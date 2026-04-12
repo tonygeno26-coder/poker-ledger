@@ -1,0 +1,28 @@
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #1c2333;
+  --border: #30363d;
+  --gold: #d4a017;
+  --gold-light: #f0c040;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --red: #f85149;
+  --positive: #3fb950;
+  --negative: #f85149;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+input, select, button { font-family: inherit; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
