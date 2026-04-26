@@ -219,6 +219,7 @@ input, select, button, textarea { font-family: inherit; }
 <nav class="nav">
   <button class="nav-btn active" onclick="showPage('dashboard')">📊 Dashboard</button>
   <button class="nav-btn" onclick="showPage('players')">👥 Players</button>
+  <button class="nav-btn" onclick="showPage('dealers')">🎴 Dealers</button>
   <button class="nav-btn" onclick="showPage('settlement')">🤝 Settlement</button>
   <button class="nav-btn" onclick="showPage('history')">📋 History</button>
 </nav>
@@ -340,6 +341,71 @@ input, select, button, textarea { font-family: inherit; }
 </div>
 
 <!-- ===== HISTORY ===== -->
+<!-- DEALERS PAGE -->
+<div id="page-dealers" class="page">
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>🎴 Dealer Profiles</span>
+      <button class="btn btn-purple btn-sm" onclick="openAddDealerModal()">＋ Add Dealer</button>
+    </div>
+    <div id="dealer-list"><div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">No dealers yet — click Add Dealer</div></div>
+  </div>
+
+  <!-- DEALER TOTALS -->
+  <div class="card" id="dealer-totals-card" style="display:none">
+    <div class="card-title">💰 Session Totals</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="dealer-totals-grid"></div>
+  </div>
+</div>
+
+<!-- ADD DEALER MODAL -->
+<div class="modal-bg" id="modal-add-dealer">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">🎴 Add Dealer <button class="modal-close" onclick="closeModal('modal-add-dealer')">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="inp-label">Dealer Name</label>
+      <input class="inp" id="new-dealer-name" placeholder="Enter dealer name..." style="width:100%">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-dealer')">Cancel</button>
+      <button class="btn btn-purple" onclick="addDealer()">Add Dealer</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEALER DETAIL MODAL -->
+<div class="modal-bg" id="modal-dealer-detail">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">🎴 <span id="dealer-detail-name"></span> <button class="modal-close" onclick="closeModal('modal-dealer-detail')">✕</button></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div class="io-field">
+        <label style="color:var(--green)">💰 TIPS</label>
+        <input type="number" class="inp" id="dealer-tips-input" placeholder="0" min="0" oninput="updateDealerTotal()" style="width:100%;font-size:1.1rem;font-weight:700">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Tips collected this session</div>
+      </div>
+      <div class="io-field">
+        <label style="color:var(--gold)">🎰 DROP</label>
+        <input type="number" class="inp" id="dealer-drop-input" placeholder="0" min="0" oninput="updateDealerTotal()" style="width:100%;font-size:1.1rem;font-weight:700">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Rake dropped this session</div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;margin-bottom:20px">
+      <span style="font-size:13px;font-weight:700;color:var(--text-muted)">TOTAL</span>
+      <span id="dealer-total-display" style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$0</span>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:space-between">
+      <button class="btn btn-outline" style="color:var(--red);border-color:var(--red)" onclick="removeDealer()">Remove</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="closeModal('modal-dealer-detail')">Cancel</button>
+        <button class="btn btn-purple" onclick="saveDealer()">✓ Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="page-history" class="page">
   <div class="card">
     <div class="card-title" style="justify-content:space-between">
@@ -544,6 +610,7 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   event.target.classList.add('active');
   if (name === 'settlement') calcSettlement();
+  if (name === 'dealers') renderDealers();
   if (name === 'history') renderHistory();
 }
 
@@ -655,6 +722,99 @@ function addBuyIn(id) {
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Buy-in added!');
+}
+
+// ========== DEALERS ==========
+if (!G.dealers) G.dealers = [];
+
+function openAddDealerModal() {
+  document.getElementById('new-dealer-name').value = '';
+  openModal('modal-add-dealer');
+  setTimeout(() => document.getElementById('new-dealer-name').focus(), 100);
+}
+
+function addDealer() {
+  const name = document.getElementById('new-dealer-name').value.trim();
+  if (!name) { toast('Enter a dealer name'); return; }
+  if (!G.dealers) G.dealers = [];
+  G.dealers.push({ id: Date.now(), name, tips: 0, drop: 0 });
+  closeModal('modal-add-dealer');
+  renderDealers();
+  autoSave();
+  toast('🎴 ' + name + ' added!');
+}
+
+function openDealerDetail(id) {
+  const d = G.dealers.find(d => d.id === id);
+  if (!d) return;
+  document.getElementById('dealer-detail-name').textContent = d.name;
+  document.getElementById('dealer-tips-input').value = d.tips || '';
+  document.getElementById('dealer-drop-input').value = d.drop || '';
+  document.getElementById('modal-dealer-detail').dataset.dealerId = id;
+  updateDealerTotal();
+  openModal('modal-dealer-detail');
+}
+
+function updateDealerTotal() {
+  const tips = parseFloat(document.getElementById('dealer-tips-input').value) || 0;
+  const drop = parseFloat(document.getElementById('dealer-drop-input').value) || 0;
+  document.getElementById('dealer-total-display').textContent = '$' + fmt(tips + drop);
+}
+
+function saveDealer() {
+  const id = parseInt(document.getElementById('modal-dealer-detail').dataset.dealerId);
+  const d = G.dealers.find(d => d.id === id);
+  if (!d) return;
+  d.tips = parseFloat(document.getElementById('dealer-tips-input').value) || 0;
+  d.drop = parseFloat(document.getElementById('dealer-drop-input').value) || 0;
+  closeModal('modal-dealer-detail');
+  renderDealers();
+  autoSave();
+  toast('✅ ' + d.name + ' saved!');
+}
+
+function removeDealer() {
+  const id = parseInt(document.getElementById('modal-dealer-detail').dataset.dealerId);
+  G.dealers = G.dealers.filter(d => d.id !== id);
+  closeModal('modal-dealer-detail');
+  renderDealers();
+  autoSave();
+  toast('Dealer removed');
+}
+
+function renderDealers() {
+  const el = document.getElementById('dealer-list');
+  const totalsCard = document.getElementById('dealer-totals-card');
+  if (!G.dealers || !G.dealers.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">No dealers yet — click Add Dealer</div>';
+    totalsCard.style.display = 'none';
+    return;
+  }
+  totalsCard.style.display = 'block';
+  el.innerHTML = G.dealers.map(d => {
+    const total = (d.tips||0) + (d.drop||0);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer" onclick="openDealerDetail(' + d.id + ')" onmouseover="this.style.borderColor=\'var(--purple)\'" onmouseout="this.style.borderColor=\'var(--border)\'" >'
+      + '<div style="display:flex;align-items:center;gap:14px">'
+      + '<div style="width:44px;height:44px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:var(--purple-light)">' + d.name.charAt(0).toUpperCase() + '</div>'
+      + '<div><div style="font-weight:700;font-size:15px">' + d.name + '</div>'
+      + '<div style="display:flex;gap:14px;margin-top:4px;font-size:12px">'
+      + '<span style="color:var(--green)">💰 Tips: $' + fmt(d.tips||0) + '</span>'
+      + '<span style="color:var(--gold)">🎰 Drop: $' + fmt(d.drop||0) + '</span>'
+      + '</div></div></div>'
+      + '<div style="text-align:right">'
+      + '<div style="font-size:1.2rem;font-weight:900;color:var(--purple-light)">$' + fmt(total) + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted)">total</div>'
+      + '</div></div>';
+  }).join('');
+
+  // Totals
+  const totalTips = G.dealers.reduce((s,d) => s + (d.tips||0), 0);
+  const totalDrop = G.dealers.reduce((s,d) => s + (d.drop||0), 0);
+  const grandTotal = totalTips + totalDrop;
+  document.getElementById('dealer-totals-grid').innerHTML =
+    '<div style="background:rgba(16,185,129,0.1);border:1px solid var(--green);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Tips</div><div style="font-size:1.6rem;font-weight:900;color:var(--green)">$' + fmt(totalTips) + '</div></div>'
+    + '<div style="background:rgba(245,158,11,0.1);border:1px solid var(--gold);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Drop</div><div style="font-size:1.6rem;font-weight:900;color:var(--gold)">$' + fmt(totalDrop) + '</div></div>'
+    + '<div style="background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div><div style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$' + fmt(grandTotal) + '</div></div>';
 }
 
 function openSettleUp(id) {
