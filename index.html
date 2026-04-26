@@ -1200,10 +1200,13 @@ function saveSettleUp() {
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
-  const amount = parseFloat(p.cashOut) || 0;
+  // Read directly from the input field to ensure latest value
+  const inputEl = document.getElementById('cashout-input-' + id);
+  const amount = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
   if (!amount) { toast('Enter a cash out amount first'); return; }
+  p.cashOut = amount;
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast('Cash out submitted!');
+  toast('Cash out $' + fmt(amount) + ' submitted!');
 }
 
 function removeBuyIn(id, idx) {
