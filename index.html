@@ -1568,7 +1568,7 @@ function calcAll() {
   // Dealer drop is also house revenue
   const dealerDrop = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop || 0) : 0), 0);
 
-  const profit = drop + dealerDrop + houseTipsTax - allExpenses - tax;
+  const profit = dealerDrop + houseTipsTax - allExpenses;
 
   const bankStart = parseFloat(getVal('bank-start')) || 0;
   const chipFloat = parseFloat(getVal('chip-float')) || 0;
@@ -1590,15 +1590,11 @@ function calcAll() {
   G.chipFloat = chipFloat;
 
   // Update breakdown
-  setText('b-drop', '$' + fmt(drop + dealerDrop));
+  setText('b-drop', '$' + fmt(dealerDrop)); // chip drop only
   setText('b-expenses', '$' + fmt(allExpenses));
-  setText('b-tax', '$' + fmt(tax + houseTipsTax));
-  // Show tips tax breakdown if any
+  setText('b-tax', '$' + fmt(houseTipsTax)); // tips tax collected from staff
   const taxEl = document.getElementById('b-tax');
-  if (taxEl && houseTipsTax > 0) {
-    taxEl.title = 'Includes $' + fmt(houseTipsTax) + ' tips tax from staff';
-    taxEl.style.color = 'var(--gold)';
-  }
+  if (taxEl) taxEl.style.color = houseTipsTax > 0 ? 'var(--gold)' : '';
   const profitEl = document.getElementById('b-profit');
   profitEl.textContent = '$' + fmt(profit);
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
