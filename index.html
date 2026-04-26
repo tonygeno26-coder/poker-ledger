@@ -1561,7 +1561,14 @@ function calcAll() {
   const drop = totalCashIn + totalECashIn; // total money brought in
   const taxPct = parseFloat(getVal('tax-pct')) || 0;
   const tax = drop * (taxPct / 100);
-  const profit = drop - allExpenses - tax;
+
+  // House tips tax collected from staff settlements
+  const houseTipsTax = G.players.reduce((s, p) => s + (p.tipsTaxAmount || 0), 0);
+
+  // Dealer drop is also house revenue
+  const dealerDrop = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop || 0) : 0), 0);
+
+  const profit = drop + dealerDrop + houseTipsTax - allExpenses - tax;
 
   const bankStart = parseFloat(getVal('bank-start')) || 0;
   const chipFloat = parseFloat(getVal('chip-float')) || 0;
@@ -1583,9 +1590,15 @@ function calcAll() {
   G.chipFloat = chipFloat;
 
   // Update breakdown
-  setText('b-drop', '$' + fmt(drop));
+  setText('b-drop', '$' + fmt(drop + dealerDrop));
   setText('b-expenses', '$' + fmt(allExpenses));
-  setText('b-tax', '$' + fmt(tax));
+  setText('b-tax', '$' + fmt(tax + houseTipsTax));
+  // Show tips tax breakdown if any
+  const taxEl = document.getElementById('b-tax');
+  if (taxEl && houseTipsTax > 0) {
+    taxEl.title = 'Includes $' + fmt(houseTipsTax) + ' tips tax from staff';
+    taxEl.style.color = 'var(--gold)';
+  }
   const profitEl = document.getElementById('b-profit');
   profitEl.textContent = '$' + fmt(profit);
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
