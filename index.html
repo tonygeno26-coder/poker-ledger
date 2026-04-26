@@ -676,6 +676,32 @@ input, select, button, textarea { font-family: inherit; }
 
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="settle-marker-note"></div>
 
+    <!-- HOUSE TIPS TAX (staff only) -->
+    <div id="settle-tips-tax-section" style="display:none;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">🏠 House Tips Tax</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;color:var(--text-muted)">House takes</span>
+        <span id="tips-tax-pct-display" style="font-size:1.2rem;font-weight:900;color:var(--gold)">0%</span>
+      </div>
+      <input type="range" id="tips-tax-slider" min="0" max="50" value="0" step="1"
+        style="width:100%;accent-color:var(--gold);margin-bottom:12px"
+        oninput="updateTipsTax(this.value)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;text-align:center">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">
+          <div style="color:var(--text-muted);margin-bottom:3px">Total Tips</div>
+          <div id="tips-tax-gross" style="font-weight:800;color:var(--white)">$0</div>
+        </div>
+        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px">
+          <div style="color:var(--text-muted);margin-bottom:3px">House Takes</div>
+          <div id="tips-tax-amount" style="font-weight:800;color:var(--red)">$0</div>
+        </div>
+        <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:8px">
+          <div style="color:var(--text-muted);margin-bottom:3px">Staff Gets</div>
+          <div id="tips-tax-net" style="font-weight:800;color:var(--green)">$0</div>
+        </div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeModal('modal-settle-up')">Cancel</button>
       <button class="btn btn-purple" onclick="saveSettleUp()">✓ Confirm Settlement</button>
@@ -1170,8 +1196,34 @@ function openSettleUp(id) {
   } else {
     markerNote.innerHTML = '';
   }
+  // Show tips tax slider for staff with tips
+  const taxSection = document.getElementById('settle-tips-tax-section');
+  const slider = document.getElementById('tips-tax-slider');
+  if (p.staffRole && (p.tips || 0) > 0) {
+    taxSection.style.display = 'block';
+    slider.value = 0;
+    updateTipsTax(0);
+  } else {
+    taxSection.style.display = 'none';
+  }
   updateSettleSummary();
   openModal('modal-settle-up');
+}
+
+function updateTipsTax(pct) {
+  const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const gross = p.tips || 0;
+  const houseTake = gross * (parseInt(pct) / 100);
+  const staffGets = gross - houseTake;
+  document.getElementById('tips-tax-pct-display').textContent = pct + '%';
+  document.getElementById('tips-tax-gross').textContent = '$' + fmt(gross);
+  document.getElementById('tips-tax-amount').textContent = '$' + fmt(houseTake);
+  document.getElementById('tips-tax-net').textContent = '$' + fmt(staffGets);
+  // Store on modal for saveSettleUp to use
+  document.getElementById('modal-settle-up').dataset.tipsTaxPct = pct;
+  document.getElementById('modal-settle-up').dataset.tipsNet = staffGets;
 }
 
 function updateSettleSummary() {
@@ -1193,6 +1245,17 @@ function saveSettleUp() {
   const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
   const p = G.players.find(p => p.id === id);
   if (!p) return;
+
+  // Apply tips tax if set
+  const tipsTaxPct = parseInt(document.getElementById('modal-settle-up').dataset.tipsTaxPct || 0);
+  if (p.staffRole && p.tips && tipsTaxPct > 0) {
+    const houseTake = p.tips * (tipsTaxPct / 100);
+    const tipsNet = p.tips - houseTake;
+    p.tipsTaxPct = tipsTaxPct;
+    p.tipsTaxAmount = houseTake;
+    p.tips = tipsNet; // adjust tips to net amount after house take
+  }
+
   p.settlement = {
     cashIn: parseFloat(document.getElementById('settle-cash-in').value) || 0,
     cashOut: parseFloat(document.getElementById('settle-cash-out').value) || 0,
