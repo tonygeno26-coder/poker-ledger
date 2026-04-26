@@ -933,8 +933,9 @@ function renderStaffEarnings(p) {
     + '<button class="btn btn-purple btn-sm" onclick="submitStaffField(' + p.id + ',\'tips\')">\u2713 Save Tips</button>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:8px">'
-    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">STAFF TOTAL</span>'
-    + '<span style="font-weight:800;color:var(--purple-light)">$' + fmt(total) + '</span></div>'
+    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">TIPS OWED TO STAFF</span>'
+    + '<span style="font-weight:800;color:var(--purple-light)">$' + fmt(p.tips||0) + '</span></div>'
+    + (isDealer && (p.drop||0) > 0 ? '<div style="display:flex;justify-content:space-between;padding:6px 12px;background:rgba(245,158,11,0.08);border-radius:8px;margin-top:4px;font-size:12px"><span style="color:var(--gold)">🎰 Drop (house revenue)</span><span style="color:var(--gold);font-weight:700">$' + fmt(p.drop||0) + '</span></div>' : '')
     + '</div>';
 }
 
@@ -1220,7 +1221,7 @@ function removeBuyIn(id, idx) {
 
 function staffOwed(p) {
   if (!p.staffRole) return 0;
-  return (p.tips || 0) + (p.drop || 0);
+  return (p.tips || 0); // Drop is house revenue, NOT owed to dealer
 }
 
 function markerTotal(p) {
@@ -1572,7 +1573,7 @@ function renderOwedList() {
     const amtColor = houseOwes ? 'var(--green)' : bal < 0 || hasMarker ? 'var(--red)' : 'var(--green)';
     const label = houseOwes ? 'House owes' : hasMarker || bal < 0 ? 'Owes house' : 'House owes';
     const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
-    const staffLabel = 'Tips $' + fmt(p.tips||0) + (p.staffRole === 'dealer' ? ' + Drop $' + fmt(p.drop||0) : '');
+    const staffLabel = 'Tips $' + fmt(p.tips||0); // Drop is house revenue, not shown here
     return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center">'
       + '<div><div class="owed-name">' + p.name + '</div><div style="font-size:10px;color:var(--text-muted)">' + label + '</div></div>'
