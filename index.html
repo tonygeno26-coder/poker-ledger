@@ -1545,7 +1545,7 @@ function renderOwedList() {
   const countEl = document.getElementById('owed-count');
 
   // Players who owe from balance OR have unpaid marker OR staff tips/drop OR player expenses
-  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0 || staffOwed(p) > 0 || (p.expense||0) > 0)
+  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0 || staffOwed(p) > 0 || (p.expense||0) > 0 || (p.playerExpenses||[]).length > 0)
     .sort((a,b) => playerBalance(a) - playerBalance(b));
 
   if (!owing.length) {
@@ -1561,10 +1561,11 @@ function renderOwedList() {
     const sOwed = staffOwed(p);
     const hasMarker = mOwed > 0;
     const isStaff = sOwed > 0;
-    const houseOwes = isStaff && bal >= 0 && !hasMarker;
-    const displayAmt = houseOwes ? sOwed : Math.abs(bal < 0 ? bal : mOwed);
-    const amtColor = houseOwes ? 'var(--green)' : 'var(--red)';
-    const label = houseOwes ? 'House owes' : 'Owes house';
+    const pExp = (p.expense||0);
+    const houseOwes = (isStaff || pExp > 0) && bal >= 0 && !hasMarker;
+    const displayAmt = houseOwes ? (sOwed + pExp) : Math.abs(bal < 0 ? bal : mOwed);
+    const amtColor = houseOwes ? 'var(--green)' : bal < 0 || hasMarker ? 'var(--red)' : 'var(--green)';
+    const label = houseOwes ? 'House owes' : hasMarker || bal < 0 ? 'Owes house' : 'House owes';
     const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
     const staffLabel = 'Tips $' + fmt(p.tips||0) + (p.staffRole === 'dealer' ? ' + Drop $' + fmt(p.drop||0) : '');
     return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
@@ -1574,7 +1575,7 @@ function renderOwedList() {
       + '</div>'
       + (hasMarker ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px"><span>📋 Marker unpaid</span><span>$' + fmt(mOwed) + '</span></div>' : '')
       + (isStaff ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 8px"><span>' + staffIcon + ' ' + staffLabel + '</span><span>owed by house</span></div>' : '')
-      + ((p.expense||0) > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:6px;padding:3px 8px"><span>🧧 Expenses</span><span>$' + fmt(p.expense||0) + ' owed by house</span></div>' : '')
+      + ((p.expense||0) > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:6px;padding:3px 8px;margin-top:3px"><span>🧧 Expense owed by house</span><span style="font-weight:800">$' + fmt(p.expense||0) + '</span></div>' : '')
       + '</div>';
   }).join('');
 }
