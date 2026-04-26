@@ -662,6 +662,12 @@ input, select, button, textarea { font-family: inherit; }
       <div class="io-field">
         <label style="color:var(--gold)">📤 ELECTRONIC OUT</label>
         <input type="number" class="inp" id="settle-elec-out" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div id="settle-elec-out-source-wrap" style="display:none;margin-top:8px">
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Paid from player:</label>
+          <select class="inp" id="settle-elec-out-source" style="width:100%;font-size:13px">
+            <option value="">— Select player —</option>
+          </select>
+        </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle received</div>
       </div>
     </div>
@@ -1254,6 +1260,27 @@ function openSettleUp(id) {
   } else {
     markerNote.innerHTML = '';
   }
+  // Show electronic out source dropdown for staff
+  const elecOutWrap = document.getElementById('settle-elec-out-source-wrap');
+  const elecOutSelect = document.getElementById('settle-elec-out-source');
+  const elecOutInput = document.getElementById('settle-elec-out');
+  if (p.staffRole) {
+    elecOutWrap.style.display = 'block';
+    // Populate with players (excluding the staff member being settled)
+    const otherPlayers = G.players.filter(pl => pl.id !== p.id);
+    elecOutSelect.innerHTML = '<option value="">\u2014 Select player \u2014</option>'
+      + otherPlayers.map(pl => '<option value="' + pl.id + '">' + pl.name + '</option>').join('');
+    elecOutSelect.value = p.settlement ? (p.settlement.elecOutSourceId || '') : '';
+  } else {
+    elecOutWrap.style.display = 'none';
+  }
+  elecOutInput.oninput = function() {
+    if (p.staffRole && this.value > 0) {
+      elecOutWrap.style.display = 'block';
+    }
+    updateSettleSummary();
+  };
+
   // Show tips tax slider for staff with tips
   const taxSection = document.getElementById('settle-tips-tax-section');
   const slider = document.getElementById('tips-tax-slider');
@@ -1319,11 +1346,15 @@ function saveSettleUp() {
     p.tips = tipsNet; // adjust tips to net amount after house take
   }
 
+  const elecOutSourceId = document.getElementById('settle-elec-out-source')?.value || '';
+  const elecOutSourcePlayer = elecOutSourceId ? G.players.find(pl => pl.id === parseInt(elecOutSourceId)) : null;
   p.settlement = {
     cashIn: parseFloat(document.getElementById('settle-cash-in').value) || 0,
     cashOut: parseFloat(document.getElementById('settle-cash-out').value) || 0,
     elecIn: parseFloat(document.getElementById('settle-elec-in').value) || 0,
     elecOut: parseFloat(document.getElementById('settle-elec-out').value) || 0,
+    elecOutSourceId: elecOutSourceId,
+    elecOutSourceName: elecOutSourcePlayer ? elecOutSourcePlayer.name : '',
     time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})
   };
   closeModal('modal-settle-up');
@@ -1541,7 +1572,7 @@ function renderPlayerDetail(id) {
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
       </div>
-      ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span></div>' : '') + '</div></div>' : ''}
+      ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span>' + (p.settlement.elecOutSourceName ? ' <span style="color:var(--gold);font-size:10px">from ' + p.settlement.elecOutSourceName + '</span>' : '') + '</div>' : '') + '</div></div>' : ''}
     </div>`;
 
   // Highlight active card
