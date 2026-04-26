@@ -495,8 +495,44 @@ input, select, button, textarea { font-family: inherit; }
   <div class="modal">
     <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
     <div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Name</div><input class="inp" id="new-player-name" placeholder="Player name"></div>
-    <div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Role (optional)</div><input class="inp" id="new-player-role" placeholder="e.g. hostess, dealer"></div>
     <div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Notes (Venmo, etc.)</div><input class="inp" id="new-player-notes" placeholder="@venmo"></div>
+
+    <!-- STAFF TOGGLE -->
+    <div style="margin-bottom:16px">
+      <button id="staff-toggle-btn" onclick="toggleStaffSection()" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all 0.2s">
+        <span>👔 Staff</span>
+        <span id="staff-toggle-arrow" style="font-size:11px">▼ expand</span>
+      </button>
+      <div id="staff-section" style="display:none;margin-top:10px;background:var(--bg);border:1px solid var(--purple);border-radius:10px;padding:14px">
+        <div class="inp-label" style="margin-bottom:10px">Staff Role</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-none" value="" checked>
+            <label for="new-role-none" style="text-align:center;padding:10px">
+              <div style="font-size:1.2rem">👥</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Player Only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer">
+            <label for="new-role-dealer" style="text-align:center;padding:10px">
+              <div style="font-size:1.2rem">🎴</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Dealer</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips + Drop</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-hostess" value="hostess">
+            <label for="new-role-hostess" style="text-align:center;padding:10px">
+              <div style="font-size:1.2rem">💁</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Hostess</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px">
       <button class="btn btn-purple" style="flex:1" onclick="addPlayer()">Add Player</button>
       <button class="btn btn-outline" onclick="closeModal('modal-add-player')">Cancel</button>
@@ -716,14 +752,25 @@ function openAddPlayerModal() {
 
 function addPlayer() {
   const name = getVal('new-player-name').trim();
+  const staffRoleEl = document.querySelector('input[name="new-staff-role"]:checked');
+  const staffRole = staffRoleEl ? staffRoleEl.value : '';
   if (!name) return toast('Enter player name');
   G.players.push({
-    id: Date.now(), name: name.toUpperCase(), role: getVal('new-player-role'),
+    id: Date.now(), name: name.toUpperCase(),
+    role: staffRole || '',
+    staffRole: staffRole,  // 'dealer', 'hostess', or ''
+    tips: 0, drop: 0,
     notes: getVal('new-player-notes'),
     cashIn: 0, cashOut: 0, chipsIn: 0, chipsOut: 0,
     eCashIn: 0, eCashOut: 0, tipTransfer: 0,
     expense: 0, playerNotes: '', cosignECashIn: false, cosignECashOut: false
   });
+  // Reset staff toggle
+  document.getElementById('staff-section').style.display = 'none';
+  document.getElementById('staff-toggle-arrow').textContent = '▼ expand';
+  document.getElementById('staff-toggle-btn').style.borderColor = 'var(--border)';
+  document.getElementById('staff-toggle-btn').style.color = 'var(--text-muted)';
+  document.getElementById('new-role-none').checked = true;
   closeModal('modal-add-player');
   renderPlayerGrid();
   autoSave();
@@ -803,6 +850,38 @@ function switchPlayerTab(tab) {
   document.getElementById('tab-staff-btn').style.fontSize = '13px';
   document.getElementById('tab-staff-btn').style.border = isPlayers ? 'none' : '';
   if (!isPlayers) renderStaff();
+}
+
+function renderStaffEarnings(p) {
+  if (!p.staffRole) return '';
+  const isDealer = p.staffRole === 'dealer';
+  const icon = isDealer ? '🎴 Dealer' : '💁 Hostess';
+  const total = (p.tips||0) + (p.drop||0);
+  return '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">' + icon + ' — Staff Earnings</div>'
+    + '<div style="display:grid;grid-template-columns:' + (isDealer ? '1fr 1fr' : '1fr') + ';gap:12px">'
+    + '<div class="io-field"><label style="color:var(--green)">💰 TIPS</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.tips||'') + '" oninput="updatePlayerField(' + p.id + ',\'tips\',this.value)" min="0" style="width:100%"></div>'
+    + (isDealer
+      ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
+        + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.drop||'') + '" oninput="updatePlayerField(' + p.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>'
+      : '')
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:8px">'
+    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">STAFF TOTAL</span>'
+    + '<span style="font-weight:800;color:var(--purple-light)">$' + fmt(total) + '</span></div>'
+    + '</div>';
+}
+
+function toggleStaffSection() {
+  const section = document.getElementById('staff-section');
+  const arrow = document.getElementById('staff-toggle-arrow');
+  const btn = document.getElementById('staff-toggle-btn');
+  const isOpen = section.style.display !== 'none';
+  section.style.display = isOpen ? 'none' : 'block';
+  arrow.textContent = isOpen ? '▼ expand' : '▲ collapse';
+  btn.style.borderColor = isOpen ? 'var(--border)' : 'var(--purple)';
+  btn.style.color = isOpen ? 'var(--text-muted)' : 'var(--purple-light)';
 }
 
 function openAddStaffModal() {
@@ -1224,8 +1303,8 @@ function renderPlayerDetail(id) {
         <div>Expense <span>$${fmt(p.expense||0)}</span></div>
         ${p.playerNotes ? '<div>Notes <span>' + p.playerNotes + '</span></div>' : ''}
       </div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      ${renderStaffEarnings(p)}
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-outline btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Expense</button>
         <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
       </div>
