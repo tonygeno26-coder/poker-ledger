@@ -281,6 +281,27 @@ input, select, button, textarea { font-family: inherit; }
     </div>
   </div>
 
+  <!-- CHIP COUNT -->
+  <div class="card" id="chip-count-card">
+    <div class="card-title">🎲 Chip Count <button class="btn btn-outline btn-xs ml-auto" onclick="openChipCountModal()">＋ Count Now</button></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Starting Count</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+        <div class="inp-group"><div class="inp-label" style="color:#ef4444">$5 chips</div><input class="inp" type="number" id="start-chip-5" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#3b82f6">$25 chips</div><input class="inp" type="number" id="start-chip-25" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#8b5cf6">$100 chips</div><input class="inp" type="number" id="start-chip-100" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#f59e0b">$500 chips</div><input class="inp" type="number" id="start-chip-500" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#10b981">$1000 chips</div><input class="inp" type="number" id="start-chip-1000" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-muted)">Starting Total</span>
+        <span style="font-size:20px;font-weight:800;color:var(--gold)" id="start-chip-total">$0</span>
+      </div>
+    </div>
+    <div id="chip-count-log"></div>
+    <div id="chip-balance-status"></div>
+  </div>
+
   <!-- HOST SPLIT -->
   <div class="card" id="host-split-card">
     <div class="card-title">👥 Host Split <button class="btn btn-outline btn-xs ml-auto" onclick="openHostModal()">⚙️ Edit</button></div>
@@ -370,6 +391,55 @@ input, select, button, textarea { font-family: inherit; }
     <div style="display:flex;gap:10px;margin-top:14px">
       <button class="btn btn-purple" style="flex:1" onclick="saveHosts()">Save</button>
       <button class="btn btn-outline" onclick="closeModal('modal-host')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Chip Count Modal -->
+<div class="modal-bg" id="modal-chip-count">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🎲 Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')">✕</button></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Enter the number of chips of each denomination currently on the table.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#ef4444">$5</span>
+          <input type="number" id="cc-5" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-5-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#3b82f6">$25</span>
+          <input type="number" id="cc-25" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-25-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:10px">
+          <span style="font-weight:700;color:#8b5cf6">$100</span>
+          <input type="number" id="cc-100" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-100-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#f59e0b">$500</span>
+          <input type="number" id="cc-500" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-500-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px">
+          <span style="font-weight:700;color:#10b981">$1000</span>
+          <input type="number" id="cc-1000" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-1000-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg3);border-radius:12px;border:1px solid var(--border);margin-bottom:16px">
+      <span style="font-size:14px;font-weight:600">Count Total</span>
+      <span id="cc-total" style="font-size:24px;font-weight:800;color:var(--gold)">$0</span>
+    </div>
+    <div id="cc-vs-expected" style="margin-bottom:16px"></div>
+    <div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Note (optional)</div><input class="inp" id="cc-note" placeholder="e.g. Mid-game count, 10pm"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-purple" style="flex:1" onclick="saveChipCount()">💾 Log This Count</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-chip-count')">Cancel</button>
     </div>
   </div>
 </div>
@@ -497,13 +567,38 @@ function removePlayer(id) {
 function updatePlayerField(id, field, val) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
-  p[field] = (field === 'playerNotes' || field === 'cosignECashIn' || field === 'cosignECashOut') ? val : (parseFloat(val) || 0);
+  const strFields = ['playerNotes','buyInType','cosignECashIn','cosignECashOut'];
+  p[field] = strFields.includes(field) ? val : (parseFloat(val) || 0);
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+}
+
+function addBuyIn(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const amount = parseFloat(p.buyInAmount) || 0;
+  if (!amount) { toast('Enter an amount first'); return; }
+  if (!p.buyIns) p.buyIns = [];
+  p.buyIns.push({ type: p.buyInType || 'cash', amount });
+  p.buyInAmount = 0;
+  // also update legacy cashIn for balance calc
+  p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
+  p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Buy-in added!');
+}
+
+function removeBuyIn(id, idx) {
+  const p = G.players.find(p => p.id === id);
+  if (!p || !p.buyIns) return;
+  p.buyIns.splice(idx, 1);
+  p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
+  p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
 }
 
 function playerBalance(p) {
-  const totalIn = (p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0);
-  const totalOut = (p.cashOut||0) + (p.chipsOut||0) + (p.eCashOut||0) + (p.tipTransfer||0);
+  const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
+  const totalOut = (p.cashOut||0) + (p.tipTransfer||0) + (p.expense||0);
   return totalOut - totalIn;
 }
 
@@ -557,51 +652,63 @@ function renderPlayerDetail(id) {
         <input class="inp" style="max-width:200px;font-size:12px" placeholder="📝 Enter notes here..." value="${p.playerNotes||''}" oninput="updatePlayerField(${p.id},'playerNotes',this.value)">
       </div>
 
-      <div class="grid-2">
-        <!-- IN -->
-        <div class="io-section">
-          <div class="io-title">💵 IN</div>
-          <div class="io-field"><label>CASH IN</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.cashIn||''}" oninput="updatePlayerField(${p.id},'cashIn',this.value)" min="0"></div>
-          <div class="io-field"><label>CHIPS IN</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.chipsIn||''}" oninput="updatePlayerField(${p.id},'chipsIn',this.value)" min="0"></div>
-          <div class="io-field">
-            <label>e-CASH IN</label>
-            <input type="number" class="amount-btn" placeholder="Amount" value="${p.eCashIn||''}" oninput="updatePlayerField(${p.id},'eCashIn',this.value)" min="0">
-            <label class="cosign-check"><input type="checkbox" ${p.cosignECashIn?'checked':''} onchange="updatePlayerField(${p.id},'cosignECashIn',this.checked)"> Add Cosign</label>
+      <!-- BUY IN SECTION -->
+      <div style="margin-bottom:14px">
+        <div class="io-title">💵 Buy In</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="io-field" style="flex:1;min-width:130px">
+            <label>TYPE</label>
+            <select class="inp" onchange="updatePlayerField(${p.id},'buyInType',this.value)" style="width:100%">
+              <option value="cash" ${(p.buyInType||'cash')==='cash'?'selected':''}>💵 Cash Buy</option>
+              <option value="marker" ${p.buyInType==='marker'?'selected':''}>📋 Marker</option>
+              <option value="electronic" ${p.buyInType==='electronic'?'selected':''}>📱 Electronic</option>
+              <option value="bonus" ${p.buyInType==='bonus'?'selected':''}>🎁 Bonus</option>
+            </select>
+          </div>
+          <div class="io-field" style="flex:1;min-width:100px">
+            <label>AMOUNT</label>
+            <input type="number" class="amount-btn" placeholder="0" value="${p.buyInAmount||''}" oninput="updatePlayerField(${p.id},'buyInAmount',this.value)" min="0" style="width:100%">
+          </div>
+          <div>
+            <button class="btn btn-purple btn-sm" onclick="addBuyIn(${p.id})" style="margin-bottom:2px">＋ Add</button>
           </div>
         </div>
+        <div id="buyin-log-${p.id}" style="margin-top:10px">
+          ${(p.buyIns||[]).length ? (p.buyIns||[]).map((b,i) => \`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">
+              <span style="color:var(--text-muted)">\${{cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'}[b.type]||b.type}</span>
+              <span style="font-weight:700;color:var(--green)">+\$\${fmt(b.amount)}</span>
+              <button onclick="removeBuyIn(${p.id},\${i})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">✕</button>
+            </div>\`).join('') : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No buy-ins yet — add one above</div>'}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:4px">
+          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL BUY IN</span>
+          <span style="font-weight:800;font-size:16px;color:var(--purple-light)">$${fmt((p.buyIns||[]).reduce((s,b)=>s+parseFloat(b.amount||0),0))}</span>
+        </div>
+      </div>
 
-        <!-- OUT -->
-        <div class="io-section">
-          <div class="io-title">💸 OUT</div>
-          <div class="io-field"><label>CASH OUT</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.cashOut||''}" oninput="updatePlayerField(${p.id},'cashOut',this.value)" min="0"></div>
-          <div class="io-field"><label>CHIPS OUT</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.chipsOut||''}" oninput="updatePlayerField(${p.id},'chipsOut',this.value)" min="0"></div>
-          <div class="io-field">
-            <label>e-CASH OUT</label>
-            <input type="number" class="amount-btn" placeholder="Amount" value="${p.eCashOut||''}" oninput="updatePlayerField(${p.id},'eCashOut',this.value)" min="0">
-            <label class="cosign-check"><input type="checkbox" ${p.cosignECashOut?'checked':''} onchange="updatePlayerField(${p.id},'cosignECashOut',this.checked)"> Add Cosign</label>
+      <!-- CASH OUT SECTION -->
+      <div style="margin-bottom:14px">
+        <div class="io-title">💸 Cash Out</div>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div class="io-field" style="flex:1">
+            <label>AMOUNT</label>
+            <input type="number" class="amount-btn" placeholder="0" value="${p.cashOut||''}" oninput="updatePlayerField(${p.id},'cashOut',this.value)" min="0" style="width:100%">
           </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
-        <div class="io-field"><label>TIP TRANSFER</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.tipTransfer||''}" oninput="updatePlayerField(${p.id},'tipTransfer',this.value)" min="0"></div>
-        <div class="io-field"><label>EXPENSE</label><input type="number" class="amount-btn" placeholder="Amount" value="${p.expense||''}" oninput="updatePlayerField(${p.id},'expense',this.value)" min="0"></div>
-      </div>
-
+      <!-- SUMMARY -->
       <div class="player-summary">
-        <div>Cash In <span>$${fmt(p.cashIn||0)}</span></div>
-        <div>ECash In <span>$${fmt(p.eCashIn||0)}</span></div>
-        <div>Tip Transfer <span>$${fmt(p.tipTransfer||0)}</span></div>
+        ${(p.buyIns||[]).map(b => \`<div>\${{cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'}[b.type]||b.type} Buy In <span>$\${fmt(b.amount)}</span></div>\`).join('')}
         <div>Cash Out <span>$${fmt(p.cashOut||0)}</span></div>
-        <div>ECash Out <span>$${fmt(p.eCashOut||0)}</span></div>
-        <div>Chips In <span>$${fmt(p.chipsIn||0)}</span></div>
-        <div>Chips Out <span>$${fmt(p.chipsOut||0)}</span></div>
+        <div>Tip Transfer <span>$${fmt(p.tipTransfer||0)}</span></div>
         <div>Expense <span>$${fmt(p.expense||0)}</span></div>
-        ${p.notes ? `<div>Notes <span>${p.notes}</span></div>` : ''}
+        ${p.playerNotes ? \`<div>Notes <span>\${p.playerNotes}</span></div>\` : ''}
       </div>
 
-      <div style="text-align:right;margin-top:12px">
-        <button class="btn btn-purple btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Add Expense</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-outline btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Expense</button>
       </div>
     </div>`;
 
@@ -970,6 +1077,168 @@ function showPage_direct(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => { if (b.textContent.toLowerCase().includes(name.substring(0,4))) b.classList.add('active'); });
+}
+
+// ========== CHIP COUNT ==========
+const DENOMS = [5, 25, 100, 500, 1000];
+
+function calcChipCount() {
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('start-chip-' + d)?.value) || 0;
+    total += count * d;
+    if (!G.startChips) G.startChips = {};
+    G.startChips[d] = count;
+  });
+  setText('start-chip-total', '$' + fmt(total));
+  G.startChipTotal = total;
+  renderChipBalance();
+  autoSave();
+}
+
+function updateCCTotal() {
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('cc-' + d)?.value) || 0;
+    const val = count * d;
+    total += val;
+    const valEl = document.getElementById('cc-' + d + '-val');
+    if (valEl) valEl.textContent = '$' + fmt(val);
+  });
+  setText('cc-total', '$' + fmt(total));
+  // vs expected
+  const expected = getExpectedChips();
+  const diff = total - expected;
+  const el = document.getElementById('cc-vs-expected');
+  if (!el) return;
+  if (expected === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:10px;border:1px solid ${Math.abs(diff)<1?'var(--green)':'var(--red)'};background:${Math.abs(diff)<1?'var(--green-dim)':'var(--red-dim)'}">
+    <div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Expected on table</div>
+      <div style="font-weight:700">$${fmt(expected)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Difference</div>
+      <div style="font-size:20px;font-weight:800;color:${Math.abs(diff)<1?'var(--green)':'var(--red)'}">${diff>=0?'+':''}$${fmt(diff)}</div>
+    </div>
+    <div style="font-size:22px">${Math.abs(diff)<1?'✅':'⚠️'}</div>
+  </div>`;
+}
+
+function getExpectedChips() {
+  // Expected = starting chip total + all chips bought in - all chips cashed out
+  const startTotal = G.startChipTotal || 0;
+  const chipsIn = G.players.reduce((s,p) => s+(p.chipsIn||0), 0);
+  const chipsOut = G.players.reduce((s,p) => s+(p.chipsOut||0), 0);
+  return startTotal + chipsIn - chipsOut;
+}
+
+function openChipCountModal() {
+  DENOMS.forEach(d => setVal('cc-' + d, ''));
+  DENOMS.forEach(d => setText('cc-' + d + '-val', '$0'));
+  setText('cc-total', '$0');
+  setVal('cc-note', '');
+  const el = document.getElementById('cc-vs-expected');
+  if (el) el.innerHTML = '';
+  openModal('modal-chip-count');
+  setTimeout(() => document.getElementById('cc-5')?.focus(), 100);
+}
+
+function saveChipCount() {
+  const chips = {};
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('cc-' + d)?.value) || 0;
+    chips[d] = count;
+    total += count * d;
+  });
+  const expected = getExpectedChips();
+  const diff = total - expected;
+  const note = getVal('cc-note');
+  if (!G.chipCounts) G.chipCounts = [];
+  G.chipCounts.push({
+    id: Date.now(),
+    time: new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}),
+    chips, total, expected, diff, note
+  });
+  closeModal('modal-chip-count');
+  renderChipLog();
+  renderChipBalance();
+  autoSave();
+  toast(Math.abs(diff) < 1 ? '✅ Chips balanced!' : `⚠️ Off by $${fmt(Math.abs(diff))}`);
+}
+
+function renderChipLog() {
+  const el = document.getElementById('chip-count-log');
+  if (!el) return;
+  const counts = G.chipCounts || [];
+  if (!counts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">Count History</div>
+    ${counts.slice().reverse().map(c => {
+      const balanced = Math.abs(c.diff) < 1;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:${balanced?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${balanced?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:13px">${c.time}${c.note?' · '+c.note:''}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+            ${DENOMS.map(d => c.chips[d] ? `${c.chips[d]}×$${d}` : '').filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:16px">$${fmt(c.total)}</div>
+          <div style="font-size:12px;color:${balanced?'var(--green)':'var(--red)'};font-weight:700">${balanced?'✅ Balanced':(c.diff>0?'+':'')+' $'+fmt(c.diff)+' off'}</div>
+        </div>
+        <button onclick="removeChipCount(${c.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;margin-left:8px">✕</button>
+      </div>`;
+    }).join('')}`;
+}
+
+function removeChipCount(id) {
+  G.chipCounts = (G.chipCounts||[]).filter(c => c.id !== id);
+  renderChipLog();
+  renderChipBalance();
+  autoSave();
+}
+
+function renderChipBalance() {
+  const el = document.getElementById('chip-balance-status');
+  if (!el) return;
+  const counts = G.chipCounts || [];
+  if (!counts.length) { el.innerHTML = ''; return; }
+  const last = counts[counts.length - 1];
+  const balanced = Math.abs(last.diff) < 1;
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:${balanced?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${balanced?'rgba(16,185,129,0.4)':'rgba(239,68,68,0.4)'};border-radius:10px;margin-top:8px">
+    <div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Latest Count Status</div>
+      <div style="font-weight:700;font-size:15px">${balanced?'Chips are balanced':'Chips are off'}</div>
+    </div>
+    <div style="font-size:28px">${balanced?'✅':'⚠️'}</div>
+    <div style="text-align:right">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Difference</div>
+      <div style="font-size:22px;font-weight:800;color:${balanced?'var(--green)':'var(--red)'}">${last.diff>=0?'+':''}$${fmt(last.diff)}</div>
+    </div>
+  </div>`;
+}
+
+// Patch init to restore chip count state
+const _origInit = init;
+function init() {
+  document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
+  const saved = ls('pb-current');
+  if (saved) try {
+    const d = JSON.parse(saved);
+    G = {...G, ...d};
+    restoreInputs();
+    // Restore start chip inputs
+    if (G.startChips) {
+      DENOMS.forEach(d2 => { if (G.startChips[d2]) setVal('start-chip-'+d2, G.startChips[d2]); });
+      setText('start-chip-total', '$' + fmt(G.startChipTotal||0));
+    }
+  } catch(e){}
+  calcAll();
+  renderAll();
+  renderChipLog();
+  renderChipBalance();
 }
 
 // ========== START ==========
