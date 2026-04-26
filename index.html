@@ -869,6 +869,13 @@ function switchPlayerTab(tab) {
   if (!isPlayers) renderStaff();
 }
 
+function submitStaffField(id, field) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('\u2705 ' + (field === 'tips' ? 'Tips' : 'Drop') + ' saved!');
+}
+
 function renderStaffEarnings(p) {
   if (!p.staffRole) return '';
   const isDealer = p.staffRole === 'dealer';
@@ -884,6 +891,10 @@ function renderStaffEarnings(p) {
       ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
         + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.drop||'') + '" oninput="updatePlayerField(' + p.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>'
       : '')
+    + '</div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
+    + (isDealer ? '<button class="btn btn-outline btn-sm" onclick="submitStaffField(' + p.id + ',\'drop\')">\u2713 Save Drop</button>' : '')
+    + '<button class="btn btn-purple btn-sm" onclick="submitStaffField(' + p.id + ',\'tips\')">\u2713 Save Tips</button>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:8px">'
     + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">STAFF TOTAL</span>'
