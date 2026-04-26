@@ -1358,6 +1358,22 @@ function saveSettleUp() {
     elecOutSourceName: elecOutSourcePlayer ? elecOutSourcePlayer.name : '',
     time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})
   };
+  // If a player paid electronic out to this staff member, credit that player
+  const elecOutAmt = p.settlement.elecOut || 0;
+  const sourceId = parseInt(p.settlement.elecOutSourceId || 0);
+  if (elecOutAmt > 0 && sourceId) {
+    const sourcePl = G.players.find(pl => pl.id === sourceId);
+    if (sourcePl) {
+      if (!sourcePl.playerExpenses) sourcePl.playerExpenses = [];
+      sourcePl.playerExpenses.push({
+        id: Date.now(),
+        desc: 'Paid ' + p.name + ' tips (electronic)',
+        amount: elecOutAmt
+      });
+      sourcePl.expense = sourcePl.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+    }
+  }
+
   closeModal('modal-settle-up');
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('✅ ' + p.name + ' settled up!');
