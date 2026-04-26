@@ -625,6 +625,21 @@ function removeBuyIn(id, idx) {
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
 }
 
+function markerTotal(p) {
+  return (p.buyIns||[]).filter(b => b.type === 'marker').reduce((s,b) => s + parseFloat(b.amount||0), 0);
+}
+
+function markerOwed(p) {
+  // How much of the marker is still unpaid after cash out covers it
+  const marker = markerTotal(p);
+  if (!marker) return 0;
+  const cashOut = p.cashOut || 0;
+  const nonMarkerIn = (p.buyIns||[]).filter(b => b.type !== 'marker').reduce((s,b) => s + parseFloat(b.amount||0), 0);
+  // Cash out first covers non-marker buy-ins, then applies to marker
+  const appliedToMarker = Math.max(0, cashOut - nonMarkerIn);
+  return Math.max(0, marker - appliedToMarker);
+}
+
 function playerBalance(p) {
   const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
   const totalOut = (p.cashOut||0) + (p.tipTransfer||0) + (p.expense||0);
@@ -680,6 +695,7 @@ function renderPlayerDetail(id) {
         <span class="bal-val" style="color:${balClass}">${bal >= 0 ? '+' : ''}$${fmt(Math.abs(bal))}</span>
         <input class="inp" style="max-width:200px;font-size:12px" placeholder="📝 Enter notes here..." value="${p.playerNotes||''}" oninput="updatePlayerField(${p.id},'playerNotes',this.value)">
       </div>
+      ${markerOwed(p) > 0 ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:10px;margin-bottom:10px"><div style="font-size:13px;color:var(--gold);font-weight:700">📋 Marker Unpaid</div><div style="font-size:15px;font-weight:800;color:var(--gold)">$' + fmt(markerOwed(p)) + ' owed</div></div>' : ''}
 
       <!-- BUY IN SECTION -->
       <div style="margin-bottom:14px">
@@ -872,19 +888,30 @@ function renderExpenseList() {
 function renderOwedList() {
   const el = document.getElementById('owed-list');
   const countEl = document.getElementById('owed-count');
-  const owing = G.players.filter(p => playerBalance(p) < 0).sort((a,b) => playerBalance(a) - playerBalance(b));
+
+  // Players who owe from balance OR have unpaid marker
+  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0)
+    .sort((a,b) => playerBalance(a) - playerBalance(b));
+
   if (!owing.length) {
-    el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div>`;
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div>';
     countEl.style.display = 'none';
     return;
   }
   countEl.style.display = 'inline';
   countEl.textContent = owing.length;
-  el.innerHTML = owing.map(p => `
-    <div class="owed-row" onclick="showPage_direct('players');renderPlayerDetail(${p.id})">
-      <div class="owed-name">${p.name}</div>
-      <div class="owed-amt">$${fmt(Math.abs(playerBalance(p)))}</div>
-    </div>`).join('');
+  el.innerHTML = owing.map(p => {
+    const bal = playerBalance(p);
+    const mOwed = markerOwed(p);
+    const hasMarker = mOwed > 0;
+    return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<div class="owed-name">' + p.name + '</div>'
+      + '<div class="owed-amt">$' + fmt(Math.abs(bal < 0 ? bal : mOwed)) + '</div>'
+      + '</div>'
+      + (hasMarker ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px"><span>📋 Marker unpaid</span><span>$' + fmt(mOwed) + '</span></div>' : '')
+      + '</div>';
+  }).join('');
 }
 
 function renderHostSplit(profit) {
