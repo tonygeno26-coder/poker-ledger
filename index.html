@@ -505,18 +505,11 @@ input, select, button, textarea { font-family: inherit; }
       </button>
       <div id="staff-section" style="display:none;margin-top:10px;background:var(--bg);border:1px solid var(--purple);border-radius:10px;padding:14px">
         <div class="inp-label" style="margin-bottom:10px">Staff Role</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
           <div class="time-option">
-            <input type="radio" name="new-staff-role" id="new-role-none" value="" checked>
-            <label for="new-role-none" style="text-align:center;padding:10px">
-              <div style="font-size:1.2rem">👥</div>
-              <div style="font-size:12px;font-weight:700;margin-top:4px">Player Only</div>
-            </label>
-          </div>
-          <div class="time-option">
-            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer">
+            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer" checked>
             <label for="new-role-dealer" style="text-align:center;padding:10px">
-              <div style="font-size:1.2rem">🎴</div>
+              <div style="font-size:1.3rem">🎴</div>
               <div style="font-size:12px;font-weight:700;margin-top:4px">Dealer</div>
               <div style="font-size:10px;color:var(--text-muted)">Tips + Drop</div>
             </label>
@@ -524,8 +517,32 @@ input, select, button, textarea { font-family: inherit; }
           <div class="time-option">
             <input type="radio" name="new-staff-role" id="new-role-hostess" value="hostess">
             <label for="new-role-hostess" style="text-align:center;padding:10px">
-              <div style="font-size:1.2rem">💁</div>
+              <div style="font-size:1.3rem">💁</div>
               <div style="font-size:12px;font-weight:700;margin-top:4px">Hostess</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-chef" value="chef">
+            <label for="new-role-chef" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">👨‍🍳</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Chef</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-security" value="security">
+            <label for="new-role-security" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">🔒</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Security</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-misc" value="misc">
+            <label for="new-role-misc" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">⭐</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Misc</div>
               <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
             </label>
           </div>
@@ -770,7 +787,7 @@ function addPlayer() {
   document.getElementById('staff-toggle-arrow').textContent = '▼ expand';
   document.getElementById('staff-toggle-btn').style.borderColor = 'var(--border)';
   document.getElementById('staff-toggle-btn').style.color = 'var(--text-muted)';
-  document.getElementById('new-role-none').checked = true;
+  document.getElementById('new-role-dealer').checked = true;
   closeModal('modal-add-player');
   renderPlayerGrid();
   autoSave();
@@ -855,7 +872,8 @@ function switchPlayerTab(tab) {
 function renderStaffEarnings(p) {
   if (!p.staffRole) return '';
   const isDealer = p.staffRole === 'dealer';
-  const icon = isDealer ? '🎴 Dealer' : '💁 Hostess';
+  const icons = {dealer:'🎴 Dealer', hostess:'💁 Hostess', chef:'👨‍🍳 Chef', security:'🔒 Security', misc:'⭐ Misc'};
+  const icon = icons[p.staffRole] || p.staffRole;
   const total = (p.tips||0) + (p.drop||0);
   return '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">' + icon + ' — Staff Earnings</div>'
