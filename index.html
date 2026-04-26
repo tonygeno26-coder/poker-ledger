@@ -512,7 +512,7 @@ input, select, button, textarea { font-family: inherit; }
         <div class="inp-label" style="margin-bottom:10px">Staff Role</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
           <div class="time-option">
-            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer" checked>
+            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer">
             <label for="new-role-dealer" style="text-align:center;padding:10px">
               <div style="font-size:1.3rem">🎴</div>
               <div style="font-size:12px;font-weight:700;margin-top:4px">Dealer</div>
@@ -792,7 +792,8 @@ function addPlayer() {
   document.getElementById('staff-toggle-arrow').textContent = '▼ expand';
   document.getElementById('staff-toggle-btn').style.borderColor = 'var(--border)';
   document.getElementById('staff-toggle-btn').style.color = 'var(--text-muted)';
-  document.getElementById('new-role-dealer').checked = true;
+  // Uncheck all staff roles
+  document.querySelectorAll('input[name="new-staff-role"]').forEach(r => r.checked = false);
   closeModal('modal-add-player');
   renderPlayerGrid();
   autoSave();
