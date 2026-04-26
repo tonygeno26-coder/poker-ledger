@@ -1343,8 +1343,9 @@ function saveSettleUp() {
     const tipsNet = p.tips - houseTake;
     p.tipsTaxPct = tipsTaxPct;
     p.tipsTaxAmount = houseTake;
-    p.tips = tipsNet; // adjust tips to net amount after house take
+    p.tips = tipsNet;
   }
+  if (p.staffRole) p.tipsSettled = true;
 
   const elecOutSourceId = document.getElementById('settle-elec-out-source')?.value || '';
   const elecOutSourcePlayer = elecOutSourceId ? G.players.find(pl => pl.id === parseInt(elecOutSourceId)) : null;
@@ -1385,7 +1386,8 @@ function removeBuyIn(id, idx) {
 
 function staffOwed(p) {
   if (!p.staffRole) return 0;
-  return (p.tips || 0); // Drop is house revenue, NOT owed to dealer
+  if (p.tipsSettled) return 0; // already in balance, don't double-count in owed
+  return (p.tips || 0); // pending tips shown in House Owes until settled
 }
 
 function markerTotal(p) {
@@ -1432,8 +1434,8 @@ function playerBalance(p) {
   // Net: positive = house owes player, negative = player still owes house
   const gameNet = remainingDebt > 0 ? -remainingDebt : winnings;
 
-  // Tips only count in balance after settlement confirmed — tracked separately in Owed until then
-  const tips = (p.settlement && p.staffRole) ? (p.tips || 0) : 0;
+  // Tips only count in balance after explicitly settled (tipsSettled flag set)
+  const tips = (p.tipsSettled && p.staffRole) ? (p.tips || 0) : 0;
   return gameNet + expenses + tips;
 }
 
