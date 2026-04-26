@@ -1506,11 +1506,13 @@ function calcAll() {
 
   // Chips on hand: start with float, subtract all buy-ins (chips go out to players)
   // then add back all cash-outs (chips come back from players)
+  // then add back dealer drop (chips turned in by dealers)
   const totalBuyInsAllPlayers = G.players.reduce((s, p) => {
     return s + (p.buyIns||[]).reduce((t, b) => t + parseFloat(b.amount||0), 0);
   }, 0);
   const totalCashOutsAllPlayers = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
-  const chipsOnHand = chipFloat - totalBuyInsAllPlayers + totalCashOutsAllPlayers;
+  const totalDropAllDealers = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop||0) : 0), 0);
+  const chipsOnHand = chipFloat - totalBuyInsAllPlayers + totalCashOutsAllPlayers + totalDropAllDealers;
   const eCashOnHand = totalECashIn - totalECashOut;
 
   G.taxPct = taxPct;
