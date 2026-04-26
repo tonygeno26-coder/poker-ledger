@@ -1502,7 +1502,14 @@ function calcAll() {
   const bankStart = parseFloat(getVal('bank-start')) || 0;
   const chipFloat = parseFloat(getVal('chip-float')) || 0;
   const cashOnHand = bankStart + totalCashIn - totalCashOut;
-  const chipsOnHand = chipFloat + totalChipsIn - totalChipsOut;
+
+  // Chips on hand: start with float, subtract all buy-ins (chips go out to players)
+  // then add back all cash-outs (chips come back from players)
+  const totalBuyInsAllPlayers = G.players.reduce((s, p) => {
+    return s + (p.buyIns||[]).reduce((t, b) => t + parseFloat(b.amount||0), 0);
+  }, 0);
+  const totalCashOutsAllPlayers = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
+  const chipsOnHand = chipFloat - totalBuyInsAllPlayers + totalCashOutsAllPlayers;
   const eCashOnHand = totalECashIn - totalECashOut;
 
   G.taxPct = taxPct;
