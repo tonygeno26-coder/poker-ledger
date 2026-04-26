@@ -1275,8 +1275,9 @@ function playerBalance(p) {
   // Net: positive = house owes player, negative = player still owes house
   const gameNet = remainingDebt > 0 ? -remainingDebt : winnings;
 
-  // Expenses always add (house owes player regardless)
-  return gameNet + expenses;
+  // Expenses + tips always add (house owes player regardless of game result)
+  const tips = (p.tips || 0);
+  return gameNet + expenses + tips;
 }
 
 function renderPlayerGrid() {
