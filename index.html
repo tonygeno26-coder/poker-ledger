@@ -1268,12 +1268,17 @@ function openSettleUp(id) {
   openModal('modal-settle-up');
 }
 
+function roundToNearest5(n) {
+  return Math.round(n / 5) * 5;
+}
+
 function updateTipsTax(pct) {
   const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
   const p = G.players.find(p => p.id === id);
   if (!p) return;
   const gross = p.tips || 0;
-  const houseTake = gross * (parseInt(pct) / 100);
+  const houseTakeRaw = gross * (parseInt(pct) / 100);
+  const houseTake = roundToNearest5(houseTakeRaw);
   const staffGets = gross - houseTake;
   document.getElementById('tips-tax-pct-display').textContent = pct + '%';
   document.getElementById('tips-tax-gross').textContent = '$' + fmt(gross);
@@ -1307,7 +1312,7 @@ function saveSettleUp() {
   // Apply tips tax if set
   const tipsTaxPct = parseInt(document.getElementById('modal-settle-up').dataset.tipsTaxPct || 0);
   if (p.staffRole && p.tips && tipsTaxPct > 0) {
-    const houseTake = p.tips * (tipsTaxPct / 100);
+    const houseTake = roundToNearest5(p.tips * (tipsTaxPct / 100));
     const tipsNet = p.tips - houseTake;
     p.tipsTaxPct = tipsTaxPct;
     p.tipsTaxAmount = houseTake;
