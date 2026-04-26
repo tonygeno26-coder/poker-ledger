@@ -1,17 +1,1510 @@
-  el.innerHTML = owing.map(function(p) {
-    var bal = playerBalance(p);
-    var mOwed = markerOwed(p);
-    var sOwed = staffOwed(p);
-    var hasMarker = mOwed > 0;
-    var isStaff = sOwed > 0;
-    var displayAmt = (isStaff && bal >= 0 && !hasMarker) ? sOwed : Math.abs(bal < 0 ? bal : mOwed);
-    var amtColor = (isStaff && bal >= 0 && !hasMarker) ? 'var(--green)' : 'var(--red)';
-    var label = (isStaff && bal >= 0 && !hasMarker) ? 'House owes' : 'Owes house';
-    var staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
-    var staffLabel = 'Tips $' + fmt(p.tips||0) + (p.staffRole === 'dealer' ? ' + Drop $' + fmt(p.drop||0) : '');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pocketbooks 🃏</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f1a;
+  --bg2: #1a1a2e;
+  --bg3: #16213e;
+  --card: #1e1e35;
+  --border: #2d2d4a;
+  --purple: #7c3aed;
+  --purple-light: #a855f7;
+  --purple-dim: rgba(124,58,237,0.15);
+  --gold: #f59e0b;
+  --gold-dim: rgba(245,158,11,0.15);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.15);
+  --green: #10b981;
+  --green-dim: rgba(16,185,129,0.15);
+  --orange: #f97316;
+  --orange-dim: rgba(249,115,22,0.15);
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+input, select, button, textarea { font-family: inherit; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* HEADER */
+.header {
+  background: linear-gradient(135deg, #1a0533 0%, #0f1a3a 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 200;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo h1 { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, #a855f7, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 0.5px; }
+.logo span { font-size: 11px; color: var(--text-muted); display: block; font-weight: 400; }
+
+/* NAV */
+.nav { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; padding: 0 12px; }
+.nav-btn { padding: 12px 18px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
+.nav-btn:hover { color: var(--text); }
+.nav-btn.active { color: var(--purple-light); border-bottom-color: var(--purple-light); }
+
+/* MAIN */
+.main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* CARDS */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+.card-sm { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.card-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .grid-3 { grid-template-columns: 1fr 1fr; } .grid-4 { grid-template-columns: 1fr 1fr; } }
+
+/* STAT BOX */
+.stat-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+.stat-box .lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.stat-box .val { font-size: 24px; font-weight: 800; }
+
+/* INPUTS */
+.inp { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 10px; font-size: 14px; width: 100%; transition: border-color 0.2s; }
+.inp:focus { outline: none; border-color: var(--purple); }
+.inp-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.inp-group { display: flex; flex-direction: column; gap: 5px; }
+
+/* BUTTONS */
+.btn { padding: 10px 18px; border-radius: 10px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+.btn-purple { background: var(--purple); color: #fff; }
+.btn-purple:hover { background: var(--purple-light); }
+.btn-gold { background: var(--gold); color: #000; }
+.btn-gold:hover { background: #fbbf24; }
+.btn-red { background: var(--red); color: #fff; }
+.btn-green { background: var(--green); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+.btn-outline:hover { border-color: var(--purple-light); color: var(--purple-light); }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+.btn-xs { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+
+/* EXPENSE ROW */
+.exp-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(239,68,68,0.1)); border: 1px solid rgba(249,115,22,0.25); border-radius: 10px; margin-bottom: 8px; }
+.exp-row .exp-name { font-weight: 600; font-size: 13px; }
+.exp-row .exp-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.exp-row .exp-amt { font-weight: 800; font-size: 16px; color: var(--orange); }
+
+/* OWED ROW */
+.owed-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05)); border: 1px solid rgba(239,68,68,0.25); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s; }
+.owed-row:hover { border-color: rgba(239,68,68,0.5); }
+.owed-row .owed-name { font-weight: 700; font-size: 13px; letter-spacing: 0.5px; }
+.owed-row .owed-amt { font-weight: 800; font-size: 16px; color: var(--red); }
+
+/* BREAKDOWN BAR */
+.breakdown { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.breakdown-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.breakdown-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.breakdown-cell { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+.breakdown-cell .bc-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.breakdown-cell .bc-val { font-size: 20px; font-weight: 800; color: var(--text); }
+.breakdown-cell.profit .bc-val { color: var(--green); }
+
+/* GAME NUMBERS */
+.game-numbers { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+
+/* HOST SPLIT */
+.host-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.host-row:last-child { border-bottom: none; }
+.host-name { font-weight: 700; font-size: 14px; flex: 1; }
+.host-actions { display: flex; align-items: center; gap: 8px; }
+.host-pct { font-size: 13px; color: var(--text-muted); }
+.host-share { font-weight: 800; font-size: 15px; color: var(--green); }
+
+/* END GAME BUTTON */
+.end-game-btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #7c3aed, #2563eb); color: #fff; border: none; border-radius: 14px; font-size: 18px; font-weight: 800; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: opacity 0.2s; margin-top: 8px; }
+.end-game-btn:hover { opacity: 0.9; }
+
+/* PLAYER CARD */
+.player-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer; transition: border-color 0.2s; }
+.player-card:hover { border-color: var(--purple); }
+.player-card.active-card { border-color: var(--purple-light); background: rgba(124,58,237,0.05); }
+.player-avatar { width: 44px; height: 44px; background: linear-gradient(135deg, var(--purple), var(--purple-light)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.player-balance { font-size: 18px; font-weight: 800; }
+.player-balance.pos { color: var(--green); }
+.player-balance.neg { color: var(--red); }
+.player-balance.zero { color: var(--text-muted); }
+
+/* PLAYER DETAIL */
+.player-detail { background: linear-gradient(135deg, #1a0533, #0f1a3a); border: 1px solid var(--purple); border-radius: 20px; padding: 24px; }
+.player-detail-header { text-align: center; margin-bottom: 20px; }
+.player-detail-avatar { width: 64px; height: 64px; background: linear-gradient(135deg, var(--purple), var(--purple-light)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #fff; margin: 0 auto 10px; }
+.player-detail-name { font-size: 20px; font-weight: 800; }
+.player-detail-role { font-size: 12px; color: var(--text-muted); }
+.balance-bar { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.3); border-radius: 10px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.balance-bar .bal-lbl { font-size: 13px; color: var(--purple-light); font-weight: 600; }
+.balance-bar .bal-val { font-size: 22px; font-weight: 800; }
+.amount-btn { background: var(--bg3); border: 1px solid var(--purple); color: var(--purple-light); padding: 10px 14px; border-radius: 10px; font-size: 14px; width: 100%; cursor: pointer; text-align: left; transition: border-color 0.2s; font-weight: 500; }
+.amount-btn:focus { outline: none; border-color: var(--purple-light); color: var(--text); }
+.io-section { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 14px; }
+.io-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; text-align: center; }
+.io-field { margin-bottom: 12px; }
+.io-field label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+.player-summary { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px; color: var(--text-muted); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 14px; }
+.player-summary div span { color: var(--text); font-weight: 600; }
+.cosign-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); margin-top: 6px; cursor: pointer; }
+.cosign-check input { accent-color: var(--purple); }
+
+/* SETTLEMENT */
+.settle-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+.settle-item .arrow { color: var(--purple-light); margin: 0 8px; font-size: 16px; }
+.settle-item .s-amount { font-weight: 800; font-size: 18px; color: var(--green); }
+
+/* HISTORY */
+.hist-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s; }
+.hist-item:hover { border-color: var(--purple); }
+
+/* MODAL */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; align-items: center; justify-content: center; padding: 20px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; max-width: 480px; width: 100%; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--purple); color: var(--text); padding: 12px 18px; border-radius: 12px; font-size: 14px; font-weight: 500; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* BADGE */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.badge-purple { background: var(--purple-dim); color: var(--purple-light); }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-gold { background: var(--gold-dim); color: var(--gold); }
+
+/* DIVIDER */
+.divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ml-auto { margin-left: auto; }
+
+@media print {
+  .header, .nav, .btn, .no-print { display: none !important; }
+  body { background: #fff; color: #000; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <span style="font-size:26px">🃏</span>
+    <div>
+      <h1>POCKETBOOKS</h1>
+      <span id="game-label">No active game</span>
+    </div>
+  </div>
+  <div class="flex-row no-print" style="gap:8px">
+    <button class="btn btn-outline btn-sm" onclick="newGame()">＋ New Game</button>
+    <button class="btn btn-purple btn-sm" onclick="saveGame()">💾 Save</button>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="showPage('dashboard')">📊 Dashboard</button>
+  <button class="nav-btn" onclick="showPage('players')">👥 Players</button>
+  <button class="nav-btn" onclick="showPage('settlement')">🤝 Settlement</button>
+  <button class="nav-btn" onclick="showPage('history')">📋 History</button>
+</nav>
+
+<div class="main">
+
+<!-- ===== DASHBOARD ===== -->
+<div id="page-dashboard" class="page active">
+  <!-- Setup row -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
+      <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
+      <div class="inp-group"><div class="inp-label">Game Type</div><input class="inp" id="g-type" placeholder="No Limit Hold'em"></div>
+      <div class="inp-group"><div class="inp-label">Stakes</div><input class="inp" id="g-stakes" placeholder="1/2"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- LEFT: Expenses -->
+    <div>
+      <div class="card">
+        <div class="card-title">🧾 Expenses <button class="btn btn-outline btn-xs ml-auto" onclick="openExpenseModal()">＋ Add</button></div>
+        <div id="expense-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No expenses yet</div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Owed -->
+    <div>
+      <div class="card">
+        <div class="card-title">💸 Owed <span id="owed-count" class="badge badge-red ml-auto" style="display:none">0</span></div>
+        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BREAKDOWN -->
+  <div class="breakdown">
+    <div class="breakdown-title">🏦 Breakdown</div>
+    <div class="breakdown-row">
+      <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Tax</div><div class="bc-val" id="b-tax">$0</div></div>
+      <div class="breakdown-cell profit"><div class="bc-lbl">Profit</div><div class="bc-val" id="b-profit">$0</div></div>
+    </div>
+  </div>
+
+  <!-- GAME NUMBERS -->
+  <div class="game-numbers">
+    <div class="card-title">🎰 Game Numbers</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
+      <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
+      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="calcAll()"></div>
+      <div class="inp-group"><div class="inp-label">Starting Bank</div><input class="inp" type="number" id="bank-start" placeholder="0" oninput="calcAll()"></div>
+      <div class="inp-group"><div class="inp-label">Chip Float</div><input class="inp" type="number" id="chip-float" placeholder="0" oninput="calcAll()"></div>
+    </div>
+  </div>
+
+  <!-- CHIP COUNT -->
+  <div class="card" id="chip-count-card">
+    <div class="card-title">🎲 Chip Count <button class="btn btn-outline btn-xs ml-auto" onclick="openChipCountModal()">＋ Count Now</button></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Starting Count</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+        <div class="inp-group"><div class="inp-label" style="color:#ef4444">$5 chips</div><input class="inp" type="number" id="start-chip-5" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#3b82f6">$25 chips</div><input class="inp" type="number" id="start-chip-25" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#8b5cf6">$100 chips</div><input class="inp" type="number" id="start-chip-100" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#f59e0b">$500 chips</div><input class="inp" type="number" id="start-chip-500" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+        <div class="inp-group"><div class="inp-label" style="color:#10b981">$1000 chips</div><input class="inp" type="number" id="start-chip-1000" placeholder="0" oninput="calcChipCount()" style="text-align:center"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-muted)">Starting Total</span>
+        <span style="font-size:20px;font-weight:800;color:var(--gold)" id="start-chip-total">$0</span>
+      </div>
+    </div>
+    <div id="chip-count-log"></div>
+    <div id="chip-balance-status"></div>
+  </div>
+
+  <!-- HOST SPLIT -->
+  <div class="card" id="host-split-card">
+    <div class="card-title">👥 Host Split <button class="btn btn-outline btn-xs ml-auto" onclick="openHostModal()">⚙️ Edit</button></div>
+    <div id="host-split-list"><div style="color:var(--text-muted);font-size:13px;text-align:center;padding:10px">No hosts configured — click Edit to add</div></div>
+  </div>
+
+  <!-- END GAME -->
+  <button class="end-game-btn" onclick="endGame()">🏁 END GAME</button>
+</div>
+
+<!-- ===== PLAYERS ===== -->
+<div id="page-players" class="page">
+  <!-- TABS -->
+  <div style="display:flex;gap:0;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px">
+    <button id="tab-players-btn" class="btn btn-purple" style="flex:1;border-radius:8px;font-size:13px" onclick="switchPlayerTab('players')">👥 Players <span id="player-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
+    <button id="tab-staff-btn" class="btn btn-outline" style="flex:1;border-radius:8px;font-size:13px;border:none" onclick="switchPlayerTab('staff')">👔 Staff <span id="staff-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
+  </div>
+
+  <!-- ADD BUTTON -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button id="add-player-btn" class="btn btn-purple" onclick="openAddPlayerModal()">＋ Add Player</button>
+    <button id="add-staff-btn" class="btn btn-purple" style="display:none" onclick="openAddStaffModal()">＋ Add Staff</button>
+  </div>
+
+  <!-- PLAYER DETAIL VIEW -->
+  <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
+
+  <!-- PLAYERS GRID -->
+  <div id="player-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+
+  <!-- STAFF GRID -->
+  <div id="staff-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+
+  <!-- STAFF DETAIL VIEW -->
+  <div id="staff-detail-view" style="display:none;margin-bottom:20px"></div>
+
+  <!-- STAFF SESSION TOTALS -->
+  <div id="staff-totals-card" style="display:none;margin-top:20px" class="card">
+    <div class="card-title">💰 Staff Session Totals</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="staff-totals-grid"></div>
+  </div>
+</div>
+
+<!-- ===== SETTLEMENT ===== -->
+<div id="page-settlement" class="page">
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>🤝 Who Owes Who</span>
+      <button class="btn btn-outline btn-sm no-print" onclick="window.print()">🖨️ Print</button>
+    </div>
+    <div id="settlement-content"><div style="text-align:center;padding:40px;color:var(--text-muted)">Add players with results to see settlement</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📊 Player Results</div>
+    <div id="results-content"></div>
+  </div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<!-- DEALERS PAGE -->
+<div id="page-dealers" class="page">
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>🎴 Dealer Profiles</span>
+      <button class="btn btn-purple btn-sm" onclick="openAddDealerModal()">＋ Add Dealer</button>
+    </div>
+    <div id="dealer-list"><div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">No dealers yet — click Add Dealer</div></div>
+  </div>
+
+  <!-- DEALER TOTALS -->
+  <div class="card" id="dealer-totals-card" style="display:none">
+    <div class="card-title">💰 Session Totals</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="dealer-totals-grid"></div>
+  </div>
+</div>
+
+<!-- ADD DEALER MODAL -->
+<div class="modal-bg" id="modal-add-dealer">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">🎴 Add Dealer <button class="modal-close" onclick="closeModal('modal-add-dealer')">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="inp-label">Dealer Name</label>
+      <input class="inp" id="new-dealer-name" placeholder="Enter dealer name..." style="width:100%">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-dealer')">Cancel</button>
+      <button class="btn btn-purple" onclick="addDealer()">Add Dealer</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEALER DETAIL MODAL -->
+<div class="modal-bg" id="modal-dealer-detail">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">🎴 <span id="dealer-detail-name"></span> <button class="modal-close" onclick="closeModal('modal-dealer-detail')">✕</button></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div class="io-field">
+        <label style="color:var(--green)">💰 TIPS</label>
+        <input type="number" class="inp" id="dealer-tips-input" placeholder="0" min="0" oninput="updateDealerTotal()" style="width:100%;font-size:1.1rem;font-weight:700">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Tips collected this session</div>
+      </div>
+      <div class="io-field">
+        <label style="color:var(--gold)">🎰 DROP</label>
+        <input type="number" class="inp" id="dealer-drop-input" placeholder="0" min="0" oninput="updateDealerTotal()" style="width:100%;font-size:1.1rem;font-weight:700">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Rake dropped this session</div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;margin-bottom:20px">
+      <span style="font-size:13px;font-weight:700;color:var(--text-muted)">TOTAL</span>
+      <span id="dealer-total-display" style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$0</span>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:space-between">
+      <button class="btn btn-outline" style="color:var(--red);border-color:var(--red)" onclick="removeDealer()">Remove</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="closeModal('modal-dealer-detail')">Cancel</button>
+        <button class="btn btn-purple" onclick="saveDealer()">✓ Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="page-history" class="page">
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>📋 Past Games</span>
+      <button class="btn btn-outline btn-xs" onclick="clearHistory()" style="color:var(--red);border-color:var(--red)">🗑️ Clear All</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- ===== MODALS ===== -->
+
+<!-- Add Expense -->
+<div class="modal-bg" id="modal-expense">
+  <div class="modal">
+    <div class="modal-title">Add Expense <button class="modal-close" onclick="closeModal('modal-expense')">✕</button></div>
+    <div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Name / Description</div><input class="inp" id="exp-name" placeholder="e.g. AA RABBIT"></div>
+    <div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Amount ($)</div><input class="inp" type="number" id="exp-amount" placeholder="0"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-purple" style="flex:1" onclick="addExpense()">Add Expense</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-expense')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD STAFF MODAL -->
+<div class="modal-bg" id="modal-add-staff">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">👔 Add Staff <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="inp-label">Name</label>
+      <input class="inp" id="new-staff-name" placeholder="Staff name..." style="width:100%">
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label class="inp-label">Role</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="time-option">
+          <input type="radio" name="staff-role" id="role-dealer" value="dealer" checked>
+          <label for="role-dealer" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px">
+            <span style="font-size:1.4rem">🎴</span>
+            <span style="font-size:13px;font-weight:700">Dealer</span>
+            <span style="font-size:11px;color:var(--text-muted)">Tips + Drop</span>
+          </label>
+        </div>
+        <div class="time-option">
+          <input type="radio" name="staff-role" id="role-hostess" value="hostess">
+          <label for="role-hostess" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px">
+            <span style="font-size:1.4rem">💁</span>
+            <span style="font-size:13px;font-weight:700">Hostess</span>
+            <span style="font-size:11px;color:var(--text-muted)">Tips only</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-staff')">Cancel</button>
+      <button class="btn btn-purple" onclick="addStaff()">Add Staff</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PLAYER -->
+<div class="modal-bg" id="modal-add-player">
+  <div class="modal">
+    <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
+    <div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Name</div><input class="inp" id="new-player-name" placeholder="Player name"></div>
+    <div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Notes (Venmo, etc.)</div><input class="inp" id="new-player-notes" placeholder="@venmo"></div>
+
+    <!-- STAFF TOGGLE -->
+    <div style="margin-bottom:16px">
+      <button id="staff-toggle-btn" onclick="toggleStaffSection()" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all 0.2s">
+        <span>👔 Staff</span>
+        <span id="staff-toggle-arrow" style="font-size:11px">▼ expand</span>
+      </button>
+      <div id="staff-section" style="display:none;margin-top:10px;background:var(--bg);border:1px solid var(--purple);border-radius:10px;padding:14px">
+        <div class="inp-label" style="margin-bottom:10px">Staff Role</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-dealer" value="dealer" checked>
+            <label for="new-role-dealer" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">🎴</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Dealer</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips + Drop</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-hostess" value="hostess">
+            <label for="new-role-hostess" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">💁</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Hostess</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-chef" value="chef">
+            <label for="new-role-chef" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">👨‍🍳</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Chef</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-security" value="security">
+            <label for="new-role-security" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">🔒</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Security</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-misc" value="misc">
+            <label for="new-role-misc" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">⭐</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Misc</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-purple" style="flex:1" onclick="addPlayer()">Add Player</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-add-player')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Host Config -->
+<div class="modal-bg" id="modal-host">
+  <div class="modal">
+    <div class="modal-title">Host Split Config <button class="modal-close" onclick="closeModal('modal-host')">✕</button></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Add hosts and their profit split percentage.</p>
+    <div id="host-config-list"></div>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="addHost()">＋ Add Host</button>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-purple" style="flex:1" onclick="saveHosts()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-host')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Chip Count Modal -->
+<div class="modal-bg" id="modal-chip-count">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🎲 Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')">✕</button></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Enter the number of chips of each denomination currently on the table.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#ef4444">$5</span>
+          <input type="number" id="cc-5" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-5-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#3b82f6">$25</span>
+          <input type="number" id="cc-25" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-25-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:10px">
+          <span style="font-weight:700;color:#8b5cf6">$100</span>
+          <input type="number" id="cc-100" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-100-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;margin-bottom:8px">
+          <span style="font-weight:700;color:#f59e0b">$500</span>
+          <input type="number" id="cc-500" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-500-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px">
+          <span style="font-weight:700;color:#10b981">$1000</span>
+          <input type="number" id="cc-1000" placeholder="# chips" class="inp" style="max-width:100px;text-align:center" oninput="updateCCTotal()">
+          <span id="cc-1000-val" style="font-weight:700;min-width:60px;text-align:right;color:var(--text-muted)">$0</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg3);border-radius:12px;border:1px solid var(--border);margin-bottom:16px">
+      <span style="font-size:14px;font-weight:600">Count Total</span>
+      <span id="cc-total" style="font-size:24px;font-weight:800;color:var(--gold)">$0</span>
+    </div>
+    <div id="cc-vs-expected" style="margin-bottom:16px"></div>
+    <div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Note (optional)</div><input class="inp" id="cc-note" placeholder="e.g. Mid-game count, 10pm"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-purple" style="flex:1" onclick="saveChipCount()">💾 Log This Count</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-chip-count')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- History Detail -->
+<div class="modal-bg" id="modal-history">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title" id="modal-history-title">Game Details <button class="modal-close" onclick="closeModal('modal-history')">✕</button></div>
+    <div id="modal-history-body"></div>
+  </div>
+</div>
+
+<!-- SETTLE UP MODAL -->
+<div class="modal-bg" id="modal-settle-up">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🤝 Settle Up — <span id="settle-player-name"></span> <button class="modal-close" onclick="closeModal('modal-settle-up')">✕</button></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Record how this player's balance was settled</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <!-- CASH IN -->
+      <div class="io-field">
+        <label style="color:var(--green)">💵 CASH IN</label>
+        <input type="number" class="inp" id="settle-cash-in" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash given to game</div>
+      </div>
+      <!-- CASH OUT -->
+      <div class="io-field">
+        <label style="color:var(--red)">💸 CASH OUT</label>
+        <input type="number" class="inp" id="settle-cash-out" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash received from game</div>
+      </div>
+      <!-- ELECTRONIC IN -->
+      <div class="io-field">
+        <label style="color:var(--purple-light)">📱 ELECTRONIC IN</label>
+        <input type="number" class="inp" id="settle-elec-in" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle sent</div>
+      </div>
+      <!-- ELECTRONIC OUT -->
+      <div class="io-field">
+        <label style="color:var(--gold)">📤 ELECTRONIC OUT</label>
+        <input type="number" class="inp" id="settle-elec-out" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle received</div>
+      </div>
+    </div>
+
+    <!-- LIVE SUMMARY -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px" id="settle-summary">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Settlement Summary</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total In</span><span id="settle-total-in" style="color:var(--green);font-weight:700">$0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total Out</span><span id="settle-total-out" style="color:var(--red);font-weight:700">$0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 0;font-weight:800"><span>Net</span><span id="settle-net" style="color:var(--green)">$0</span></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="settle-marker-note"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-settle-up')">Cancel</button>
+      <button class="btn btn-purple" onclick="saveSettleUp()">✓ Confirm Settlement</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== STATE ==========
+let G = {
+  id: null,
+  location: '', date: '', type: '', stakes: '',
+  expenses: [],
+  players: [],
+  hosts: [],
+  taxPct: 0,
+  bankStart: 0,
+  chipFloat: 0
+};
+
+// ========== INIT ==========
+function init() {
+  document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
+  const saved = ls('pb-current');
+  if (saved) try { G = {...G, ...JSON.parse(saved)}; restoreInputs(); } catch(e){}
+  calcAll();
+  renderAll();
+}
+
+function restoreInputs() {
+  setVal('g-location', G.location);
+  setVal('g-date', G.date || new Date().toISOString().split('T')[0]);
+  setVal('g-type', G.type);
+  setVal('g-stakes', G.stakes);
+  setVal('tax-pct', G.taxPct);
+  setVal('bank-start', G.bankStart);
+  setVal('chip-float', G.chipFloat);
+  updateGameLabel();
+}
+
+// ========== NAV ==========
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'settlement') calcSettlement();
+  if (name === 'dealers') renderDealers();
+  if (name === 'history') renderHistory();
+}
+
+// ========== GAME LABEL ==========
+function updateGameLabel() {
+  G.location = getVal('g-location');
+  G.date = getVal('g-date');
+  G.type = getVal('g-type');
+  G.stakes = getVal('g-stakes');
+  const loc = G.location || 'Unknown Location';
+  const dt = G.date ? new Date(G.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '';
+  document.getElementById('game-label').textContent = `${loc}${dt ? ' · ' + dt : ''}`;
+  autoSave();
+}
+
+// ========== EXPENSES ==========
+function openExpenseModal() {
+  setVal('exp-name', ''); setVal('exp-amount', '');
+  openModal('modal-expense');
+  setTimeout(() => document.getElementById('exp-name').focus(), 100);
+}
+
+function addExpense() {
+  const name = getVal('exp-name').trim();
+  const amount = parseFloat(getVal('exp-amount')) || 0;
+  if (!name || !amount) return toast('Enter name and amount');
+  G.expenses.push({ id: Date.now(), name: name.toUpperCase(), amount, time: new Date().toLocaleTimeString() });
+  closeModal('modal-expense');
+  calcAll();
+  renderAll();
+  autoSave();
+  toast('Expense added ✅');
+}
+
+function removeExpense(id) {
+  G.expenses = G.expenses.filter(e => e.id !== id);
+  calcAll(); renderAll(); autoSave();
+}
+
+// ========== PLAYERS ==========
+function openAddPlayerModal() {
+  setVal('new-player-name', ''); setVal('new-player-role', ''); setVal('new-player-notes', '');
+  openModal('modal-add-player');
+  setTimeout(() => document.getElementById('new-player-name').focus(), 100);
+}
+
+function addPlayer() {
+  const name = getVal('new-player-name').trim();
+  const staffRoleEl = document.querySelector('input[name="new-staff-role"]:checked');
+  const staffRole = staffRoleEl ? staffRoleEl.value : '';
+  if (!name) return toast('Enter player name');
+  G.players.push({
+    id: Date.now(), name: name.toUpperCase(),
+    role: staffRole || '',
+    staffRole: staffRole,  // 'dealer', 'hostess', or ''
+    tips: 0, drop: 0,
+    notes: getVal('new-player-notes'),
+    cashIn: 0, cashOut: 0, chipsIn: 0, chipsOut: 0,
+    eCashIn: 0, eCashOut: 0, tipTransfer: 0,
+    expense: 0, playerNotes: '', cosignECashIn: false, cosignECashOut: false
+  });
+  // Reset staff toggle
+  document.getElementById('staff-section').style.display = 'none';
+  document.getElementById('staff-toggle-arrow').textContent = '▼ expand';
+  document.getElementById('staff-toggle-btn').style.borderColor = 'var(--border)';
+  document.getElementById('staff-toggle-btn').style.color = 'var(--text-muted)';
+  document.getElementById('new-role-dealer').checked = true;
+  closeModal('modal-add-player');
+  renderPlayerGrid();
+  autoSave();
+  toast('Player added ✅');
+}
+
+function removePlayer(id) {
+  if (!confirm('Remove this player?')) return;
+  G.players = G.players.filter(p => p.id !== id);
+  document.getElementById('player-detail-view').style.display = 'none';
+  renderPlayerGrid();
+  calcAll(); renderAll(); autoSave();
+}
+
+function updatePlayerField(id, field, val) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const strFields = ['playerNotes','buyInType','cosignECashIn','cosignECashOut'];
+  p[field] = strFields.includes(field) ? val : (parseFloat(val) || 0);
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+}
+
+const BUYIN_LABELS = {cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'};
+
+function renderBuyInLog(p) {
+  const buyIns = p.buyIns || [];
+  if (!buyIns.length) return '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No buy-ins yet — add one above</div>';
+  return buyIns.map((b, i) =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">'
+    + '<span style="color:var(--text-muted)">' + (BUYIN_LABELS[b.type] || b.type) + '</span>'
+    + '<span style="font-weight:700;color:var(--green)">+$' + fmt(b.amount) + '</span>'
+    + '<button onclick="removeBuyIn(' + p.id + ',' + i + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">✕</button>'
+    + '</div>'
+  ).join('');
+}
+
+function renderBuyInSummary(p) {
+  return (p.buyIns || []).map(b =>
+    '<div>' + (BUYIN_LABELS[b.type] || b.type) + ' Buy In <span>$' + fmt(b.amount) + '</span></div>'
+  ).join('');
+}
+
+function addBuyIn(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const amount = parseFloat(p.buyInAmount) || 0;
+  if (!amount) { toast('Enter an amount first'); return; }
+  if (!p.buyIns) p.buyIns = [];
+  p.buyIns.push({ type: p.buyInType || 'cash', amount });
+  p.buyInAmount = 0;
+  // also update legacy cashIn for balance calc
+  p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
+  p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Buy-in added!');
+}
+
+// ========== STAFF ==========
+if (!G.staff) G.staff = [];
+let currentStaffTab = 'players';
+
+function switchPlayerTab(tab) {
+  currentStaffTab = tab;
+  const isPlayers = tab === 'players';
+  document.getElementById('player-grid').style.display = isPlayers ? 'grid' : 'none';
+  document.getElementById('staff-grid').style.display = isPlayers ? 'none' : 'grid';
+  document.getElementById('player-detail-view').style.display = 'none';
+  document.getElementById('staff-detail-view').style.display = 'none';
+  document.getElementById('add-player-btn').style.display = isPlayers ? '' : 'none';
+  document.getElementById('add-staff-btn').style.display = isPlayers ? 'none' : '';
+  document.getElementById('staff-totals-card').style.display = isPlayers ? 'none' : 'block';
+  document.getElementById('tab-players-btn').className = isPlayers ? 'btn btn-purple' : 'btn btn-outline';
+  document.getElementById('tab-players-btn').style.borderRadius = '8px';
+  document.getElementById('tab-players-btn').style.fontSize = '13px';
+  document.getElementById('tab-staff-btn').className = isPlayers ? 'btn btn-outline' : 'btn btn-purple';
+  document.getElementById('tab-staff-btn').style.borderRadius = '8px';
+  document.getElementById('tab-staff-btn').style.fontSize = '13px';
+  document.getElementById('tab-staff-btn').style.border = isPlayers ? 'none' : '';
+  if (!isPlayers) renderStaff();
+}
+
+function submitStaffField(id, field) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('\u2705 ' + (field === 'tips' ? 'Tips' : 'Drop') + ' saved!');
+}
+
+function renderStaffEarnings(p) {
+  if (!p.staffRole) return '';
+  const isDealer = p.staffRole === 'dealer';
+  const icons = {dealer:'🎴 Dealer', hostess:'💁 Hostess', chef:'👨‍🍳 Chef', security:'🔒 Security', misc:'⭐ Misc'};
+  const icon = icons[p.staffRole] || p.staffRole;
+  const total = (p.tips||0) + (p.drop||0);
+  return '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">' + icon + ' — Staff Earnings</div>'
+    + '<div style="display:grid;grid-template-columns:' + (isDealer ? '1fr 1fr' : '1fr') + ';gap:12px">'
+    + '<div class="io-field"><label style="color:var(--green)">💰 TIPS</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.tips||'') + '" oninput="updatePlayerField(' + p.id + ',\'tips\',this.value)" min="0" style="width:100%"></div>'
+    + (isDealer
+      ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
+        + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.drop||'') + '" oninput="updatePlayerField(' + p.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>'
+      : '')
+    + '</div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
+    + (isDealer ? '<button class="btn btn-outline btn-sm" onclick="submitStaffField(' + p.id + ',\'drop\')">\u2713 Save Drop</button>' : '')
+    + '<button class="btn btn-purple btn-sm" onclick="submitStaffField(' + p.id + ',\'tips\')">\u2713 Save Tips</button>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:8px">'
+    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">STAFF TOTAL</span>'
+    + '<span style="font-weight:800;color:var(--purple-light)">$' + fmt(total) + '</span></div>'
+    + '</div>';
+}
+
+function toggleStaffSection() {
+  const section = document.getElementById('staff-section');
+  const arrow = document.getElementById('staff-toggle-arrow');
+  const btn = document.getElementById('staff-toggle-btn');
+  const isOpen = section.style.display !== 'none';
+  section.style.display = isOpen ? 'none' : 'block';
+  arrow.textContent = isOpen ? '▼ expand' : '▲ collapse';
+  btn.style.borderColor = isOpen ? 'var(--border)' : 'var(--purple)';
+  btn.style.color = isOpen ? 'var(--text-muted)' : 'var(--purple-light)';
+}
+
+function openAddStaffModal() {
+  document.getElementById('new-staff-name').value = '';
+  document.getElementById('role-dealer').checked = true;
+  openModal('modal-add-staff');
+  setTimeout(() => document.getElementById('new-staff-name').focus(), 100);
+}
+
+function addStaff() {
+  const name = document.getElementById('new-staff-name').value.trim();
+  if (!name) { toast('Enter a name'); return; }
+  const role = document.querySelector('input[name="staff-role"]:checked').value;
+  if (!G.staff) G.staff = [];
+  G.staff.push({ id: Date.now(), name, role, tips: 0, drop: 0 });
+  closeModal('modal-add-staff');
+  renderStaff();
+  autoSave();
+  toast((role === 'dealer' ? '🎴' : '💁') + ' ' + name + ' added!');
+}
+
+function renderStaff() {
+  const grid = document.getElementById('staff-grid');
+  const badge = document.getElementById('staff-count-badge');
+  const totalsCard = document.getElementById('staff-totals-card');
+  if (!G.staff || !G.staff.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">👔</div>No staff yet — click Add Staff</div>';
+    badge.textContent = '0';
+    totalsCard.style.display = 'none';
+    return;
+  }
+  badge.textContent = G.staff.length;
+  totalsCard.style.display = 'block';
+  grid.innerHTML = G.staff.map(s => {
+    const total = (s.tips||0) + (s.drop||0);
+    const icon = s.role === 'dealer' ? '🎴' : '💁';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:border-color 0.2s;text-align:center" onclick="renderStaffDetail(' + s.id + ')" onmouseover="this.style.borderColor=\'var(--purple)\'" onmouseout="this.style.borderColor=\'var(--border)\'" >'
+      + '<div style="width:44px;height:44px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 8px">' + icon + '</div>'
+      + '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + s.name + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:capitalize">' + s.role + '</div>'
+      + '<div style="font-size:18px;font-weight:800;color:var(--purple-light)">$' + fmt(total) + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'
+      + '<span style="color:var(--green)">tips $' + fmt(s.tips||0) + '</span>'
+      + (s.role === 'dealer' ? ' · <span style="color:var(--gold)">drop $' + fmt(s.drop||0) + '</span>' : '')
+      + '</div></div>';
+  }).join('');
+
+  // Totals
+  const totalTips = G.staff.reduce((s,d) => s + (d.tips||0), 0);
+  const totalDrop = G.staff.filter(d=>d.role==='dealer').reduce((s,d) => s + (d.drop||0), 0);
+  const grand = totalTips + totalDrop;
+  document.getElementById('staff-totals-grid').innerHTML =
+    '<div style="background:rgba(16,185,129,0.1);border:1px solid var(--green);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Tips</div><div style="font-size:1.6rem;font-weight:900;color:var(--green)">$' + fmt(totalTips) + '</div></div>'
+    + '<div style="background:rgba(245,158,11,0.1);border:1px solid var(--gold);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Drop</div><div style="font-size:1.6rem;font-weight:900;color:var(--gold)">$' + fmt(totalDrop) + '</div></div>'
+    + '<div style="background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div><div style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$' + fmt(grand) + '</div></div>';
+}
+
+function renderStaffDetail(id) {
+  const s = G.staff.find(s => s.id === id);
+  if (!s) return;
+  const isDealer = s.role === 'dealer';
+  const icon = isDealer ? '🎴' : '💁';
+  const detail = document.getElementById('staff-detail-view');
+  detail.style.display = 'block';
+  document.querySelectorAll('#staff-grid > div').forEach(c => c.style.borderColor = 'var(--border)');
+
+  detail.innerHTML = '<div class="card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;gap:12px">'
+    + '<div style="width:52px;height:52px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px">' + icon + '</div>'
+    + '<div><div style="font-size:18px;font-weight:800">' + s.name + '</div><div style="font-size:12px;color:var(--text-muted);text-transform:capitalize">' + s.role + '</div></div>'
+    + '</div>'
+    + '<button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="removeStaff(' + s.id + ')">Remove</button>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:' + (isDealer ? '1fr 1fr' : '1fr') + ';gap:12px;margin-bottom:16px">'
+    + '<div class="io-field"><label style="color:var(--green)">💰 TIPS</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (s.tips||'') + '" oninput="updateStaffField(' + s.id + ',\'tips\',this.value)" min="0" style="width:100%"></div>'
+    + (isDealer ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (s.drop||'') + '" oninput="updateStaffField(' + s.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>' : '')
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--purple-dim);border-radius:10px">'
+    + '<span style="font-weight:700;color:var(--text-muted)">Total</span>'
+    + '<span style="font-size:1.4rem;font-weight:900;color:var(--purple-light)">$' + fmt((s.tips||0)+(s.drop||0)) + '</span>'
+    + '</div></div>';
+}
+
+function updateStaffField(id, field, val) {
+  const s = G.staff.find(s => s.id === id);
+  if (!s) return;
+  s[field] = parseFloat(val) || 0;
+  renderStaff();
+  renderStaffDetail(id);
+  autoSave();
+}
+
+function removeStaff(id) {
+  G.staff = G.staff.filter(s => s.id !== id);
+  document.getElementById('staff-detail-view').style.display = 'none';
+  renderStaff();
+  autoSave();
+  toast('Staff removed');
+}
+
+// ========== DEALERS (legacy - now handled by staff) ==========
+if (!G.dealers) G.dealers = [];
+
+function openAddDealerModal() {
+  document.getElementById('new-dealer-name').value = '';
+  openModal('modal-add-dealer');
+  setTimeout(() => document.getElementById('new-dealer-name').focus(), 100);
+}
+
+function addDealer() {
+  const name = document.getElementById('new-dealer-name').value.trim();
+  if (!name) { toast('Enter a dealer name'); return; }
+  if (!G.dealers) G.dealers = [];
+  G.dealers.push({ id: Date.now(), name, tips: 0, drop: 0 });
+  closeModal('modal-add-dealer');
+  renderDealers();
+  autoSave();
+  toast('🎴 ' + name + ' added!');
+}
+
+function openDealerDetail(id) {
+  const d = G.dealers.find(d => d.id === id);
+  if (!d) return;
+  document.getElementById('dealer-detail-name').textContent = d.name;
+  document.getElementById('dealer-tips-input').value = d.tips || '';
+  document.getElementById('dealer-drop-input').value = d.drop || '';
+  document.getElementById('modal-dealer-detail').dataset.dealerId = id;
+  updateDealerTotal();
+  openModal('modal-dealer-detail');
+}
+
+function updateDealerTotal() {
+  const tips = parseFloat(document.getElementById('dealer-tips-input').value) || 0;
+  const drop = parseFloat(document.getElementById('dealer-drop-input').value) || 0;
+  document.getElementById('dealer-total-display').textContent = '$' + fmt(tips + drop);
+}
+
+function saveDealer() {
+  const id = parseInt(document.getElementById('modal-dealer-detail').dataset.dealerId);
+  const d = G.dealers.find(d => d.id === id);
+  if (!d) return;
+  d.tips = parseFloat(document.getElementById('dealer-tips-input').value) || 0;
+  d.drop = parseFloat(document.getElementById('dealer-drop-input').value) || 0;
+  closeModal('modal-dealer-detail');
+  renderDealers();
+  autoSave();
+  toast('✅ ' + d.name + ' saved!');
+}
+
+function removeDealer() {
+  const id = parseInt(document.getElementById('modal-dealer-detail').dataset.dealerId);
+  G.dealers = G.dealers.filter(d => d.id !== id);
+  closeModal('modal-dealer-detail');
+  renderDealers();
+  autoSave();
+  toast('Dealer removed');
+}
+
+function renderDealers() {
+  const el = document.getElementById('dealer-list');
+  const totalsCard = document.getElementById('dealer-totals-card');
+  if (!G.dealers || !G.dealers.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">No dealers yet — click Add Dealer</div>';
+    totalsCard.style.display = 'none';
+    return;
+  }
+  totalsCard.style.display = 'block';
+  el.innerHTML = G.dealers.map(d => {
+    const total = (d.tips||0) + (d.drop||0);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer" onclick="openDealerDetail(' + d.id + ')" onmouseover="this.style.borderColor=\'var(--purple)\'" onmouseout="this.style.borderColor=\'var(--border)\'" >'
+      + '<div style="display:flex;align-items:center;gap:14px">'
+      + '<div style="width:44px;height:44px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:var(--purple-light)">' + d.name.charAt(0).toUpperCase() + '</div>'
+      + '<div><div style="font-weight:700;font-size:15px">' + d.name + '</div>'
+      + '<div style="display:flex;gap:14px;margin-top:4px;font-size:12px">'
+      + '<span style="color:var(--green)">💰 Tips: $' + fmt(d.tips||0) + '</span>'
+      + '<span style="color:var(--gold)">🎰 Drop: $' + fmt(d.drop||0) + '</span>'
+      + '</div></div></div>'
+      + '<div style="text-align:right">'
+      + '<div style="font-size:1.2rem;font-weight:900;color:var(--purple-light)">$' + fmt(total) + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted)">total</div>'
+      + '</div></div>';
+  }).join('');
+
+  // Totals
+  const totalTips = G.dealers.reduce((s,d) => s + (d.tips||0), 0);
+  const totalDrop = G.dealers.reduce((s,d) => s + (d.drop||0), 0);
+  const grandTotal = totalTips + totalDrop;
+  document.getElementById('dealer-totals-grid').innerHTML =
+    '<div style="background:rgba(16,185,129,0.1);border:1px solid var(--green);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Tips</div><div style="font-size:1.6rem;font-weight:900;color:var(--green)">$' + fmt(totalTips) + '</div></div>'
+    + '<div style="background:rgba(245,158,11,0.1);border:1px solid var(--gold);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Drop</div><div style="font-size:1.6rem;font-weight:900;color:var(--gold)">$' + fmt(totalDrop) + '</div></div>'
+    + '<div style="background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div><div style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$' + fmt(grandTotal) + '</div></div>';
+}
+
+function openSettleUp(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  document.getElementById('settle-player-name').textContent = p.name;
+  document.getElementById('modal-settle-up').dataset.playerId = id;
+  // Pre-fill with existing settlement if any
+  const s = p.settlement || {};
+  document.getElementById('settle-cash-in').value = s.cashIn || '';
+  document.getElementById('settle-cash-out').value = s.cashOut || '';
+  document.getElementById('settle-elec-in').value = s.elecIn || '';
+  document.getElementById('settle-elec-out').value = s.elecOut || '';
+  // Show marker note if applicable
+  const mOwed = markerOwed(p);
+  const markerNote = document.getElementById('settle-marker-note');
+  if (mOwed > 0) {
+    markerNote.innerHTML = '📋 <strong style="color:var(--gold)">Marker of $' + fmt(mOwed) + ' outstanding</strong> — cash out must cover marker before player receives funds.';
+  } else {
+    markerNote.innerHTML = '';
+  }
+  updateSettleSummary();
+  openModal('modal-settle-up');
+}
+
+function updateSettleSummary() {
+  const cashIn = parseFloat(document.getElementById('settle-cash-in').value) || 0;
+  const cashOut = parseFloat(document.getElementById('settle-cash-out').value) || 0;
+  const elecIn = parseFloat(document.getElementById('settle-elec-in').value) || 0;
+  const elecOut = parseFloat(document.getElementById('settle-elec-out').value) || 0;
+  const totalIn = cashIn + elecIn;
+  const totalOut = cashOut + elecOut;
+  const net = totalOut - totalIn;
+  document.getElementById('settle-total-in').textContent = '$' + fmt(totalIn);
+  document.getElementById('settle-total-out').textContent = '$' + fmt(totalOut);
+  const netEl = document.getElementById('settle-net');
+  netEl.textContent = (net >= 0 ? '+' : '') + '$' + fmt(Math.abs(net));
+  netEl.style.color = net >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function saveSettleUp() {
+  const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  p.settlement = {
+    cashIn: parseFloat(document.getElementById('settle-cash-in').value) || 0,
+    cashOut: parseFloat(document.getElementById('settle-cash-out').value) || 0,
+    elecIn: parseFloat(document.getElementById('settle-elec-in').value) || 0,
+    elecOut: parseFloat(document.getElementById('settle-elec-out').value) || 0,
+    time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})
+  };
+  closeModal('modal-settle-up');
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('✅ ' + p.name + ' settled up!');
+}
+
+function submitCashOut(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const amount = parseFloat(p.cashOut) || 0;
+  if (!amount) { toast('Enter a cash out amount first'); return; }
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Cash out submitted!');
+}
+
+function removeBuyIn(id, idx) {
+  const p = G.players.find(p => p.id === id);
+  if (!p || !p.buyIns) return;
+  p.buyIns.splice(idx, 1);
+  p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
+  p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+}
+
+function markerTotal(p) {
+  return (p.buyIns||[]).filter(b => b.type === 'marker').reduce((s,b) => s + parseFloat(b.amount||0), 0);
+}
+
+function markerOwed(p) {
+  const marker = markerTotal(p);
+  if (!marker) return 0;
+  // Chip cash out pays toward marker
+  const chipCashOut = p.cashOut || 0;
+  // Settlement cash in also pays toward marker
+  const settleCashIn = p.settlement ? ((p.settlement.cashIn||0) + (p.settlement.elecIn||0)) : 0;
+  const totalPaid = chipCashOut + settleCashIn;
+  return Math.max(0, marker - totalPaid);
+}
+
+function playerBalance(p) {
+  const marker = markerTotal(p);
+  const chipCashOut = p.cashOut || 0;
+  const settleCashIn = p.settlement ? ((p.settlement.cashIn||0) + (p.settlement.elecIn||0)) : 0;
+  const settleOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
+
+  if (marker > 0) {
+    // Marker player: owed = marker minus what they've paid back (chips + settle cash)
+    const remaining = markerOwed(p);
+    // If marker fully cleared, show net profit/loss from settle out
+    if (remaining <= 0) {
+      return settleOut; // any cash they receive back after clearing marker
+    }
+    return -remaining; // still owes this much
+  }
+
+  if (p.settlement) {
+    // Non-marker settled player: net = what they got out minus what they put in
+    const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0);
+    return settleOut - totalIn;
+  }
+
+  // Unsettled player
+  const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
+  const totalOut = chipCashOut + (p.tipTransfer||0) + (p.expense||0);
+  return totalOut - totalIn;
+}
+
+function renderPlayerGrid() {
+  const grid = document.getElementById('player-grid');
+  document.getElementById('player-count-badge').textContent = G.players.length;
+  if (!G.players.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">👥</div>No players yet — click Add Player</div>`;
+    return;
+  }
+  grid.innerHTML = G.players.map(p => {
+    const bal = playerBalance(p);
+    const balClass = bal > 0 ? 'pos' : bal < 0 ? 'neg' : 'zero';
+    return `<div class="player-card" onclick="renderPlayerDetail(${p.id})">
+      <div class="player-avatar">${p.name.charAt(0)}</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:2px">${p.name}</div>
+      ${p.role ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${p.role}</div>` : '<div style="margin-bottom:6px"></div>'}
+      <div class="player-balance ${balClass}">${bal >= 0 ? '+' : ''}$${fmt(Math.abs(bal))}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.settlement ? '<span style="color:var(--green)">✅ settled</span>' : 'balance'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPlayerDetail(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const detail = document.getElementById('player-detail-view');
+  detail.style.display = 'block';
+  const bal = playerBalance(p);
+  const balClass = bal > 0 ? 'var(--green)' : bal < 0 ? 'var(--red)' : 'var(--text-muted)';
+
+  detail.innerHTML = `
+    <div class="player-detail">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="player-detail-avatar">${p.name.charAt(0)}</div>
+          <div>
+            <div class="player-detail-name">${p.name}</div>
+            <div class="player-detail-role">${p.role || 'player'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="resetPlayerFields(${p.id})">↺ Reset</button>
+          <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="removePlayer(${p.id})">Remove</button>
+        </div>
+      </div>
+
+      <div class="balance-bar">
+        <span class="bal-lbl">Balance</span>
+        <span class="bal-val" style="color:${balClass}">${bal >= 0 ? '+' : ''}$${fmt(Math.abs(bal))}</span>
+        <input class="inp" style="max-width:200px;font-size:12px" placeholder="📝 Enter notes here..." value="${p.playerNotes||''}" oninput="updatePlayerField(${p.id},'playerNotes',this.value)">
+      </div>
+      ${markerOwed(p) > 0 ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:10px;margin-bottom:10px"><div style="font-size:13px;color:var(--gold);font-weight:700">📋 Marker Unpaid</div><div style="font-size:15px;font-weight:800;color:var(--gold)">$' + fmt(markerOwed(p)) + ' owed</div></div>' : ''}
+
+      <!-- BUY IN SECTION -->
+      <div style="margin-bottom:14px">
+        <div class="io-title">💵 Buy In</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="io-field" style="flex:1;min-width:130px">
+            <label>TYPE</label>
+            <select class="inp" onchange="updatePlayerField(${p.id},'buyInType',this.value)" style="width:100%">
+              <option value="cash" ${(p.buyInType||'cash')==='cash'?'selected':''}>💵 Cash Buy</option>
+              <option value="marker" ${p.buyInType==='marker'?'selected':''}>📋 Marker</option>
+              <option value="electronic" ${p.buyInType==='electronic'?'selected':''}>📱 Electronic</option>
+              <option value="bonus" ${p.buyInType==='bonus'?'selected':''}>🎁 Bonus</option>
+            </select>
+          </div>
+          <div class="io-field" style="flex:1;min-width:100px">
+            <label>AMOUNT</label>
+            <input type="number" class="amount-btn" placeholder="0" value="${p.buyInAmount||''}" oninput="updatePlayerField(${p.id},'buyInAmount',this.value)" min="0" onblur="if(!this.value)this.value=''" style="width:100%">
+          </div>
+          <div>
+            <button class="btn btn-purple btn-sm" onclick="addBuyIn(${p.id})" style="margin-bottom:2px">＋ Add</button>
+          </div>
+        </div>
+        <div id="buyin-log-${p.id}" style="margin-top:10px">
+          ${renderBuyInLog(p)}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:4px">
+          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL BUY IN</span>
+          <span style="font-weight:800;font-size:16px;color:var(--purple-light)">$${fmt((p.buyIns||[]).reduce((s,b)=>s+parseFloat(b.amount||0),0))}</span>
+        </div>
+      </div>
+
+      <!-- CASH OUT SECTION -->
+      <div style="margin-bottom:14px">
+        <div class="io-title">💸 Cash Out</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="io-field" style="flex:1;min-width:120px">
+            <label>AMOUNT</label>
+            <input type="number" class="amount-btn" id="cashout-input-${p.id}" placeholder="0" value="${p.cashOut||''}" oninput="updatePlayerField(${p.id},'cashOut',this.value)" min="0" style="width:100%" onblur="if(!this.value)this.value=''">
+          </div>
+          <div>
+            <button class="btn btn-purple btn-sm" onclick="submitCashOut(${p.id})" style="margin-bottom:2px">✓ Submit</button>
+          </div>
+        </div>
+        <div id="cashout-display-${p.id}" style="margin-top:10px">
+          ${p.cashOut ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px"><span style="color:var(--text-muted)">💸 Cash Out</span><span style="font-weight:700;color:var(--red)">-$' + fmt(p.cashOut) + '</span></div>' : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No cash out yet</div>'}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--red-dim);border-radius:8px;margin-top:4px">
+          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL CASH OUT</span>
+          <span style="font-weight:800;font-size:16px;color:var(--red)">$${fmt(p.cashOut||0)}</span>
+        </div>
+      </div>
+
+      <!-- SUMMARY -->
+      <div class="player-summary">
+        ${renderBuyInSummary(p)}
+        <div>Cash Out <span>$${fmt(p.cashOut||0)}</span></div>
+        <div>Tip Transfer <span>$${fmt(p.tipTransfer||0)}</span></div>
+        <div>Expense <span>$${fmt(p.expense||0)}</span></div>
+        ${p.playerNotes ? '<div>Notes <span>' + p.playerNotes + '</span></div>' : ''}
+      </div>
+      ${renderStaffEarnings(p)}
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-outline btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Expense</button>
+        <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
+      </div>
+      ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span></div>' : '') + '</div></div>' : ''}
+    </div>`;
+
+  // Highlight active card
+  document.querySelectorAll('.player-card').forEach(c => c.classList.remove('active-card'));
+  // scroll into view
+  detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetPlayerFields(id) {
+  if (!confirm('Reset all fields for this player?')) return;
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  p.cashIn = 0; p.cashOut = 0; p.chipsIn = 0; p.chipsOut = 0;
+  p.eCashIn = 0; p.eCashOut = 0; p.tipTransfer = 0; p.expense = 0; p.playerNotes = '';
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Fields reset');
+}
+
+function openExpenseModalFor(playerId) {
+  setVal('exp-name', ''); setVal('exp-amount', '');
+  openModal('modal-expense');
+  document.getElementById('exp-name').dataset.playerId = playerId;
+}
+
+// ========== HOSTS ==========
+function openHostModal() {
+  renderHostConfig();
+  openModal('modal-host');
+}
+
+function renderHostConfig() {
+  const el = document.getElementById('host-config-list');
+  el.innerHTML = G.hosts.map((h, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="inp" value="${h.name||''}" placeholder="Host name" style="flex:1" oninput="G.hosts[${i}].name=this.value">
+      <input class="inp" type="number" value="${h.pct||''}" placeholder="%" style="max-width:70px;text-align:right" oninput="G.hosts[${i}].pct=parseFloat(this.value)||0">
+      <span style="color:var(--text-muted);font-size:13px">%</span>
+      <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="G.hosts.splice(${i},1);renderHostConfig()">✕</button>
+    </div>`).join('');
+}
+
+function addHost() {
+  G.hosts.push({ name: '', pct: 0, paid: false, eCashZero: false });
+  renderHostConfig();
+}
+
+function saveHosts() {
+  closeModal('modal-host');
+  calcAll(); renderAll(); autoSave();
+  toast('Host split saved ✅');
+}
+
+// ========== CALC ALL ==========
+function calcAll() {
+  const totalExpenses = G.expenses.reduce((s, e) => s + e.amount, 0);
+  const playerExpenses = G.players.reduce((s, p) => s + (p.expense||0), 0);
+  const allExpenses = totalExpenses + playerExpenses;
+
+  // Use settlement figures when a player is settled, otherwise use raw fields
+  const totalCashIn = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.cashIn||0);
+    return s + (p.buyIns||[]).filter(b=>b.type==='cash'||b.type==='bonus').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.cashIn||0);
+  }, 0);
+  const totalECashIn = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.elecIn||0);
+    return s + (p.buyIns||[]).filter(b=>b.type==='electronic').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.eCashIn||0);
+  }, 0);
+  const totalCashOut = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.cashOut||0);
+    return s + (p.cashOut||0);
+  }, 0);
+  const totalECashOut = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.elecOut||0);
+    return s + (p.eCashOut||0);
+  }, 0);
+  const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
+  const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
+  const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
+
+  const drop = totalCashIn + totalECashIn; // total money brought in
+  const taxPct = parseFloat(getVal('tax-pct')) || 0;
+  const tax = drop * (taxPct / 100);
+  const profit = drop - allExpenses - tax;
+
+  const bankStart = parseFloat(getVal('bank-start')) || 0;
+  const chipFloat = parseFloat(getVal('chip-float')) || 0;
+  const cashOnHand = bankStart + totalCashIn - totalCashOut;
+  const chipsOnHand = chipFloat + totalChipsIn - totalChipsOut;
+  const eCashOnHand = totalECashIn - totalECashOut;
+
+  G.taxPct = taxPct;
+  G.bankStart = bankStart;
+  G.chipFloat = chipFloat;
+
+  // Update breakdown
+  setText('b-drop', '$' + fmt(drop));
+  setText('b-expenses', '$' + fmt(allExpenses));
+  setText('b-tax', '$' + fmt(tax));
+  const profitEl = document.getElementById('b-profit');
+  profitEl.textContent = '$' + fmt(profit);
+  profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Game numbers
+  setText('gn-cash', '$' + fmt(cashOnHand));
+  setText('gn-chips', '$' + fmt(chipsOnHand));
+  const eCashEl = document.getElementById('gn-ecash');
+  eCashEl.textContent = (eCashOnHand < 0 ? '-' : '') + '$' + fmt(Math.abs(eCashOnHand));
+  eCashEl.style.color = eCashOnHand < 0 ? 'var(--red)' : 'var(--purple-light)';
+
+  // Host split
+  renderHostSplit(profit);
+}
+
+function renderAll() {
+  renderExpenseList();
+  renderOwedList();
+  renderPlayerGrid();
+}
+
+function renderExpenseList() {
+  const el = document.getElementById('expense-list');
+  if (!G.expenses.length) {
+    el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No expenses yet</div>`;
+    return;
+  }
+  el.innerHTML = G.expenses.map(e => `
+    <div class="exp-row">
+      <div>
+        <div class="exp-name">${e.name}</div>
+        <div class="exp-sub">${e.time || ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="exp-amt">$${fmt(e.amount)}</div>
+        <button onclick="removeExpense(${e.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderOwedList() {
+  const el = document.getElementById('owed-list');
+  const countEl = document.getElementById('owed-count');
+
+  // Players who owe from balance OR have unpaid marker
+  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0)
+    .sort((a,b) => playerBalance(a) - playerBalance(b));
+
+  if (!owing.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div>';
+    countEl.style.display = 'none';
+    return;
+  }
+  countEl.style.display = 'inline';
+  countEl.textContent = owing.length;
+  el.innerHTML = owing.map(p => {
+    const bal = playerBalance(p);
+    const mOwed = markerOwed(p);
+    const sOwed = staffOwed(p);
+    const hasMarker = mOwed > 0;
+    const isStaff = sOwed > 0;
+    const houseOwes = isStaff && bal >= 0 && !hasMarker;
+    const displayAmt = houseOwes ? sOwed : Math.abs(bal < 0 ? bal : mOwed);
+    const amtColor = houseOwes ? 'var(--green)' : 'var(--red)';
+    const label = houseOwes ? 'House owes' : 'Owes house';
+    const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
+    const staffLabel = 'Tips $' + fmt(p.tips||0) + (p.staffRole === 'dealer' ? ' + Drop $' + fmt(p.drop||0) : '');
     return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center">'
-      + '<div style="display:flex;flex-direction:column"><span class="owed-name">' + p.name + '</span><span style="font-size:10px;color:var(--text-muted)">' + label + '</span></div>'
+      + '<div><div class="owed-name">' + p.name + '</div><div style="font-size:10px;color:var(--text-muted)">' + label + '</div></div>'
       + '<div class="owed-amt" style="color:' + amtColor + '">$' + fmt(displayAmt) + '</div>'
       + '</div>'
       + (hasMarker ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px"><span>📋 Marker unpaid</span><span>$' + fmt(mOwed) + '</span></div>' : '')
@@ -19,3 +1512,397 @@
       + '</div>';
   }).join('');
 }
+
+function renderHostSplit(profit) {
+  const el = document.getElementById('host-split-list');
+  if (!G.hosts.length) {
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:10px">No hosts configured — click Edit to add</div>`;
+    return;
+  }
+  el.innerHTML = G.hosts.map((h, i) => {
+    const share = profit * ((h.pct||0) / 100);
+    return `<div class="host-row">
+      <div class="host-name">${h.name || `Host ${i+1}`}</div>
+      <div class="host-actions">
+        ${h.eCashZero ? `<button class="btn btn-sm" style="background:rgba(245,158,11,0.15);color:var(--gold);border:1px solid var(--gold)" onclick="G.hosts[${i}].eCashZero=false;calcAll()">✓ Zero ECash</button>` :
+          `<button class="btn btn-outline btn-sm" onclick="G.hosts[${i}].eCashZero=true;calcAll()">Zero ECash</button>`}
+        <button class="btn btn-sm ${h.paid ? 'btn-green' : 'btn-purple'}" onclick="G.hosts[${i}].paid=!G.hosts[${i}].paid;calcAll()">
+          ${h.paid ? '✓ Paid' : '☐ Pay'}
+        </button>
+        <span class="host-pct">${h.pct||0}%</span>
+        <span class="host-share">(${share >= 0 ? '' : '-'}$${fmt(Math.abs(share))})</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ========== SETTLEMENT ==========
+function calcSettlement() {
+  const el = document.getElementById('settlement-content');
+  const resEl = document.getElementById('results-content');
+  const active = G.players.filter(p => p.cashIn || p.chipsIn || p.eCashIn || p.cashOut || p.chipsOut || p.eCashOut);
+  if (!active.length) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">Add players with activity to see settlement</div>`;
+    resEl.innerHTML = '';
+    return;
+  }
+
+  const balances = active.map(p => ({ name: p.name, balance: playerBalance(p) }));
+  const txs = minTransactions([...balances]);
+
+  if (!txs.length) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--green);font-size:16px;font-weight:700">✅ All square! No payments needed.</div>`;
+  } else {
+    el.innerHTML = txs.map(t => `
+      <div class="settle-item">
+        <span style="font-weight:700">💸 ${t.from}</span>
+        <span class="arrow">→</span>
+        <span style="font-weight:700">🏆 ${t.to}</span>
+        <span class="s-amount">$${fmt(t.amount)}</span>
+      </div>`).join('');
+  }
+
+  resEl.innerHTML = [...active].sort((a,b) => playerBalance(b) - playerBalance(a)).map(p => {
+    const bal = playerBalance(p);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600">${p.name}</span>
+      <span style="font-weight:800;font-size:16px;color:${bal>0?'var(--green)':bal<0?'var(--red)':'var(--text-muted)'}">${bal>=0?'+':''}$${fmt(Math.abs(bal))}</span>
+    </div>`;
+  }).join('');
+}
+
+function minTransactions(balances) {
+  let debtors = balances.filter(b => b.balance < 0).map(b => ({...b, amount: Math.abs(b.balance)}));
+  let creditors = balances.filter(b => b.balance > 0).map(b => ({...b, amount: b.balance}));
+  const txs = []; let i=0, j=0;
+  while (i<debtors.length && j<creditors.length) {
+    const pay = Math.min(debtors[i].amount, creditors[j].amount);
+    if (pay > 0.005) txs.push({from: debtors[i].name, to: creditors[j].name, amount: Math.round(pay*100)/100});
+    debtors[i].amount -= pay; creditors[j].amount -= pay;
+    if (debtors[i].amount < 0.005) i++;
+    if (creditors[j].amount < 0.005) j++;
+  }
+  return txs;
+}
+
+// ========== HISTORY ==========
+function saveGame() {
+  const game = {
+    id: G.id || Date.now(),
+    location: G.location || 'Unknown',
+    date: G.date,
+    type: G.type,
+    stakes: G.stakes,
+    expenses: G.expenses,
+    players: G.players,
+    hosts: G.hosts,
+    taxPct: G.taxPct,
+    bankStart: G.bankStart,
+    chipFloat: G.chipFloat,
+    savedAt: new Date().toISOString()
+  };
+  G.id = game.id;
+  let hist = JSON.parse(ls('pb-history') || '[]');
+  const idx = hist.findIndex(g => g.id === game.id);
+  if (idx >= 0) hist[idx] = game; else hist.unshift(game);
+  lsSet('pb-history', JSON.stringify(hist));
+  autoSave();
+  toast('Game saved! ✅');
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  const hist = JSON.parse(ls('pb-history') || '[]');
+  if (!hist.length) { el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">📋 No saved games yet</div>`; return; }
+  el.innerHTML = hist.map(g => {
+    const drop = (g.players||[]).reduce((s,p) => s+(p.cashIn||0)+(p.eCashIn||0), 0);
+    const dt = g.date ? new Date(g.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : '?';
+    return `<div class="hist-item" onclick="viewHistory('${g.id}')">
+      <div><div style="font-weight:700;margin-bottom:3px">${g.location}</div><div style="font-size:12px;color:var(--text-muted)">${dt}${g.stakes?' · '+g.stakes:''}</div></div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800;color:var(--gold)">$${fmt(drop)}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${(g.players||[]).filter(p=>p.name).length} players</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function viewHistory(id) {
+  const hist = JSON.parse(ls('pb-history') || '[]');
+  const game = hist.find(g => String(g.id) === String(id));
+  if (!game) return;
+  const players = (game.players||[]).filter(p => p.name);
+  const drop = players.reduce((s,p)=>s+(p.cashIn||0)+(p.eCashIn||0),0);
+  const expAmt = (game.expenses||[]).reduce((s,e)=>s+e.amount,0);
+  const playerExp = players.reduce((s,p)=>s+(p.expense||0),0);
+  const tax = drop * ((game.taxPct||0)/100);
+  const profit = drop - expAmt - playerExp - tax;
+  const txs = minTransactions(players.map(p=>({name:p.name,balance:playerBalance(p)})));
+  const dt = game.date ? new Date(game.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '?';
+
+  document.getElementById('modal-history-title').innerHTML = `${game.location} <button class="modal-close" onclick="closeModal('modal-history')">✕</button>`;
+  document.getElementById('modal-history-body').innerHTML = `
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">${dt}</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <div class="stat-box"><div class="lbl">Drop</div><div class="val" style="font-size:18px;color:var(--gold)">$${fmt(drop)}</div></div>
+      <div class="stat-box"><div class="lbl">Profit</div><div class="val" style="font-size:18px;color:${profit>=0?'var(--green)':'var(--red)'}">$${fmt(profit)}</div></div>
+      <div class="stat-box"><div class="lbl">Players</div><div class="val" style="font-size:18px">${players.filter(p=>p.name).length}</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Settlement</div>
+    ${txs.length ? txs.map(t=>`<div class="settle-item" style="margin-bottom:6px"><span style="font-weight:700">💸 ${t.from}</span><span class="arrow">→</span><span style="font-weight:700">🏆 ${t.to}</span><span class="s-amount">$${fmt(t.amount)}</span></div>`).join('') : '<p style="color:var(--green)">✅ All square!</p>'}
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="btn btn-purple btn-sm" onclick="loadGame('${id}')">📂 Load Game</button>
+      <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="deleteGame('${id}')">🗑️ Delete</button>
+    </div>`;
+  openModal('modal-history');
+}
+
+function loadGame(id) {
+  const hist = JSON.parse(ls('pb-history') || '[]');
+  const game = hist.find(g => String(g.id) === String(id));
+  if (!game) return;
+  G = { id: game.id, location: game.location||'', date: game.date||'', type: game.type||'', stakes: game.stakes||'',
+    expenses: game.expenses||[], players: game.players||[], hosts: game.hosts||[],
+    taxPct: game.taxPct||0, bankStart: game.bankStart||0, chipFloat: game.chipFloat||0 };
+  closeModal('modal-history');
+  restoreInputs();
+  calcAll(); renderAll();
+  showPage_direct('dashboard');
+  toast('Game loaded! 📂');
+}
+
+function deleteGame(id) {
+  if (!confirm('Delete this game?')) return;
+  let hist = JSON.parse(ls('pb-history') || '[]');
+  hist = hist.filter(g => String(g.id) !== String(id));
+  lsSet('pb-history', JSON.stringify(hist));
+  closeModal('modal-history');
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Clear ALL saved games? Cannot be undone.')) return;
+  localStorage.removeItem('pb-history');
+  renderHistory();
+}
+
+// ========== END GAME ==========
+function endGame() {
+  if (!confirm('End this game? This will save it to history and reset for a new game.')) return;
+  saveGame();
+  toast('Game ended and saved! 🏁');
+}
+
+function newGame() {
+  if (!confirm('Start new game? Save first if needed.')) return;
+  localStorage.removeItem('pb-current');
+  G = { id: null, location:'', date: new Date().toISOString().split('T')[0], type:'', stakes:'', expenses:[], players:[], hosts:[], taxPct:0, bankStart:0, chipFloat:0 };
+  restoreInputs();
+  document.getElementById('player-detail-view').style.display = 'none';
+  calcAll(); renderAll();
+  toast('New game started! 🃏');
+}
+
+// ========== AUTO SAVE ==========
+let saveTimer;
+function autoSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { lsSet('pb-current', JSON.stringify(G)); }, 500);
+}
+
+// ========== MODAL ==========
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('open'); }));
+
+// ========== UTILS ==========
+function getVal(id) { return document.getElementById(id)?.value || ''; }
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function ls(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function showPage_direct(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => { if (b.textContent.toLowerCase().includes(name.substring(0,4))) b.classList.add('active'); });
+}
+
+// ========== CHIP COUNT ==========
+const DENOMS = [5, 25, 100, 500, 1000];
+
+function calcChipCount() {
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('start-chip-' + d)?.value) || 0;
+    total += count * d;
+    if (!G.startChips) G.startChips = {};
+    G.startChips[d] = count;
+  });
+  setText('start-chip-total', '$' + fmt(total));
+  G.startChipTotal = total;
+  renderChipBalance();
+  autoSave();
+}
+
+function updateCCTotal() {
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('cc-' + d)?.value) || 0;
+    const val = count * d;
+    total += val;
+    const valEl = document.getElementById('cc-' + d + '-val');
+    if (valEl) valEl.textContent = '$' + fmt(val);
+  });
+  setText('cc-total', '$' + fmt(total));
+  // vs expected
+  const expected = getExpectedChips();
+  const diff = total - expected;
+  const el = document.getElementById('cc-vs-expected');
+  if (!el) return;
+  if (expected === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:10px;border:1px solid ${Math.abs(diff)<1?'var(--green)':'var(--red)'};background:${Math.abs(diff)<1?'var(--green-dim)':'var(--red-dim)'}">
+    <div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Expected on table</div>
+      <div style="font-weight:700">$${fmt(expected)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Difference</div>
+      <div style="font-size:20px;font-weight:800;color:${Math.abs(diff)<1?'var(--green)':'var(--red)'}">${diff>=0?'+':''}$${fmt(diff)}</div>
+    </div>
+    <div style="font-size:22px">${Math.abs(diff)<1?'✅':'⚠️'}</div>
+  </div>`;
+}
+
+function getExpectedChips() {
+  // Expected = starting chip total + all chips bought in - all chips cashed out
+  const startTotal = G.startChipTotal || 0;
+  const chipsIn = G.players.reduce((s,p) => s+(p.chipsIn||0), 0);
+  const chipsOut = G.players.reduce((s,p) => s+(p.chipsOut||0), 0);
+  return startTotal + chipsIn - chipsOut;
+}
+
+function openChipCountModal() {
+  DENOMS.forEach(d => setVal('cc-' + d, ''));
+  DENOMS.forEach(d => setText('cc-' + d + '-val', '$0'));
+  setText('cc-total', '$0');
+  setVal('cc-note', '');
+  const el = document.getElementById('cc-vs-expected');
+  if (el) el.innerHTML = '';
+  openModal('modal-chip-count');
+  setTimeout(() => document.getElementById('cc-5')?.focus(), 100);
+}
+
+function saveChipCount() {
+  const chips = {};
+  let total = 0;
+  DENOMS.forEach(d => {
+    const count = parseFloat(document.getElementById('cc-' + d)?.value) || 0;
+    chips[d] = count;
+    total += count * d;
+  });
+  const expected = getExpectedChips();
+  const diff = total - expected;
+  const note = getVal('cc-note');
+  if (!G.chipCounts) G.chipCounts = [];
+  G.chipCounts.push({
+    id: Date.now(),
+    time: new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}),
+    chips, total, expected, diff, note
+  });
+  closeModal('modal-chip-count');
+  renderChipLog();
+  renderChipBalance();
+  autoSave();
+  toast(Math.abs(diff) < 1 ? '✅ Chips balanced!' : `⚠️ Off by $${fmt(Math.abs(diff))}`);
+}
+
+function renderChipLog() {
+  const el = document.getElementById('chip-count-log');
+  if (!el) return;
+  const counts = G.chipCounts || [];
+  if (!counts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">Count History</div>
+    ${counts.slice().reverse().map(c => {
+      const balanced = Math.abs(c.diff) < 1;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:${balanced?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${balanced?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:13px">${c.time}${c.note?' · '+c.note:''}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+            ${DENOMS.map(d => c.chips[d] ? `${c.chips[d]}×$${d}` : '').filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:16px">$${fmt(c.total)}</div>
+          <div style="font-size:12px;color:${balanced?'var(--green)':'var(--red)'};font-weight:700">${balanced?'✅ Balanced':(c.diff>0?'+':'')+' $'+fmt(c.diff)+' off'}</div>
+        </div>
+        <button onclick="removeChipCount(${c.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;margin-left:8px">✕</button>
+      </div>`;
+    }).join('')}`;
+}
+
+function removeChipCount(id) {
+  G.chipCounts = (G.chipCounts||[]).filter(c => c.id !== id);
+  renderChipLog();
+  renderChipBalance();
+  autoSave();
+}
+
+function renderChipBalance() {
+  const el = document.getElementById('chip-balance-status');
+  if (!el) return;
+  const counts = G.chipCounts || [];
+  if (!counts.length) { el.innerHTML = ''; return; }
+  const last = counts[counts.length - 1];
+  const balanced = Math.abs(last.diff) < 1;
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:${balanced?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${balanced?'rgba(16,185,129,0.4)':'rgba(239,68,68,0.4)'};border-radius:10px;margin-top:8px">
+    <div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Latest Count Status</div>
+      <div style="font-weight:700;font-size:15px">${balanced?'Chips are balanced':'Chips are off'}</div>
+    </div>
+    <div style="font-size:28px">${balanced?'✅':'⚠️'}</div>
+    <div style="text-align:right">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Difference</div>
+      <div style="font-size:22px;font-weight:800;color:${balanced?'var(--green)':'var(--red)'}">${last.diff>=0?'+':''}$${fmt(last.diff)}</div>
+    </div>
+  </div>`;
+}
+
+// Patch init to restore chip count state
+const _origInit = init;
+function init() {
+  document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
+  const saved = ls('pb-current');
+  if (saved) try {
+    const d = JSON.parse(saved);
+    G = {...G, ...d};
+    restoreInputs();
+    // Restore start chip inputs
+    if (G.startChips) {
+      DENOMS.forEach(d2 => { if (G.startChips[d2]) setVal('start-chip-'+d2, G.startChips[d2]); });
+      setText('start-chip-total', '$' + fmt(G.startChipTotal||0));
+    }
+  } catch(e){}
+  calcAll();
+  renderAll();
+  renderChipLog();
+  renderChipBalance();
+}
+
+// ========== START ==========
+init();
+</script>
+</body>
+</html>
