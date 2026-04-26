@@ -1239,31 +1239,27 @@ function markerOwed(p) {
 }
 
 function playerBalance(p) {
-  const marker = markerTotal(p);
+  // Every transaction counts — positive = house owes player, negative = player owes house
+
+  // Money player put IN (cost to player)
+  const totalBuyIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0)
+    || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
+
+  // Money player got OUT (received from game)
   const chipCashOut = p.cashOut || 0;
-  const settleCashIn = p.settlement ? ((p.settlement.cashIn||0) + (p.settlement.elecIn||0)) : 0;
-  const settleOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
 
-  if (marker > 0) {
-    // Marker player: owed = marker minus what they've paid back (chips + settle cash)
-    const remaining = markerOwed(p);
-    // If marker fully cleared, show net profit/loss from settle out
-    if (remaining <= 0) {
-      return settleOut; // any cash they receive back after clearing marker
-    }
-    return -remaining; // still owes this much
-  }
+  // Settlement payments (player paying house or house paying player)
+  const settleCashIn  = p.settlement ? ((p.settlement.cashIn||0)  + (p.settlement.elecIn||0))  : 0; // player paid house
+  const settleCashOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0; // house paid player
 
-  if (p.settlement) {
-    // Non-marker settled player: net = what they got out minus what they put in
-    const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0);
-    return settleOut - totalIn;
-  }
+  // Expenses owed TO player BY house (positive for player)
+  const expenses = (p.expense || 0);
 
-  // Unsettled player
-  const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
-  const totalOut = chipCashOut + (p.tipTransfer||0) + (p.expense||0);
-  return totalOut - totalIn;
+  // Net from game: chips out + house paid player - total buy-in - player paid house
+  const gameNet = chipCashOut + settleCashOut - totalBuyIn - settleCashIn;
+
+  // Add expenses on top — house always owes these regardless of game result
+  return gameNet + expenses;
 }
 
 function renderPlayerGrid() {
