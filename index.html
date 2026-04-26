@@ -452,6 +452,56 @@ input, select, button, textarea { font-family: inherit; }
   </div>
 </div>
 
+<!-- SETTLE UP MODAL -->
+<div class="modal-bg" id="modal-settle-up">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🤝 Settle Up — <span id="settle-player-name"></span> <button class="modal-close" onclick="closeModal('modal-settle-up')">✕</button></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Record how this player's balance was settled</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <!-- CASH IN -->
+      <div class="io-field">
+        <label style="color:var(--green)">💵 CASH IN</label>
+        <input type="number" class="inp" id="settle-cash-in" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash given to game</div>
+      </div>
+      <!-- CASH OUT -->
+      <div class="io-field">
+        <label style="color:var(--red)">💸 CASH OUT</label>
+        <input type="number" class="inp" id="settle-cash-out" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash received from game</div>
+      </div>
+      <!-- ELECTRONIC IN -->
+      <div class="io-field">
+        <label style="color:var(--purple-light)">📱 ELECTRONIC IN</label>
+        <input type="number" class="inp" id="settle-elec-in" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle sent</div>
+      </div>
+      <!-- ELECTRONIC OUT -->
+      <div class="io-field">
+        <label style="color:var(--gold)">📤 ELECTRONIC OUT</label>
+        <input type="number" class="inp" id="settle-elec-out" placeholder="0" min="0" oninput="updateSettleSummary()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle received</div>
+      </div>
+    </div>
+
+    <!-- LIVE SUMMARY -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px" id="settle-summary">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Settlement Summary</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total In</span><span id="settle-total-in" style="color:var(--green);font-weight:700">$0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total Out</span><span id="settle-total-out" style="color:var(--red);font-weight:700">$0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 0;font-weight:800"><span>Net</span><span id="settle-net" style="color:var(--green)">$0</span></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="settle-marker-note"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-settle-up')">Cancel</button>
+      <button class="btn btn-purple" onclick="saveSettleUp()">✓ Confirm Settlement</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -607,6 +657,60 @@ function addBuyIn(id) {
   toast('Buy-in added!');
 }
 
+function openSettleUp(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  document.getElementById('settle-player-name').textContent = p.name;
+  document.getElementById('modal-settle-up').dataset.playerId = id;
+  // Pre-fill with existing settlement if any
+  const s = p.settlement || {};
+  document.getElementById('settle-cash-in').value = s.cashIn || '';
+  document.getElementById('settle-cash-out').value = s.cashOut || '';
+  document.getElementById('settle-elec-in').value = s.elecIn || '';
+  document.getElementById('settle-elec-out').value = s.elecOut || '';
+  // Show marker note if applicable
+  const mOwed = markerOwed(p);
+  const markerNote = document.getElementById('settle-marker-note');
+  if (mOwed > 0) {
+    markerNote.innerHTML = '📋 <strong style="color:var(--gold)">Marker of $' + fmt(mOwed) + ' outstanding</strong> — cash out must cover marker before player receives funds.';
+  } else {
+    markerNote.innerHTML = '';
+  }
+  updateSettleSummary();
+  openModal('modal-settle-up');
+}
+
+function updateSettleSummary() {
+  const cashIn = parseFloat(document.getElementById('settle-cash-in').value) || 0;
+  const cashOut = parseFloat(document.getElementById('settle-cash-out').value) || 0;
+  const elecIn = parseFloat(document.getElementById('settle-elec-in').value) || 0;
+  const elecOut = parseFloat(document.getElementById('settle-elec-out').value) || 0;
+  const totalIn = cashIn + elecIn;
+  const totalOut = cashOut + elecOut;
+  const net = totalOut - totalIn;
+  document.getElementById('settle-total-in').textContent = '$' + fmt(totalIn);
+  document.getElementById('settle-total-out').textContent = '$' + fmt(totalOut);
+  const netEl = document.getElementById('settle-net');
+  netEl.textContent = (net >= 0 ? '+' : '') + '$' + fmt(Math.abs(net));
+  netEl.style.color = net >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function saveSettleUp() {
+  const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  p.settlement = {
+    cashIn: parseFloat(document.getElementById('settle-cash-in').value) || 0,
+    cashOut: parseFloat(document.getElementById('settle-cash-out').value) || 0,
+    elecIn: parseFloat(document.getElementById('settle-elec-in').value) || 0,
+    elecOut: parseFloat(document.getElementById('settle-elec-out').value) || 0,
+    time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})
+  };
+  closeModal('modal-settle-up');
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('✅ ' + p.name + ' settled up!');
+}
+
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
@@ -759,7 +863,9 @@ function renderPlayerDetail(id) {
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-outline btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Expense</button>
+        <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
       </div>
+      ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span></div>' : '') + '</div></div>' : ''}
     </div>`;
 
   // Highlight active card
