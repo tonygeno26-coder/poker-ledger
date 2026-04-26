@@ -745,6 +745,15 @@ function markerOwed(p) {
 }
 
 function playerBalance(p) {
+  if (p.settlement) {
+    // Use settlement figures when settled
+    const totalIn = (p.settlement.cashIn||0) + (p.settlement.elecIn||0);
+    const totalOut = (p.settlement.cashOut||0) + (p.settlement.elecOut||0);
+    // Also account for any unpaid marker
+    const mOwed = markerOwed(p);
+    return totalOut - totalIn - mOwed;
+  }
+  // Unsettled: use buy-ins vs cash out
   const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
   const totalOut = (p.cashOut||0) + (p.tipTransfer||0) + (p.expense||0);
   return totalOut - totalIn;
@@ -765,7 +774,7 @@ function renderPlayerGrid() {
       <div style="font-weight:700;font-size:14px;margin-bottom:2px">${p.name}</div>
       ${p.role ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${p.role}</div>` : '<div style="margin-bottom:6px"></div>'}
       <div class="player-balance ${balClass}">${bal >= 0 ? '+' : ''}$${fmt(Math.abs(bal))}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">balance</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.settlement ? '<span style="color:var(--green)">✅ settled</span>' : 'balance'}</div>
     </div>`;
   }).join('');
 }
@@ -924,12 +933,25 @@ function calcAll() {
   const playerExpenses = G.players.reduce((s, p) => s + (p.expense||0), 0);
   const allExpenses = totalExpenses + playerExpenses;
 
-  const totalCashIn = G.players.reduce((s, p) => s + (p.cashIn||0), 0);
+  // Use settlement figures when a player is settled, otherwise use raw fields
+  const totalCashIn = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.cashIn||0);
+    return s + (p.buyIns||[]).filter(b=>b.type==='cash'||b.type==='bonus').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.cashIn||0);
+  }, 0);
+  const totalECashIn = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.elecIn||0);
+    return s + (p.buyIns||[]).filter(b=>b.type==='electronic').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.eCashIn||0);
+  }, 0);
+  const totalCashOut = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.cashOut||0);
+    return s + (p.cashOut||0);
+  }, 0);
+  const totalECashOut = G.players.reduce((s, p) => {
+    if (p.settlement) return s + (p.settlement.elecOut||0);
+    return s + (p.eCashOut||0);
+  }, 0);
   const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
-  const totalECashIn = G.players.reduce((s, p) => s + (p.eCashIn||0), 0);
-  const totalCashOut = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
   const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
-  const totalECashOut = G.players.reduce((s, p) => s + (p.eCashOut||0), 0);
   const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
 
   const drop = totalCashIn + totalECashIn; // total money brought in
