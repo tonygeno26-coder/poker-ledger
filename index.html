@@ -938,39 +938,97 @@ function renderPlayerExpenseLog(p) {
   ).join('');
 }
 
-function submitStaffField(id, field) {
+function logStaffTurn(id, field) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
+  const inputEl = document.getElementById('staff-' + field + '-input-' + id);
+  const amount = parseFloat(inputEl ? inputEl.value : 0) || 0;
+  if (!amount) { toast('Enter an amount first'); return; }
+  const time = new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  if (field === 'tips') {
+    if (!p.tipsLog) p.tipsLog = [];
+    p.tipsLog.push({ id: Date.now(), amount, time });
+    p.tips = p.tipsLog.reduce((s, t) => s + t.amount, 0);
+  } else {
+    if (!p.dropLog) p.dropLog = [];
+    p.dropLog.push({ id: Date.now(), amount, time });
+    p.drop = p.dropLog.reduce((s, t) => s + t.amount, 0);
+  }
+  if (inputEl) inputEl.value = '';
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast('\u2705 ' + (field === 'tips' ? 'Tips' : 'Drop') + ' saved!');
+  toast('\u2705 ' + (field === 'tips' ? 'Tips' : 'Drop') + ' $' + fmt(amount) + ' logged!');
+}
+
+function removeStaffLog(id, field, logId) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  if (field === 'tips') {
+    p.tipsLog = (p.tipsLog||[]).filter(t => t.id !== logId);
+    p.tips = p.tipsLog.reduce((s, t) => s + t.amount, 0);
+  } else {
+    p.dropLog = (p.dropLog||[]).filter(t => t.id !== logId);
+    p.drop = p.dropLog.reduce((s, t) => s + t.amount, 0);
+  }
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+}
+
+function renderStaffLog(p, field) {
+  const log = field === 'tips' ? (p.tipsLog||[]) : (p.dropLog||[]);
+  if (!log.length) return '<div style="font-size:12px;color:var(--text-muted);padding:4px 0">No entries yet</div>';
+  return log.map(function(t) {
+    var color = field === 'tips' ? 'var(--green)' : 'var(--gold)';
+    var onclick = 'removeStaffLog(' + p.id + ',' + JSON.stringify(field) + ',' + t.id + ')';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:12px">'
+      + '<span style="color:var(--text-muted)">' + t.time + '</span>'
+      + '<span style="font-weight:700;color:' + color + '">$' + fmt(t.amount) + '</span>'
+      + '<button onclick="' + onclick + '" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">&times;</button>'
+      + '</div>';
+  }).join('');
 }
 
 function renderStaffEarnings(p) {
   if (!p.staffRole) return '';
   const isDealer = p.staffRole === 'dealer';
-  const icons = {dealer:'🎴 Dealer', hostess:'💁 Hostess', chef:'👨‍🍳 Chef', security:'🔒 Security', misc:'⭐ Misc'};
+  const icons = {dealer:'Dealer', hostess:'Hostess', chef:'Chef', security:'Security', misc:'Misc'};
   const icon = icons[p.staffRole] || p.staffRole;
-  const total = (p.tips||0) + (p.drop||0);
-  return '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
-    + '<div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">' + icon + ' — Staff Earnings</div>'
-    + '<div style="display:grid;grid-template-columns:' + (isDealer ? '1fr 1fr' : '1fr') + ';gap:12px">'
-    + '<div class="io-field"><label style="color:var(--green)">💰 TIPS</label>'
-    + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.tips||'') + '" oninput="updatePlayerField(' + p.id + ',\'tips\',this.value)" min="0" style="width:100%"></div>'
-    + (isDealer
-      ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
-        + '<input type="number" class="amount-btn" placeholder="0" value="' + (p.drop||'') + '" oninput="updatePlayerField(' + p.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>'
-      : '')
+  const totalTips = p.tips || 0;
+  const totalDrop = p.drop || 0;
+
+  let html = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">' + icon + ' — Staff Earnings</div>';
+
+  html += '<div style="margin-bottom:14px">'
+    + '<div class="io-title" style="color:var(--green)">Tips Turn-ins</div>'
+    + '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">'
+    + '<div class="io-field" style="flex:1"><label>AMOUNT</label>'
+    + '<input type="number" class="amount-btn" id="staff-tips-input-' + p.id + '" placeholder="0" min="0" style="width:100%"></div>'
+    + '<button class="btn btn-purple btn-sm" onclick="logStaffTurn(' + p.id + ','+"'tips'"+')" style="margin-bottom:2px">+ Log</button>'
     + '</div>'
-    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
-    + (isDealer ? '<button class="btn btn-outline btn-sm" onclick="submitStaffField(' + p.id + ',\'drop\')">\u2713 Save Drop</button>' : '')
-    + '<button class="btn btn-purple btn-sm" onclick="submitStaffField(' + p.id + ',\'tips\')">\u2713 Save Tips</button>'
-    + '</div>'
-    + '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:8px">'
-    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">TIPS OWED TO STAFF</span>'
-    + '<span style="font-weight:800;color:var(--purple-light)">$' + fmt(p.tips||0) + '</span></div>'
-    + (isDealer && (p.drop||0) > 0 ? '<div style="display:flex;justify-content:space-between;padding:6px 12px;background:rgba(245,158,11,0.08);border-radius:8px;margin-top:4px;font-size:12px"><span style="color:var(--gold)">🎰 Drop (house revenue)</span><span style="color:var(--gold);font-weight:700">$' + fmt(p.drop||0) + '</span></div>' : '')
-    + '</div>';
+    + renderStaffLog(p, 'tips')
+    + '<div style="display:flex;justify-content:space-between;padding:7px 12px;background:rgba(16,185,129,0.1);border-radius:8px;margin-top:6px">'
+    + '<span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL TIPS</span>'
+    + '<span style="font-weight:800;color:var(--green)">$' + fmt(totalTips) + '</span>'
+    + '</div></div>';
+
+  if (isDealer) {
+    html += '<div style="margin-bottom:8px">'
+      + '<div class="io-title" style="color:var(--gold)">Drop Turn-ins</div>'
+      + '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">'
+      + '<div class="io-field" style="flex:1"><label>AMOUNT</label>'
+      + '<input type="number" class="amount-btn" id="staff-drop-input-' + p.id + '" placeholder="0" min="0" style="width:100%"></div>'
+      + '<button class="btn btn-outline btn-sm" onclick="logStaffTurn(' + p.id + ','+"'drop'"+')" style="margin-bottom:2px">+ Log</button>'
+      + '</div>'
+      + renderStaffLog(p, 'drop')
+      + '<div style="display:flex;justify-content:space-between;padding:7px 12px;background:rgba(245,158,11,0.08);border-radius:8px;margin-top:6px">'
+      + '<span style="font-size:12px;font-weight:700;color:var(--gold)">TOTAL DROP (house revenue)</span>'
+      + '<span style="font-weight:800;color:var(--gold)">$' + fmt(totalDrop) + '</span>'
+      + '</div></div>';
+  }
+
+  html += '</div>';
+  return html;
 }
+
 
 function toggleStaffSection() {
   const section = document.getElementById('staff-section');
