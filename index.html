@@ -315,14 +315,35 @@ input, select, button, textarea { font-family: inherit; }
 
 <!-- ===== PLAYERS ===== -->
 <div id="page-players" class="page">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="font-size:18px;font-weight:700">Players <span id="player-count-badge" class="badge badge-purple">0</span></div>
-    <button class="btn btn-purple" onclick="openAddPlayerModal()">＋ Add Player</button>
+  <!-- TABS -->
+  <div style="display:flex;gap:0;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px">
+    <button id="tab-players-btn" class="btn btn-purple" style="flex:1;border-radius:8px;font-size:13px" onclick="switchPlayerTab('players')">👥 Players <span id="player-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
+    <button id="tab-staff-btn" class="btn btn-outline" style="flex:1;border-radius:8px;font-size:13px;border:none" onclick="switchPlayerTab('staff')">👔 Staff <span id="staff-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
   </div>
 
+  <!-- ADD BUTTON -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button id="add-player-btn" class="btn btn-purple" onclick="openAddPlayerModal()">＋ Add Player</button>
+    <button id="add-staff-btn" class="btn btn-purple" style="display:none" onclick="openAddStaffModal()">＋ Add Staff</button>
+  </div>
+
+  <!-- PLAYER DETAIL VIEW -->
   <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
 
+  <!-- PLAYERS GRID -->
   <div id="player-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+
+  <!-- STAFF GRID -->
+  <div id="staff-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+
+  <!-- STAFF DETAIL VIEW -->
+  <div id="staff-detail-view" style="display:none;margin-bottom:20px"></div>
+
+  <!-- STAFF SESSION TOTALS -->
+  <div id="staff-totals-card" style="display:none;margin-top:20px" class="card">
+    <div class="card-title">💰 Staff Session Totals</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="staff-totals-grid"></div>
+  </div>
 </div>
 
 <!-- ===== SETTLEMENT ===== -->
@@ -433,7 +454,43 @@ input, select, button, textarea { font-family: inherit; }
   </div>
 </div>
 
-<!-- Add Player -->
+<!-- ADD STAFF MODAL -->
+<div class="modal-bg" id="modal-add-staff">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">👔 Add Staff <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="inp-label">Name</label>
+      <input class="inp" id="new-staff-name" placeholder="Staff name..." style="width:100%">
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label class="inp-label">Role</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="time-option">
+          <input type="radio" name="staff-role" id="role-dealer" value="dealer" checked>
+          <label for="role-dealer" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px">
+            <span style="font-size:1.4rem">🎴</span>
+            <span style="font-size:13px;font-weight:700">Dealer</span>
+            <span style="font-size:11px;color:var(--text-muted)">Tips + Drop</span>
+          </label>
+        </div>
+        <div class="time-option">
+          <input type="radio" name="staff-role" id="role-hostess" value="hostess">
+          <label for="role-hostess" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px">
+            <span style="font-size:1.4rem">💁</span>
+            <span style="font-size:13px;font-weight:700">Hostess</span>
+            <span style="font-size:11px;color:var(--text-muted)">Tips only</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-staff')">Cancel</button>
+      <button class="btn btn-purple" onclick="addStaff()">Add Staff</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PLAYER -->
 <div class="modal-bg" id="modal-add-player">
   <div class="modal">
     <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
@@ -724,7 +781,132 @@ function addBuyIn(id) {
   toast('Buy-in added!');
 }
 
-// ========== DEALERS ==========
+// ========== STAFF ==========
+if (!G.staff) G.staff = [];
+let currentStaffTab = 'players';
+
+function switchPlayerTab(tab) {
+  currentStaffTab = tab;
+  const isPlayers = tab === 'players';
+  document.getElementById('player-grid').style.display = isPlayers ? 'grid' : 'none';
+  document.getElementById('staff-grid').style.display = isPlayers ? 'none' : 'grid';
+  document.getElementById('player-detail-view').style.display = 'none';
+  document.getElementById('staff-detail-view').style.display = 'none';
+  document.getElementById('add-player-btn').style.display = isPlayers ? '' : 'none';
+  document.getElementById('add-staff-btn').style.display = isPlayers ? 'none' : '';
+  document.getElementById('staff-totals-card').style.display = isPlayers ? 'none' : 'block';
+  document.getElementById('tab-players-btn').className = isPlayers ? 'btn btn-purple' : 'btn btn-outline';
+  document.getElementById('tab-players-btn').style.borderRadius = '8px';
+  document.getElementById('tab-players-btn').style.fontSize = '13px';
+  document.getElementById('tab-staff-btn').className = isPlayers ? 'btn btn-outline' : 'btn btn-purple';
+  document.getElementById('tab-staff-btn').style.borderRadius = '8px';
+  document.getElementById('tab-staff-btn').style.fontSize = '13px';
+  document.getElementById('tab-staff-btn').style.border = isPlayers ? 'none' : '';
+  if (!isPlayers) renderStaff();
+}
+
+function openAddStaffModal() {
+  document.getElementById('new-staff-name').value = '';
+  document.getElementById('role-dealer').checked = true;
+  openModal('modal-add-staff');
+  setTimeout(() => document.getElementById('new-staff-name').focus(), 100);
+}
+
+function addStaff() {
+  const name = document.getElementById('new-staff-name').value.trim();
+  if (!name) { toast('Enter a name'); return; }
+  const role = document.querySelector('input[name="staff-role"]:checked').value;
+  if (!G.staff) G.staff = [];
+  G.staff.push({ id: Date.now(), name, role, tips: 0, drop: 0 });
+  closeModal('modal-add-staff');
+  renderStaff();
+  autoSave();
+  toast((role === 'dealer' ? '🎴' : '💁') + ' ' + name + ' added!');
+}
+
+function renderStaff() {
+  const grid = document.getElementById('staff-grid');
+  const badge = document.getElementById('staff-count-badge');
+  const totalsCard = document.getElementById('staff-totals-card');
+  if (!G.staff || !G.staff.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">👔</div>No staff yet — click Add Staff</div>';
+    badge.textContent = '0';
+    totalsCard.style.display = 'none';
+    return;
+  }
+  badge.textContent = G.staff.length;
+  totalsCard.style.display = 'block';
+  grid.innerHTML = G.staff.map(s => {
+    const total = (s.tips||0) + (s.drop||0);
+    const icon = s.role === 'dealer' ? '🎴' : '💁';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:border-color 0.2s;text-align:center" onclick="renderStaffDetail(' + s.id + ')" onmouseover="this.style.borderColor=\'var(--purple)\'" onmouseout="this.style.borderColor=\'var(--border)\'" >'
+      + '<div style="width:44px;height:44px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 8px">' + icon + '</div>'
+      + '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + s.name + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:capitalize">' + s.role + '</div>'
+      + '<div style="font-size:18px;font-weight:800;color:var(--purple-light)">$' + fmt(total) + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'
+      + '<span style="color:var(--green)">tips $' + fmt(s.tips||0) + '</span>'
+      + (s.role === 'dealer' ? ' · <span style="color:var(--gold)">drop $' + fmt(s.drop||0) + '</span>' : '')
+      + '</div></div>';
+  }).join('');
+
+  // Totals
+  const totalTips = G.staff.reduce((s,d) => s + (d.tips||0), 0);
+  const totalDrop = G.staff.filter(d=>d.role==='dealer').reduce((s,d) => s + (d.drop||0), 0);
+  const grand = totalTips + totalDrop;
+  document.getElementById('staff-totals-grid').innerHTML =
+    '<div style="background:rgba(16,185,129,0.1);border:1px solid var(--green);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Tips</div><div style="font-size:1.6rem;font-weight:900;color:var(--green)">$' + fmt(totalTips) + '</div></div>'
+    + '<div style="background:rgba(245,158,11,0.1);border:1px solid var(--gold);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Drop</div><div style="font-size:1.6rem;font-weight:900;color:var(--gold)">$' + fmt(totalDrop) + '</div></div>'
+    + '<div style="background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div><div style="font-size:1.6rem;font-weight:900;color:var(--purple-light)">$' + fmt(grand) + '</div></div>';
+}
+
+function renderStaffDetail(id) {
+  const s = G.staff.find(s => s.id === id);
+  if (!s) return;
+  const isDealer = s.role === 'dealer';
+  const icon = isDealer ? '🎴' : '💁';
+  const detail = document.getElementById('staff-detail-view');
+  detail.style.display = 'block';
+  document.querySelectorAll('#staff-grid > div').forEach(c => c.style.borderColor = 'var(--border)');
+
+  detail.innerHTML = '<div class="card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;gap:12px">'
+    + '<div style="width:52px;height:52px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px">' + icon + '</div>'
+    + '<div><div style="font-size:18px;font-weight:800">' + s.name + '</div><div style="font-size:12px;color:var(--text-muted);text-transform:capitalize">' + s.role + '</div></div>'
+    + '</div>'
+    + '<button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="removeStaff(' + s.id + ')">Remove</button>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:' + (isDealer ? '1fr 1fr' : '1fr') + ';gap:12px;margin-bottom:16px">'
+    + '<div class="io-field"><label style="color:var(--green)">💰 TIPS</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (s.tips||'') + '" oninput="updateStaffField(' + s.id + ',\'tips\',this.value)" min="0" style="width:100%"></div>'
+    + (isDealer ? '<div class="io-field"><label style="color:var(--gold)">🎰 DROP</label>'
+    + '<input type="number" class="amount-btn" placeholder="0" value="' + (s.drop||'') + '" oninput="updateStaffField(' + s.id + ',\'drop\',this.value)" min="0" style="width:100%"></div>' : '')
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--purple-dim);border-radius:10px">'
+    + '<span style="font-weight:700;color:var(--text-muted)">Total</span>'
+    + '<span style="font-size:1.4rem;font-weight:900;color:var(--purple-light)">$' + fmt((s.tips||0)+(s.drop||0)) + '</span>'
+    + '</div></div>';
+}
+
+function updateStaffField(id, field, val) {
+  const s = G.staff.find(s => s.id === id);
+  if (!s) return;
+  s[field] = parseFloat(val) || 0;
+  renderStaff();
+  renderStaffDetail(id);
+  autoSave();
+}
+
+function removeStaff(id) {
+  G.staff = G.staff.filter(s => s.id !== id);
+  document.getElementById('staff-detail-view').style.display = 'none';
+  renderStaff();
+  autoSave();
+  toast('Staff removed');
+}
+
+// ========== DEALERS (legacy - now handled by staff) ==========
 if (!G.dealers) G.dealers = [];
 
 function openAddDealerModal() {
