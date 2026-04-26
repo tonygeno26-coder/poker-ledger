@@ -1239,26 +1239,35 @@ function markerOwed(p) {
 }
 
 function playerBalance(p) {
-  // Every transaction counts — positive = house owes player, negative = player owes house
+  // positive = house owes player, negative = player owes house
 
-  // Money player put IN (cost to player)
+  // Total bought in (all types)
   const totalBuyIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0)
     || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
 
-  // Money player got OUT (received from game)
+  // Chips cashed out from table
   const chipCashOut = p.cashOut || 0;
 
-  // Settlement payments (player paying house or house paying player)
-  const settleCashIn  = p.settlement ? ((p.settlement.cashIn||0)  + (p.settlement.elecIn||0))  : 0; // player paid house
-  const settleCashOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0; // house paid player
+  // Settle up: cash player paid house (goes toward clearing buy-in debt)
+  const settlePaidIn  = p.settlement ? ((p.settlement.cashIn||0)  + (p.settlement.elecIn||0))  : 0;
+  // Settle up: cash house paid player (winnings paid out)
+  const settlePaidOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
 
-  // Expenses owed TO player BY house (positive for player)
+  // Expenses house owes player (always positive for player)
   const expenses = (p.expense || 0);
 
-  // Net from game: chips out + house paid player - total buy-in - player paid house
-  const gameNet = chipCashOut + settleCashOut - totalBuyIn - settleCashIn;
+  // What player still owed after cashing out chips
+  const debtAfterChips = Math.max(0, totalBuyIn - chipCashOut);
 
-  // Add expenses on top — house always owes these regardless of game result
+  // Settle cash in pays off remaining debt (marker)
+  // Settle cash out is winnings house pays player
+  const remainingDebt = Math.max(0, debtAfterChips - settlePaidIn);
+  const winnings = Math.max(0, (chipCashOut + settlePaidOut) - totalBuyIn);
+
+  // Net: positive = house owes player, negative = player still owes house
+  const gameNet = remainingDebt > 0 ? -remainingDebt : winnings;
+
+  // Expenses always add (house owes player regardless)
   return gameNet + expenses;
 }
 
