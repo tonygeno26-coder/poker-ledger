@@ -734,28 +734,41 @@ function markerTotal(p) {
 }
 
 function markerOwed(p) {
-  // How much of the marker is still unpaid after cash out covers it
   const marker = markerTotal(p);
   if (!marker) return 0;
-  const cashOut = p.cashOut || 0;
-  const nonMarkerIn = (p.buyIns||[]).filter(b => b.type !== 'marker').reduce((s,b) => s + parseFloat(b.amount||0), 0);
-  // Cash out first covers non-marker buy-ins, then applies to marker
-  const appliedToMarker = Math.max(0, cashOut - nonMarkerIn);
-  return Math.max(0, marker - appliedToMarker);
+  // Chip cash out pays toward marker
+  const chipCashOut = p.cashOut || 0;
+  // Settlement cash in also pays toward marker
+  const settleCashIn = p.settlement ? ((p.settlement.cashIn||0) + (p.settlement.elecIn||0)) : 0;
+  const totalPaid = chipCashOut + settleCashIn;
+  return Math.max(0, marker - totalPaid);
 }
 
 function playerBalance(p) {
-  if (p.settlement) {
-    // Use settlement figures when settled
-    const totalIn = (p.settlement.cashIn||0) + (p.settlement.elecIn||0);
-    const totalOut = (p.settlement.cashOut||0) + (p.settlement.elecOut||0);
-    // Also account for any unpaid marker
-    const mOwed = markerOwed(p);
-    return totalOut - totalIn - mOwed;
+  const marker = markerTotal(p);
+  const chipCashOut = p.cashOut || 0;
+  const settleCashIn = p.settlement ? ((p.settlement.cashIn||0) + (p.settlement.elecIn||0)) : 0;
+  const settleOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
+
+  if (marker > 0) {
+    // Marker player: owed = marker minus what they've paid back (chips + settle cash)
+    const remaining = markerOwed(p);
+    // If marker fully cleared, show net profit/loss from settle out
+    if (remaining <= 0) {
+      return settleOut; // any cash they receive back after clearing marker
+    }
+    return -remaining; // still owes this much
   }
-  // Unsettled: use buy-ins vs cash out
+
+  if (p.settlement) {
+    // Non-marker settled player: net = what they got out minus what they put in
+    const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0);
+    return settleOut - totalIn;
+  }
+
+  // Unsettled player
   const totalIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0) || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
-  const totalOut = (p.cashOut||0) + (p.tipTransfer||0) + (p.expense||0);
+  const totalOut = chipCashOut + (p.tipTransfer||0) + (p.expense||0);
   return totalOut - totalIn;
 }
 
