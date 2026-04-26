@@ -572,6 +572,26 @@ function updatePlayerField(id, field, val) {
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
 }
 
+const BUYIN_LABELS = {cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'};
+
+function renderBuyInLog(p) {
+  const buyIns = p.buyIns || [];
+  if (!buyIns.length) return '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No buy-ins yet — add one above</div>';
+  return buyIns.map((b, i) =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">'
+    + '<span style="color:var(--text-muted)">' + (BUYIN_LABELS[b.type] || b.type) + '</span>'
+    + '<span style="font-weight:700;color:var(--green)">+$' + fmt(b.amount) + '</span>'
+    + '<button onclick="removeBuyIn(' + p.id + ',' + i + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">✕</button>'
+    + '</div>'
+  ).join('');
+}
+
+function renderBuyInSummary(p) {
+  return (p.buyIns || []).map(b =>
+    '<div>' + (BUYIN_LABELS[b.type] || b.type) + ' Buy In <span>$' + fmt(b.amount) + '</span></div>'
+  ).join('');
+}
+
 function addBuyIn(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
@@ -674,12 +694,7 @@ function renderPlayerDetail(id) {
           </div>
         </div>
         <div id="buyin-log-${p.id}" style="margin-top:10px">
-          ${(p.buyIns||[]).length ? (p.buyIns||[]).map((b,i) => \`
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">
-              <span style="color:var(--text-muted)">\${{cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'}[b.type]||b.type}</span>
-              <span style="font-weight:700;color:var(--green)">+\$\${fmt(b.amount)}</span>
-              <button onclick="removeBuyIn(${p.id},\${i})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">✕</button>
-            </div>\`).join('') : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No buy-ins yet — add one above</div>'}
+          ${renderBuyInLog(p)}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--purple-dim);border-radius:8px;margin-top:4px">
           <span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL BUY IN</span>
@@ -700,11 +715,11 @@ function renderPlayerDetail(id) {
 
       <!-- SUMMARY -->
       <div class="player-summary">
-        ${(p.buyIns||[]).map(b => \`<div>\${{cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'}[b.type]||b.type} Buy In <span>$\${fmt(b.amount)}</span></div>\`).join('')}
+        ${renderBuyInSummary(p)}
         <div>Cash Out <span>$${fmt(p.cashOut||0)}</span></div>
         <div>Tip Transfer <span>$${fmt(p.tipTransfer||0)}</span></div>
         <div>Expense <span>$${fmt(p.expense||0)}</span></div>
-        ${p.playerNotes ? \`<div>Notes <span>\${p.playerNotes}</span></div>\` : ''}
+        ${p.playerNotes ? '<div>Notes <span>' + p.playerNotes + '</span></div>' : ''}
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
