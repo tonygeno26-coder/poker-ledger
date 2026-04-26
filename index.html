@@ -868,6 +868,43 @@ function switchPlayerTab(tab) {
   if (!isPlayers) renderStaff();
 }
 
+function addPlayerExpense(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const desc = document.getElementById('pexp-desc-' + id)?.value.trim();
+  const amount = parseFloat(document.getElementById('pexp-amt-' + id)?.value) || 0;
+  if (!amount) { toast('Enter an amount'); return; }
+  if (!p.playerExpenses) p.playerExpenses = [];
+  p.playerExpenses.push({ id: Date.now(), desc: desc || 'Expense', amount });
+  // Keep legacy p.expense in sync for calcAll
+  p.expense = p.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+  document.getElementById('pexp-desc-' + id).value = '';
+  document.getElementById('pexp-amt-' + id).value = '';
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('\u2705 Expense added — $' + fmt(amount) + ' owed to ' + p.name);
+}
+
+function removePlayerExpense(playerId, expId) {
+  const p = G.players.find(p => p.id === playerId);
+  if (!p) return;
+  p.playerExpenses = (p.playerExpenses||[]).filter(e => e.id !== expId);
+  p.expense = p.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+  calcAll(); renderAll(); renderPlayerDetail(playerId); autoSave();
+}
+
+function renderPlayerExpenseLog(p) {
+  const exps = p.playerExpenses || [];
+  if (!exps.length) return '<div style="font-size:12px;color:var(--text-muted);padding:4px 0">No expenses yet</div>';
+  return exps.map(e =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">'
+    + '<span style="color:var(--text-muted)">' + e.desc + '</span>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<span style="font-weight:700;color:var(--red)">$' + fmt(e.amount) + '</span>'
+    + '<button onclick="removePlayerExpense(' + p.id + ',' + e.id + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">&times;</button>'
+    + '</div></div>'
+  ).join('');
+}
+
 function submitStaffField(id, field) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
@@ -1337,8 +1374,28 @@ function renderPlayerDetail(id) {
         ${p.playerNotes ? '<div>Notes <span>' + p.playerNotes + '</span></div>' : ''}
       </div>
       ${renderStaffEarnings(p)}
-            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="btn btn-outline btn-sm" onclick="openExpenseModalFor(${p.id})">＋ Expense</button>
+
+      <!-- PLAYER EXPENSES -->
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="io-title">🧧 Expenses <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none">(owed to player by house)</span></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
+          <div class="io-field" style="flex:2;min-width:120px">
+            <label>DESCRIPTION</label>
+            <input type="text" class="inp" id="pexp-desc-${p.id}" placeholder="e.g. Food, drinks..." style="width:100%">
+          </div>
+          <div class="io-field" style="flex:1;min-width:80px">
+            <label>AMOUNT</label>
+            <input type="number" class="amount-btn" id="pexp-amt-${p.id}" placeholder="0" min="0" style="width:100%">
+          </div>
+          <div>
+            <button class="btn btn-purple btn-sm" onclick="addPlayerExpense(${p.id})" style="margin-bottom:2px">＋ Add</button>
+          </div>
+        </div>
+        <div id="pexp-log-${p.id}">${renderPlayerExpenseLog(p)}</div>
+        ${(p.playerExpenses||[]).length ? '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-top:4px"><span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL EXPENSES</span><span style="font-weight:800;color:var(--red)">$' + fmt((p.playerExpenses||[]).reduce((s,e)=>s+parseFloat(e.amount||0),0)) + '</span></div>' : ''}
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
       </div>
       ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span></div>' : '') + '</div></div>' : ''}
@@ -1484,8 +1541,8 @@ function renderOwedList() {
   const el = document.getElementById('owed-list');
   const countEl = document.getElementById('owed-count');
 
-  // Players who owe from balance OR have unpaid marker
-  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0)
+  // Players who owe from balance OR have unpaid marker OR staff tips/drop OR player expenses
+  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0 || staffOwed(p) > 0 || (p.expense||0) > 0)
     .sort((a,b) => playerBalance(a) - playerBalance(b));
 
   if (!owing.length) {
@@ -1514,6 +1571,7 @@ function renderOwedList() {
       + '</div>'
       + (hasMarker ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px"><span>📋 Marker unpaid</span><span>$' + fmt(mOwed) + '</span></div>' : '')
       + (isStaff ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 8px"><span>' + staffIcon + ' ' + staffLabel + '</span><span>owed by house</span></div>' : '')
+      + ((p.expense||0) > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:6px;padding:3px 8px"><span>🧧 Expenses</span><span>$' + fmt(p.expense||0) + ' owed by house</span></div>' : '')
       + '</div>';
   }).join('');
 }
