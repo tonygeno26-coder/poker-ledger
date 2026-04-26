@@ -635,52 +635,14 @@ input, select, button, textarea { font-family: inherit; }
 
 <!-- SETTLE UP MODAL -->
 <div class="modal-bg" id="modal-settle-up">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:500px;max-height:90vh;overflow-y:auto">
     <div class="modal-title">🤝 Settle Up — <span id="settle-player-name"></span> <button class="modal-close" onclick="closeModal('modal-settle-up')">✕</button></div>
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Record how this player's balance was settled</p>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <!-- CASH IN -->
-      <div class="io-field">
-        <label style="color:var(--green)">💵 CASH IN</label>
-        <input type="number" class="inp" id="settle-cash-in" placeholder="0" min="0" oninput="updateSettleSummary()">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash given to game</div>
-      </div>
-      <!-- CASH OUT -->
-      <div class="io-field">
-        <label style="color:var(--red)">💸 CASH OUT</label>
-        <input type="number" class="inp" id="settle-cash-out" placeholder="0" min="0" oninput="updateSettleSummary()">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cash received from game</div>
-      </div>
-      <!-- ELECTRONIC IN -->
-      <div class="io-field">
-        <label style="color:var(--purple-light)">📱 ELECTRONIC IN</label>
-        <input type="number" class="inp" id="settle-elec-in" placeholder="0" min="0" oninput="updateSettleSummary()">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle sent</div>
-      </div>
-      <!-- ELECTRONIC OUT -->
-      <div class="io-field">
-        <label style="color:var(--gold)">📤 ELECTRONIC OUT</label>
-        <input type="number" class="inp" id="settle-elec-out" placeholder="0" min="0" oninput="updateSettleSummary()">
-        <div id="settle-elec-out-source-wrap" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Paid from player:</label>
-          <select class="inp" id="settle-elec-out-source" style="width:100%;font-size:13px">
-            <option value="">— Select player —</option>
-          </select>
-        </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Venmo/Cash App/Zelle received</div>
-      </div>
+    <!-- BALANCE OWED -->
+    <div id="settle-balance-display" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:10px;margin-bottom:16px;background:var(--bg);border:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text-muted)">Balance to settle</span>
+      <span id="settle-balance-amt" style="font-size:1.3rem;font-weight:900">$0</span>
     </div>
-
-    <!-- LIVE SUMMARY -->
-    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px" id="settle-summary">
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Settlement Summary</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total In</span><span id="settle-total-in" style="color:var(--green);font-weight:700">$0</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Total Out</span><span id="settle-total-out" style="color:var(--red);font-weight:700">$0</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 0;font-weight:800"><span>Net</span><span id="settle-net" style="color:var(--green)">$0</span></div>
-    </div>
-
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="settle-marker-note"></div>
 
     <!-- HOUSE TIPS TAX (staff only) -->
     <div id="settle-tips-tax-section" style="display:none;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:16px;margin-bottom:16px">
@@ -707,6 +669,66 @@ input, select, button, textarea { font-family: inherit; }
         </div>
       </div>
     </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Payment Transactions</div>
+
+    <!-- TRANSACTIONS LIST -->
+    <div id="settle-transactions-list" style="margin-bottom:12px"></div>
+
+    <!-- ADD TRANSACTION -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--purple-light);margin-bottom:10px">+ Add Transaction</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="io-field">
+          <label>DIRECTION</label>
+          <select class="inp" id="settle-txn-direction" onchange="updateSettleTxnForm()" style="width:100%">
+            <option value="pay-out">🏠 House pays player</option>
+            <option value="pay-in">💵 Player pays house</option>
+            <option value="player-pays">👤 Player pays player</option>
+          </select>
+        </div>
+        <div class="io-field">
+          <label>METHOD</label>
+          <select class="inp" id="settle-txn-method" onchange="updateSettleTxnForm()" style="width:100%">
+            <option value="cash">💵 Cash</option>
+            <option value="electronic">📱 Electronic</option>
+          </select>
+        </div>
+      </div>
+      <div id="settle-txn-player-wrap" style="display:none;margin-bottom:8px">
+        <div class="io-field">
+          <label>FROM PLAYER</label>
+          <select class="inp" id="settle-txn-player" style="width:100%">
+            <option value="">— Select player —</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="io-field" style="flex:1">
+          <label>AMOUNT</label>
+          <input type="number" class="amount-btn" id="settle-txn-amount" placeholder="0" min="0" style="width:100%">
+        </div>
+        <button class="btn btn-purple btn-sm" onclick="addSettleTxn()" style="margin-bottom:2px">+ Add</button>
+      </div>
+    </div>
+
+    <!-- RUNNING BALANCE -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+        <span style="color:var(--text-muted)">Balance before</span>
+        <span id="settle-before-bal" style="font-weight:700">$0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+        <span style="color:var(--text-muted)">Transactions total</span>
+        <span id="settle-txn-total" style="font-weight:700">$0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:16px;padding:6px 0 0;font-weight:900">
+        <span>Remaining</span>
+        <span id="settle-remaining" style="color:var(--green)">$0</span>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="settle-marker-note"></div>
 
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeModal('modal-settle-up')">Cancel</button>
@@ -1245,43 +1267,25 @@ function openSettleUp(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
   document.getElementById('settle-player-name').textContent = p.name;
-  document.getElementById('modal-settle-up').dataset.playerId = id;
-  // Pre-fill with existing settlement if any
-  const s = p.settlement || {};
-  document.getElementById('settle-cash-in').value = s.cashIn || '';
-  document.getElementById('settle-cash-out').value = s.cashOut || '';
-  document.getElementById('settle-elec-in').value = s.elecIn || '';
-  document.getElementById('settle-elec-out').value = s.elecOut || '';
-  // Show marker note if applicable
+  const modal = document.getElementById('modal-settle-up');
+  modal.dataset.playerId = id;
+  // Initialize transactions list from existing settlement
+  modal.dataset.transactions = JSON.stringify(p.settleTxns || []);
+
+  // Show balance
+  const bal = playerBalance(p);
+  const balEl = document.getElementById('settle-balance-amt');
+  balEl.textContent = (bal >= 0 ? '+' : '-') + '$' + fmt(Math.abs(bal));
+  balEl.style.color = bal >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Marker note
   const mOwed = markerOwed(p);
   const markerNote = document.getElementById('settle-marker-note');
-  if (mOwed > 0) {
-    markerNote.innerHTML = '📋 <strong style="color:var(--gold)">Marker of $' + fmt(mOwed) + ' outstanding</strong> — cash out must cover marker before player receives funds.';
-  } else {
-    markerNote.innerHTML = '';
-  }
-  // Show electronic out source dropdown for staff
-  const elecOutWrap = document.getElementById('settle-elec-out-source-wrap');
-  const elecOutSelect = document.getElementById('settle-elec-out-source');
-  const elecOutInput = document.getElementById('settle-elec-out');
-  if (p.staffRole) {
-    elecOutWrap.style.display = 'block';
-    // Populate with players (excluding the staff member being settled)
-    const otherPlayers = G.players.filter(pl => pl.id !== p.id);
-    elecOutSelect.innerHTML = '<option value="">\u2014 Select player \u2014</option>'
-      + otherPlayers.map(pl => '<option value="' + pl.id + '">' + pl.name + '</option>').join('');
-    elecOutSelect.value = p.settlement ? (p.settlement.elecOutSourceId || '') : '';
-  } else {
-    elecOutWrap.style.display = 'none';
-  }
-  elecOutInput.oninput = function() {
-    if (p.staffRole && this.value > 0) {
-      elecOutWrap.style.display = 'block';
-    }
-    updateSettleSummary();
-  };
+  markerNote.innerHTML = mOwed > 0
+    ? '\u26a0\ufe0f <strong style="color:var(--gold)">Marker $' + fmt(mOwed) + ' outstanding</strong> — cash paid in clears marker first.'
+    : '';
 
-  // Show tips tax slider for staff with tips
+  // Tips tax for staff
   const taxSection = document.getElementById('settle-tips-tax-section');
   const slider = document.getElementById('tips-tax-slider');
   if (p.staffRole && (p.tips || 0) > 0) {
@@ -1291,8 +1295,90 @@ function openSettleUp(id) {
   } else {
     taxSection.style.display = 'none';
   }
-  updateSettleSummary();
+
+  // Populate player dropdown
+  const playerSel = document.getElementById('settle-txn-player');
+  playerSel.innerHTML = '<option value="">— Select player —</option>'
+    + G.players.filter(pl => pl.id !== id).map(pl => '<option value="' + pl.id + '">' + pl.name + '</option>').join('');
+
+  renderSettleTxns();
   openModal('modal-settle-up');
+}
+
+function updateSettleTxnForm() {
+  const dir = document.getElementById('settle-txn-direction').value;
+  const wrap = document.getElementById('settle-txn-player-wrap');
+  wrap.style.display = dir === 'player-pays' ? 'block' : 'none';
+}
+
+function addSettleTxn() {
+  const modal = document.getElementById('modal-settle-up');
+  const dir = document.getElementById('settle-txn-direction').value;
+  const method = document.getElementById('settle-txn-method').value;
+  const amount = parseFloat(document.getElementById('settle-txn-amount').value) || 0;
+  const playerId = document.getElementById('settle-txn-player').value;
+  const playerName = playerId ? G.players.find(pl => pl.id === parseInt(playerId))?.name : '';
+  if (!amount) { toast('Enter an amount'); return; }
+  if (dir === 'player-pays' && !playerId) { toast('Select a player'); return; }
+
+  const txns = JSON.parse(modal.dataset.transactions || '[]');
+  txns.push({ id: Date.now(), dir, method, amount, playerId: parseInt(playerId)||0, playerName, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  modal.dataset.transactions = JSON.stringify(txns);
+  document.getElementById('settle-txn-amount').value = '';
+  renderSettleTxns();
+}
+
+function removeSettleTxn(txnId) {
+  const modal = document.getElementById('modal-settle-up');
+  const txns = JSON.parse(modal.dataset.transactions || '[]').filter(t => t.id !== txnId);
+  modal.dataset.transactions = JSON.stringify(txns);
+  renderSettleTxns();
+}
+
+function renderSettleTxns() {
+  const modal = document.getElementById('modal-settle-up');
+  const id = parseInt(modal.dataset.playerId);
+  const p = G.players.find(p => p.id === id);
+  const txns = JSON.parse(modal.dataset.transactions || '[]');
+  const el = document.getElementById('settle-transactions-list');
+
+  if (!txns.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:6px 0;margin-bottom:8px">No transactions yet — add one below</div>';
+  } else {
+    const dirLabels = {
+      'pay-out': '\ud83c\udfe0 House \u2192 Player',
+      'pay-in':  '\ud83d\udcb5 Player \u2192 House',
+      'player-pays': '\ud83d\udc64 Player \u2192 Player'
+    };
+    el.innerHTML = txns.map(t => {
+      const label = dirLabels[t.dir] || t.dir;
+      const methodIcon = t.method === 'cash' ? '\ud83d\udcb5' : '\ud83d\udcf1';
+      const extra = t.dir === 'player-pays' ? ' (from ' + t.playerName + ')' : '';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">'
+        + '<div><div style="font-weight:700">' + label + extra + '</div><div style="font-size:11px;color:var(--text-muted)">' + methodIcon + ' ' + t.method + ' \u00b7 ' + t.time + '</div></div>'
+        + '<div style="display:flex;align-items:center;gap:10px">'
+        + '<span style="font-weight:800;color:' + (t.dir==='pay-out'?'var(--green)':'var(--red)') + '">$' + fmt(t.amount) + '</span>'
+        + '<button onclick="removeSettleTxn(' + t.id + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">\u00d7</button>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  // Update running balance
+  const bal = p ? playerBalance(p) : 0;
+  const txnTotal = txns.reduce((s,t) => {
+    if (t.dir === 'pay-out') return s + t.amount; // house paying player
+    if (t.dir === 'pay-in') return s - t.amount;  // player paying house
+    if (t.dir === 'player-pays') return s + t.amount; // player paying on behalf of house
+    return s;
+  }, 0);
+  const remaining = bal - txnTotal;
+
+  document.getElementById('settle-before-bal').textContent = (bal >= 0 ? '+' : '-') + '$' + fmt(Math.abs(bal));
+  document.getElementById('settle-before-bal').style.color = bal >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('settle-txn-total').textContent = '$' + fmt(txnTotal);
+  const remEl = document.getElementById('settle-remaining');
+  remEl.textContent = (remaining >= 0 ? '+' : '-') + '$' + fmt(Math.abs(remaining));
+  remEl.style.color = Math.abs(remaining) < 1 ? 'var(--green)' : 'var(--red)';
 }
 
 function roundToNearest5(n) {
@@ -1304,80 +1390,78 @@ function updateTipsTax(pct) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
   const gross = p.tips || 0;
-  const houseTakeRaw = gross * (parseInt(pct) / 100);
-  const houseTake = roundToNearest5(houseTakeRaw);
+  const houseTake = roundToNearest5(gross * (parseInt(pct) / 100));
   const staffGets = gross - houseTake;
   document.getElementById('tips-tax-pct-display').textContent = pct + '%';
   document.getElementById('tips-tax-gross').textContent = '$' + fmt(gross);
   document.getElementById('tips-tax-amount').textContent = '$' + fmt(houseTake);
   document.getElementById('tips-tax-net').textContent = '$' + fmt(staffGets);
-  // Store on modal for saveSettleUp to use
   document.getElementById('modal-settle-up').dataset.tipsTaxPct = pct;
-  document.getElementById('modal-settle-up').dataset.tipsNet = staffGets;
 }
 
-function updateSettleSummary() {
-  const cashIn = parseFloat(document.getElementById('settle-cash-in').value) || 0;
-  const cashOut = parseFloat(document.getElementById('settle-cash-out').value) || 0;
-  const elecIn = parseFloat(document.getElementById('settle-elec-in').value) || 0;
-  const elecOut = parseFloat(document.getElementById('settle-elec-out').value) || 0;
-  const totalIn = cashIn + elecIn;
-  const totalOut = cashOut + elecOut;
-  const net = totalOut - totalIn;
-  document.getElementById('settle-total-in').textContent = '$' + fmt(totalIn);
-  document.getElementById('settle-total-out').textContent = '$' + fmt(totalOut);
-  const netEl = document.getElementById('settle-net');
-  netEl.textContent = (net >= 0 ? '+' : '') + '$' + fmt(Math.abs(net));
-  netEl.style.color = net >= 0 ? 'var(--green)' : 'var(--red)';
-}
+function updateSettleSummary() { renderSettleTxns(); }
 
 function saveSettleUp() {
-  const id = parseInt(document.getElementById('modal-settle-up').dataset.playerId);
+  const modal = document.getElementById('modal-settle-up');
+  const id = parseInt(modal.dataset.playerId);
   const p = G.players.find(p => p.id === id);
   if (!p) return;
 
-  // Apply tips tax if set
-  const tipsTaxPct = parseInt(document.getElementById('modal-settle-up').dataset.tipsTaxPct || 0);
+  const txns = JSON.parse(modal.dataset.transactions || '[]');
+
+  // Apply tips tax
+  const tipsTaxPct = parseInt(modal.dataset.tipsTaxPct || 0);
   if (p.staffRole && p.tips && tipsTaxPct > 0) {
     const houseTake = roundToNearest5(p.tips * (tipsTaxPct / 100));
-    const tipsNet = p.tips - houseTake;
-    p.tipsTaxPct = tipsTaxPct;
     p.tipsTaxAmount = houseTake;
-    p.tips = tipsNet;
+    p.tipsTaxPct = tipsTaxPct;
+    p.tips = p.tips - houseTake;
   }
   if (p.staffRole) p.tipsSettled = true;
 
-  const elecOutSourceId = document.getElementById('settle-elec-out-source')?.value || '';
-  const elecOutSourcePlayer = elecOutSourceId ? G.players.find(pl => pl.id === parseInt(elecOutSourceId)) : null;
+  // Store transactions
+  p.settleTxns = txns;
+
+  // Build legacy settlement object for display
   p.settlement = {
-    cashIn: parseFloat(document.getElementById('settle-cash-in').value) || 0,
-    cashOut: parseFloat(document.getElementById('settle-cash-out').value) || 0,
-    elecIn: parseFloat(document.getElementById('settle-elec-in').value) || 0,
-    elecOut: parseFloat(document.getElementById('settle-elec-out').value) || 0,
-    elecOutSourceId: elecOutSourceId,
-    elecOutSourceName: elecOutSourcePlayer ? elecOutSourcePlayer.name : '',
-    time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})
+    txns: txns,
+    time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
   };
-  // If a player paid electronic out to this staff member, credit that player
-  const elecOutAmt = p.settlement.elecOut || 0;
-  const sourceId = parseInt(p.settlement.elecOutSourceId || 0);
-  if (elecOutAmt > 0 && sourceId) {
-    const sourcePl = G.players.find(pl => pl.id === sourceId);
-    if (sourcePl) {
-      if (!sourcePl.playerExpenses) sourcePl.playerExpenses = [];
-      sourcePl.playerExpenses.push({
-        id: Date.now(),
-        desc: 'Paid ' + p.name + ' tips (electronic)',
-        amount: elecOutAmt
-      });
-      sourcePl.expense = sourcePl.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+
+  // Apply side effects of each transaction
+  txns.forEach(t => {
+    if (t.dir === 'pay-out') {
+      // House paid player — affects house cash/ecash
+      if (t.method === 'cash') {
+        G.settleCashOut = (G.settleCashOut || 0) + t.amount;
+      }
+    } else if (t.dir === 'pay-in') {
+      // Player paid house — affects cash on hand
+      if (t.method === 'cash') {
+        G.settleCashIn = (G.settleCashIn || 0) + t.amount;
+      }
+    } else if (t.dir === 'player-pays') {
+      // Another player paid on behalf of house — that player is now owed by house
+      if (t.playerId) {
+        const payer = G.players.find(pl => pl.id === t.playerId);
+        if (payer) {
+          if (!payer.playerExpenses) payer.playerExpenses = [];
+          payer.playerExpenses.push({
+            id: Date.now(),
+            desc: 'Paid ' + p.name + ' (' + t.method + ')',
+            amount: t.amount
+          });
+          payer.expense = payer.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+        }
+      }
     }
-  }
+  });
 
   closeModal('modal-settle-up');
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast('✅ ' + p.name + ' settled up!');
+  toast('\u2705 ' + p.name + ' settled up!');
 }
+
 
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
