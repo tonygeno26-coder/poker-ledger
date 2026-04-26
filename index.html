@@ -246,11 +246,17 @@ input, select, button, textarea { font-family: inherit; }
       </div>
     </div>
 
-    <!-- RIGHT: Owed -->
-    <div>
+    <!-- RIGHT: Owed + Owes -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- HOUSE OWES PLAYERS -->
       <div class="card">
-        <div class="card-title">💸 Owed <span id="owed-count" class="badge badge-red ml-auto" style="display:none">0</span></div>
-        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div></div>
+        <div class="card-title">💸 House Owes <span id="owed-count" class="badge ml-auto" style="display:none;background:var(--green);color:#000">0</span></div>
+        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div></div>
+      </div>
+      <!-- PLAYERS OWE HOUSE -->
+      <div class="card">
+        <div class="card-title" style="color:var(--red)">🔴 Owes House <span id="owes-count" class="badge badge-red ml-auto" style="display:none">0</span></div>
+        <div id="owes-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div></div>
       </div>
     </div>
   </div>
@@ -1547,43 +1553,65 @@ function renderExpenseList() {
 }
 
 function renderOwedList() {
+  // ===== HOUSE OWES (tips, expenses, winnings paid out) =====
   const el = document.getElementById('owed-list');
   const countEl = document.getElementById('owed-count');
 
-  // Players who owe from balance OR have unpaid marker OR staff tips/drop OR player expenses
-  const owing = G.players.filter(p => playerBalance(p) < 0 || markerOwed(p) > 0 || staffOwed(p) > 0 || (p.expense||0) > 0 || (p.playerExpenses||[]).length > 0)
-    .sort((a,b) => playerBalance(a) - playerBalance(b));
-
-  if (!owing.length) {
-    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No players owe yet</div>';
-    countEl.style.display = 'none';
-    return;
-  }
-  countEl.style.display = 'inline';
-  countEl.textContent = owing.length;
-  el.innerHTML = owing.map(p => {
+  const houseOwesPlayers = G.players.filter(p => {
     const bal = playerBalance(p);
-    const mOwed = markerOwed(p);
-    const sOwed = staffOwed(p);
-    const hasMarker = mOwed > 0;
-    const isStaff = sOwed > 0;
-    const pExp = (p.expense||0);
-    const houseOwes = (isStaff || pExp > 0) && bal >= 0 && !hasMarker;
-    const displayAmt = houseOwes ? (sOwed + pExp) : Math.abs(bal < 0 ? bal : mOwed);
-    const amtColor = houseOwes ? 'var(--green)' : bal < 0 || hasMarker ? 'var(--red)' : 'var(--green)';
-    const label = houseOwes ? 'House owes' : hasMarker || bal < 0 ? 'Owes house' : 'House owes';
-    const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
-    const staffLabel = 'Tips $' + fmt(p.tips||0); // Drop is house revenue, not shown here
-    return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center">'
-      + '<div><div class="owed-name">' + p.name + '</div><div style="font-size:10px;color:var(--text-muted)">' + label + '</div></div>'
-      + '<div class="owed-amt" style="color:' + amtColor + '">$' + fmt(displayAmt) + '</div>'
-      + '</div>'
-      + (hasMarker ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px"><span>📋 Marker unpaid</span><span>$' + fmt(mOwed) + '</span></div>' : '')
-      + (isStaff ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 8px"><span>' + staffIcon + ' ' + staffLabel + '</span><span>owed by house</span></div>' : '')
-      + ((p.expense||0) > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:6px;padding:3px 8px;margin-top:3px"><span>🧧 Expense owed by house</span><span style="font-weight:800">$' + fmt(p.expense||0) + '</span></div>' : '')
-      + '</div>';
-  }).join('');
+    return bal > 0 || staffOwed(p) > 0 || (p.expense||0) > 0;
+  });
+
+  countEl.style.display = houseOwesPlayers.length ? 'inline' : 'none';
+  countEl.textContent = houseOwesPlayers.length;
+
+  if (!houseOwesPlayers.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div>';
+  } else {
+    el.innerHTML = houseOwesPlayers.map(p => {
+      const bal = playerBalance(p);
+      const sOwed = staffOwed(p);
+      const pExp = p.expense || 0;
+      const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
+      return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center">'
+        + '<div><div class="owed-name">' + p.name + '</div><div style="font-size:10px;color:var(--text-muted)">House owes</div></div>'
+        + '<div class="owed-amt" style="color:var(--green)">$' + fmt(Math.abs(bal > 0 ? bal : (sOwed + pExp))) + '</div>'
+        + '</div>'
+        + (sOwed > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 8px">' + staffIcon + ' Tips <span>$' + fmt(sOwed) + '</span></div>' : '')
+        + (pExp > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:6px;padding:3px 8px">🧧 Expenses <span>$' + fmt(pExp) + '</span></div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  // ===== PLAYERS OWE HOUSE (unpaid markers, negative balance) =====
+  const owesEl = document.getElementById('owes-list');
+  const owesCountEl = document.getElementById('owes-count');
+
+  const playerOwesHouse = G.players.filter(p => {
+    const bal = playerBalance(p);
+    return bal < 0 || markerOwed(p) > 0;
+  });
+
+  owesCountEl.style.display = playerOwesHouse.length ? 'inline' : 'none';
+  owesCountEl.textContent = playerOwesHouse.length;
+
+  if (!playerOwesHouse.length) {
+    owesEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div>';
+  } else {
+    owesEl.innerHTML = playerOwesHouse.map(p => {
+      const bal = playerBalance(p);
+      const mOwed = markerOwed(p);
+      return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center">'
+        + '<div><div class="owed-name">' + p.name + '</div><div style="font-size:10px;color:var(--text-muted)">Owes house</div></div>'
+        + '<div class="owed-amt" style="color:var(--red)">$' + fmt(Math.abs(bal)) + '</div>'
+        + '</div>'
+        + (mOwed > 0 ? '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gold);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:3px 8px">📋 Marker unpaid <span>$' + fmt(mOwed) + '</span></div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
 }
 
 function renderHostSplit(profit) {
