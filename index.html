@@ -931,7 +931,7 @@ function addBuyIn(id) {
   const elecSourceId = p.buyInElecSource || '';
   const elecSourceName = elecSourceId && elecSourceId !== 'house'
     ? (G.players.find(pl=>pl.id===parseInt(elecSourceId))?.name || '')
-    : (elecSourceId === 'house' ? 'House' : '');
+    : (elecSourceId === 'house' ? 'House (cash box)' : '');
   p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName });
   p.buyInAmount = 0;
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
@@ -1762,11 +1762,11 @@ function renderPlayerDetail(id) {
         </div>
         <div id="buyin-elec-source-${p.id}" style="display:${p.buyInType==='electronic'?'block':'none'};margin-top:8px">
           <div class="io-field">
-            <label style="color:var(--purple-light)">📱 Sent from (player)</label>
+            <label style="color:var(--purple-light)">📱 Sent TO (who received it)</label>
             <select class="inp" id="buyin-elec-player-${p.id}" onchange="updatePlayerField(${p.id},'buyInElecSource',this.value)" style="width:100%">
-              <option value="">— Select who sent —</option>
+              <option value="">— Select who received it —</option>
               ${buildPlayerOptions(p.id, p.buyInElecSource)}
-              <option value="house" ${p.buyInElecSource==='house'?'selected':''}>🏠 House / External</option>
+              <option value="house" ${p.buyInElecSource==='house'?'selected':''}>🏠 House (cash box)</option>
             </select>
           </div>
         </div>
