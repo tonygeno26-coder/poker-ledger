@@ -896,13 +896,15 @@ function addBuyIn(id) {
   const amount = parseFloat(p.buyInAmount) || 0;
   if (!amount) { toast('Enter an amount first'); return; }
   if (!p.buyIns) p.buyIns = [];
-  p.buyIns.push({ type: p.buyInType || 'cash', amount });
+  const buyType = p.buyInType || 'cash';
+  p.buyIns.push({ type: buyType, amount });
   p.buyInAmount = 0;
-  // also update legacy cashIn for balance calc
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Buy-in added!');
+  const typeLabels = {cash:'Cash',marker:'Marker',electronic:'Electronic',bonus:'Bonus'};
+  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb5 Buy-in: <b>$' + fmt(amount) + '</b> (' + (typeLabels[buyType]||buyType) + ')\n<i>Pocketbooks</i>');
 }
 
 // ========== STAFF ==========
@@ -966,6 +968,49 @@ function renderPlayerExpenseLog(p) {
   ).join('');
 }
 
+async function showLinkCode(id) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  const display = document.getElementById('link-code-display-' + id);
+  const codeEl = document.getElementById('link-code-number-' + id);
+  if (!display || !codeEl) return;
+  display.style.display = 'block';
+  codeEl.textContent = '....';
+  const result = await getLinkCode(id, p.name);
+  if (result && result.code) {
+    codeEl.textContent = result.code;
+    p.linkCode = result.code;
+    autoSave();
+  } else {
+    codeEl.textContent = 'ERR';
+    toast('Could not get link code — check backend connection');
+  }
+}
+
+// ===== TELEGRAM NOTIFICATIONS =====
+const BACKEND = 'https://sms-backend-production-8e8a.up.railway.app';
+
+async function tgNotify(playerId, message) {
+  try {
+    await fetch(BACKEND + '/pocketbooks/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: String(playerId), message })
+    });
+  } catch(e) { /* silent fail */ }
+}
+
+async function getLinkCode(playerId, playerName) {
+  try {
+    const r = await fetch(BACKEND + '/pocketbooks/link-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: String(playerId), playerName })
+    });
+    return await r.json();
+  } catch(e) { return null; }
+}
+
 function logStaffTurn(id, field) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
@@ -985,6 +1030,8 @@ function logStaffTurn(id, field) {
   if (inputEl) inputEl.value = '';
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('\u2705 ' + (field === 'tips' ? 'Tips' : 'Drop') + ' $' + fmt(amount) + ' logged!');
+  if (field === 'tips') tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb0 Tips logged: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
+  if (field === 'drop') tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83c\udfb0 Drop logged: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
 }
 
 function removeStaffLog(id, field, logId) {
@@ -1460,6 +1507,10 @@ function saveSettleUp() {
   closeModal('modal-settle-up');
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('\u2705 ' + p.name + ' settled up!');
+  const bal = playerBalance(p);
+  const sign = bal >= 0 ? '+' : '-';
+  const icon = bal >= 0 ? '\ud83d\udfe2' : '\ud83d\udd34';
+  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n' + icon + ' Settlement confirmed\nBalance: <b>' + sign + '$' + fmt(Math.abs(bal)) + '</b>\n<i>Pocketbooks</i>');
 }
 
 
@@ -1473,6 +1524,7 @@ function submitCashOut(id) {
   p.cashOut = amount;
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Cash out $' + fmt(amount) + ' submitted!');
+  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
 }
 
 function removeBuyIn(id, idx) {
@@ -1671,8 +1723,15 @@ function renderPlayerDetail(id) {
         ${(p.playerExpenses||[]).length ? '<div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-top:4px"><span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL EXPENSES</span><span style="font-weight:800;color:var(--red)">$' + fmt((p.playerExpenses||[]).reduce((s,e)=>s+parseFloat(e.amount||0),0)) + '</span></div>' : ''}
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="showLinkCode(${p.id})" style="color:#29b6f6;border-color:#29b6f6">📡 Link Telegram</button>
         <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
+      </div>
+      <div id="link-code-display-${p.id}" style="display:none;margin-top:10px;background:rgba(41,182,246,0.1);border:1px solid rgba(41,182,246,0.3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Have ${p.name} message this code to @PocketbooksBot</div>
+        <div style="font-size:2rem;font-weight:900;letter-spacing:8px;color:#29b6f6" id="link-code-number-${p.id}">----</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Code expires in 24 hours</div>
+        ${p.telegramLinked ? '<div style="color:var(--green);font-size:12px;font-weight:700;margin-top:6px">\u2705 Telegram linked</div>' : ''}
       </div>
       ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span>' + (p.settlement.elecOutSourceName ? ' <span style="color:var(--gold);font-size:10px">from ' + p.settlement.elecOutSourceName + '</span>' : '') + '</div>' : '') + '</div></div>' : ''}
     </div>`;
