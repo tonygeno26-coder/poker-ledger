@@ -1061,6 +1061,33 @@ function renderStaffLog(p, field) {
   }).join('');
 }
 
+function renderSettledBadge(p) {
+  if (!p.settlement) return '';
+  const txns = p.settleTxns || [];
+  const dirLabels = {
+    'pay-out': 'House paid player',
+    'pay-in': 'Player paid house',
+    'player-pays': 'Paid by player'
+  };
+  const methodIcon = m => m === 'cash' ? '\ud83d\udcb5' : '\ud83d\udcf1';
+  const txnRows = txns.map(t =>
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px">'
+    + '<div><span style="color:var(--text-muted)">' + (dirLabels[t.dir]||t.dir) + '</span>'
+    + (t.playerName ? ' <span style="color:var(--gold)">(' + t.playerName + ')</span>' : '')
+    + ' ' + methodIcon(t.method) + ' <span style="color:var(--text-muted);font-size:10px">' + t.time + '</span></div>'
+    + '<span style="font-weight:800;color:var(--green)">$' + fmt(t.amount) + '</span>'
+    + '</div>'
+  ).join('');
+
+  const total = txns.reduce((s,t) => s + t.amount, 0);
+
+  return '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:14px;margin-top:10px">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">\u2705 Settled — ' + (p.settlement.time||'') + '</div>'
+    + (txnRows || '<div style="font-size:12px;color:var(--text-muted)">No transaction details recorded</div>')
+    + (txns.length > 1 ? '<div style="display:flex;justify-content:space-between;padding:6px 0 0;font-size:13px;font-weight:800"><span>Total Settled</span><span style="color:var(--green)">$' + fmt(total) + '</span></div>' : '')
+    + '</div>';
+}
+
 function renderStaffEarnings(p) {
   if (!p.staffRole) return '';
   const isDealer = p.staffRole === 'dealer';
@@ -1741,7 +1768,7 @@ function renderPlayerDetail(id) {
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Code expires in 24 hours</div>
         ${p.telegramLinked ? '<div style="color:var(--green);font-size:12px;font-weight:700;margin-top:6px">\u2705 Telegram linked</div>' : ''}
       </div>
-      ${(p.settlement) ? '<div style="background:rgba(16,185,129,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Settled</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' + (p.settlement.cashIn ? '<div style="color:var(--text-muted)">Cash In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashIn) + '</span></div>' : '') + (p.settlement.cashOut ? '<div style="color:var(--text-muted)">Cash Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.cashOut) + '</span></div>' : '') + (p.settlement.elecIn ? '<div style="color:var(--text-muted)">Electronic In <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecIn) + '</span></div>' : '') + (p.settlement.elecOut ? '<div style="color:var(--text-muted)">Electronic Out <span style="color:var(--white);font-weight:700">$' + fmt(p.settlement.elecOut) + '</span>' + (p.settlement.elecOutSourceName ? ' <span style="color:var(--gold);font-size:10px">from ' + p.settlement.elecOutSourceName + '</span>' : '') + '</div>' : '') + '</div></div>' : ''}
+      ${renderSettledBadge(p)}
     </div>`;
 
   // Highlight active card
