@@ -1656,28 +1656,41 @@ function playerBalance(p) {
   // Chips cashed out from table
   const chipCashOut = p.cashOut || 0;
 
-  // Settle up: cash player paid house (goes toward clearing buy-in debt)
-  const settlePaidIn  = p.settlement ? ((p.settlement.cashIn||0)  + (p.settlement.elecIn||0))  : 0;
-  // Settle up: cash house paid player (winnings paid out)
-  const settlePaidOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
+  // Settle up transactions
+  const settleTxns = p.settleTxns || [];
+  const hasSettle = settleTxns.length > 0;
 
-  // Expenses house owes player — exclude bonus (already paid in chips, not a cash debt)
+  // What house paid player via settle up
+  const settlePaidOut = settleTxns.filter(t => t.dir === 'pay-out').reduce((s,t) => s + t.amount, 0)
+    + settleTxns.filter(t => t.dir === 'player-pays').reduce((s,t) => s + t.amount, 0);
+  // What player paid house via settle up
+  const settlePaidIn = settleTxns.filter(t => t.dir === 'pay-in').reduce((s,t) => s + t.amount, 0);
+
+  // Expenses house owes player — exclude bonus (already paid in chips)
   const expenses = (p.playerExpenses||[]).filter(e => !e.desc.includes('Bonus')).reduce((s,e)=>s+parseFloat(e.amount||0),0);
 
-  // What player still owed after cashing out chips
-  const debtAfterChips = Math.max(0, totalBuyIn - chipCashOut);
-
-  // Settle cash in pays off remaining debt (marker)
-  // Settle cash out is winnings house pays player
-  const remainingDebt = Math.max(0, debtAfterChips - settlePaidIn);
-  const winnings = Math.max(0, (chipCashOut + settlePaidOut) - totalBuyIn);
-
-  // Net: positive = house owes player, negative = player still owes house
-  // For cash buy-ins with no cash-out yet = $0 (chips in play, no result)
   const markerAmt = (p.buyIns||[]).filter(b=>b.type==='marker').reduce((s,b)=>s+parseFloat(b.amount||0),0);
-  const cashOnlyBuyIn = totalBuyIn - markerAmt;
-  const noActivity = chipCashOut === 0 && settlePaidIn === 0 && settlePaidOut === 0;
-  const gameNet = (noActivity && markerAmt === 0) ? 0 : (remainingDebt > 0 ? -remainingDebt : winnings);
+
+  // Pre-settle net: what player won/lost based on buy-in vs chips returned
+  const preSettleNet = chipCashOut - totalBuyIn; // positive = player won, negative = player owes
+
+  let gameNet;
+  if (hasSettle) {
+    // Settle txns clear the pre-settle balance
+    // pay-out = house paying player their winnings
+    // pay-in = player paying house what they owe
+    // After settle, remaining balance = preSettleNet - settlePaidOut + settlePaidIn
+    const afterSettle = preSettleNet - settlePaidOut + settlePaidIn;
+    gameNet = Math.abs(afterSettle) < 1 ? 0 : afterSettle;
+  } else {
+    // No settle yet
+    const noActivity = chipCashOut === 0;
+    if (noActivity && markerAmt === 0) {
+      gameNet = 0; // chips in play, no result yet
+    } else {
+      gameNet = preSettleNet; // show current win/loss
+    }
+  }
 
   // Tips always count toward balance for staff — house owes them
   const tips = p.staffRole ? (p.tips || 0) : 0;
