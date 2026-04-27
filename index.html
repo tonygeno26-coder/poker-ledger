@@ -1582,9 +1582,9 @@ function removeBuyIn(id, idx) {
 }
 
 function staffOwed(p) {
-  if (!p.staffRole) return 0;
-  if (p.tipsSettled) return 0; // already in balance, don't double-count in owed
-  return (p.tips || 0); // pending tips shown in House Owes until settled
+  // Tips are always in playerBalance for staff, so staffOwed just returns 0
+  // The House Owes section picks up staff via positive playerBalance
+  return 0;
 }
 
 function markerTotal(p) {
@@ -1631,8 +1631,8 @@ function playerBalance(p) {
   // Net: positive = house owes player, negative = player still owes house
   const gameNet = remainingDebt > 0 ? -remainingDebt : winnings;
 
-  // Tips only count in balance after explicitly settled (tipsSettled flag set)
-  const tips = (p.tipsSettled && p.staffRole) ? (p.tips || 0) : 0;
+  // Tips always count toward balance for staff — house owes them
+  const tips = p.staffRole ? (p.tips || 0) : 0;
   const gameResult = gameNet + expenses + tips;
 
   // If settled via player-pays transactions, those payments clear the balance
