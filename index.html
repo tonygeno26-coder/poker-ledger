@@ -265,9 +265,21 @@ input, select, button, textarea { font-family: inherit; }
   <div class="breakdown">
     <div class="breakdown-title">🏦 Breakdown</div>
     <div class="breakdown-row">
-      <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
-      <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
-      <div class="breakdown-cell"><div class="bc-lbl">Tax</div><div class="bc-val" id="b-tax">$0</div></div>
+      <div class="breakdown-cell" onclick="toggleBreakdownDetail('drop-detail')" style="cursor:pointer">
+        <div class="bc-lbl">Drop ▾</div>
+        <div class="bc-val" id="b-drop">$0</div>
+        <div id="drop-detail" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px" id="b-drop-detail"></div>
+      </div>
+      <div class="breakdown-cell" onclick="toggleBreakdownDetail('expenses-detail')" style="cursor:pointer">
+        <div class="bc-lbl">Expenses ▾</div>
+        <div class="bc-val" id="b-expenses">$0</div>
+        <div id="expenses-detail" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
+      </div>
+      <div class="breakdown-cell" onclick="toggleBreakdownDetail('tax-detail')" style="cursor:pointer">
+        <div class="bc-lbl">Tax ▾</div>
+        <div class="bc-val" id="b-tax">$0</div>
+        <div id="tax-detail" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
+      </div>
       <div class="breakdown-cell profit"><div class="bc-lbl">Profit</div><div class="bc-val" id="b-profit">$0</div></div>
     </div>
   </div>
@@ -1059,6 +1071,12 @@ function renderStaffLog(p, field) {
       + '<button onclick="' + onclick + '" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">&times;</button>'
       + '</div>';
   }).join('');
+}
+
+function toggleBreakdownDetail(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function renderSettledBadge(p) {
@@ -1880,11 +1898,53 @@ function calcAll() {
   G.chipFloat = chipFloat;
 
   // Update breakdown
-  setText('b-drop', '$' + fmt(dealerDrop)); // chip drop only
+  setText('b-drop', '$' + fmt(dealerDrop));
   setText('b-expenses', '$' + fmt(allExpenses));
-  setText('b-tax', '$' + fmt(houseTipsTax)); // tips tax collected from staff
+  setText('b-tax', '$' + fmt(houseTipsTax));
   const taxEl = document.getElementById('b-tax');
   if (taxEl) taxEl.style.color = houseTipsTax > 0 ? 'var(--gold)' : '';
+
+  // Populate DROP detail
+  const dropDetail = document.getElementById('drop-detail');
+  if (dropDetail) {
+    const dropEntries = G.players.filter(p => p.staffRole === 'dealer' && (p.dropLog||[]).length > 0);
+    if (!dropEntries.length) {
+      dropDetail.innerHTML = '<div style="color:var(--text-muted)">No drop logged yet</div>';
+    } else {
+      dropDetail.innerHTML = dropEntries.map(p =>
+        (p.dropLog||[]).map(d => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text-muted)">' + p.name + ' ' + d.time + '</span><span style="color:var(--gold);font-weight:700">$' + fmt(d.amount) + '</span></div>').join('')
+      ).join('');
+    }
+  }
+
+  // Populate EXPENSES detail
+  const expDetail = document.getElementById('expenses-detail');
+  if (expDetail) {
+    const allExp = [
+      ...G.expenses.map(e => ({name: e.name, amount: e.amount})),
+      ...G.players.flatMap(p => (p.playerExpenses||[]).map(e => ({name: p.name + ': ' + e.desc, amount: e.amount})))
+    ];
+    if (!allExp.length) {
+      expDetail.innerHTML = '<div style="color:var(--text-muted)">No expenses yet</div>';
+    } else {
+      expDetail.innerHTML = allExp.map(e =>
+        '<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text-muted)">' + e.name + '</span><span style="color:var(--red);font-weight:700">$' + fmt(e.amount) + '</span></div>'
+      ).join('');
+    }
+  }
+
+  // Populate TAX detail
+  const taxDetail = document.getElementById('tax-detail');
+  if (taxDetail) {
+    const taxEntries = G.players.filter(p => p.tipsTaxAmount > 0);
+    if (!taxEntries.length) {
+      taxDetail.innerHTML = '<div style="color:var(--text-muted)">No tips tax collected yet</div>';
+    } else {
+      taxDetail.innerHTML = taxEntries.map(p =>
+        '<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text-muted)">' + p.name + ' (' + (p.tipsTaxPct||0) + '%)</span><span style="color:var(--gold);font-weight:700">$' + fmt(p.tipsTaxAmount) + '</span></div>'
+      ).join('');
+    }
+  }
   const profitEl = document.getElementById('b-profit');
   profitEl.textContent = '$' + fmt(profit);
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
