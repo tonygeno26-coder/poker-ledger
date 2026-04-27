@@ -2011,7 +2011,9 @@ function renderOwedList() {
 
   const houseOwesPlayers = G.players.filter(p => {
     const bal = playerBalance(p);
-    return bal > 0 || staffOwed(p) > 0 || (p.expense||0) > 0;
+    // Only count non-bonus expenses in House Owes (bonus already paid in chips)
+    const nonBonusExp = (p.playerExpenses||[]).filter(e => !e.desc.includes('Bonus')).reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    return bal > 0 || staffOwed(p) > 0 || nonBonusExp > 0;
   });
 
   countEl.style.display = houseOwesPlayers.length ? 'inline' : 'none';
@@ -2023,7 +2025,8 @@ function renderOwedList() {
     el.innerHTML = houseOwesPlayers.map(p => {
       const bal = playerBalance(p);
       const sOwed = staffOwed(p);
-      const pExp = p.expense || 0;
+      // Only show non-bonus expenses in owed section
+      const pExp = (p.playerExpenses||[]).filter(e => !e.desc.includes('Bonus')).reduce((s,e)=>s+parseFloat(e.amount||0),0);
       const staffIcon = p.staffRole === 'dealer' ? '🎴' : '👔';
       return '<div class="owed-row" onclick="showPage_direct(\'players\');renderPlayerDetail(' + p.id + ')" style="display:flex;flex-direction:column;gap:4px">'
         + '<div style="display:flex;justify-content:space-between;align-items:center">'
