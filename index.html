@@ -674,9 +674,12 @@ input, select, button, textarea { font-family: inherit; }
     <div class="modal-title">🤝 Settle Up — <span id="settle-player-name"></span> <button class="modal-close" onclick="closeModal('modal-settle-up')">✕</button></div>
 
     <!-- BALANCE OWED -->
-    <div id="settle-balance-display" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:10px;margin-bottom:16px;background:var(--bg);border:1px solid var(--border)">
-      <span style="font-size:13px;color:var(--text-muted)">Balance to settle</span>
-      <span id="settle-balance-amt" style="font-size:1.3rem;font-weight:900">$0</span>
+    <div id="settle-balance-display" style="border-radius:10px;margin-bottom:16px;background:var(--bg);border:1px solid var(--border);padding:12px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;color:var(--text-muted)">Net to settle</span>
+        <span id="settle-balance-amt" style="font-size:1.3rem;font-weight:900">$0</span>
+      </div>
+      <div id="settle-balance-hint" style="font-size:11px;color:var(--text-muted)"></div>
     </div>
 
     <!-- HOUSE TIPS TAX (staff only) -->
@@ -1413,6 +1416,12 @@ function openSettleUp(id) {
   const balEl = document.getElementById('settle-balance-amt');
   balEl.textContent = (bal >= 0 ? '+' : '-') + '$' + fmt(Math.abs(bal));
   balEl.style.color = bal >= 0 ? 'var(--green)' : 'var(--red)';
+  const hint = document.getElementById('settle-balance-hint');
+  if (hint) {
+    if (bal > 0) hint.textContent = '🏠 House owes player $' + fmt(bal) + ' — add a pay-out transaction for this amount';
+    else if (bal < 0) hint.textContent = '💵 Player owes house $' + fmt(Math.abs(bal)) + ' — add a pay-in transaction for this amount';
+    else hint.textContent = '✅ Already balanced — nothing to settle';
+  }
 
   // Marker note
   const mOwed = markerOwed(p);
@@ -1676,11 +1685,14 @@ function playerBalance(p) {
 
   let gameNet;
   if (hasSettle) {
-    // Settle txns clear the pre-settle balance
-    // pay-out = house paying player their winnings
-    // pay-in = player paying house what they owe
-    // After settle, remaining balance = preSettleNet - settlePaidOut + settlePaidIn
-    const afterSettle = preSettleNet - settlePaidOut + settlePaidIn;
+    // Chips cashed out return to house (not player income)
+    // Player income = only cash paid OUT by house via settle
+    // Player paid = buy-in + any cash paid IN to house via settle
+    // Net profit = chipCashOut - totalBuyIn (game result)
+    // Settle pays that net profit in cash
+    // Balance = gameProfit - settlePaidOut + settlePaidIn
+    const gameProfit = preSettleNet; // what player won/lost
+    const afterSettle = gameProfit - settlePaidOut + settlePaidIn;
     gameNet = Math.abs(afterSettle) < 1 ? 0 : afterSettle;
   } else {
     // No settle yet
