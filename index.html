@@ -566,6 +566,22 @@ input, select, button, textarea { font-family: inherit; }
               <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
             </label>
           </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-host" value="host">
+            <label for="new-role-host" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">👑</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Host</div>
+              <div style="font-size:10px;color:var(--text-muted)">Game host</div>
+            </label>
+          </div>
+          <div class="time-option">
+            <input type="radio" name="new-staff-role" id="new-role-bookkeeper" value="bookkeeper">
+            <label for="new-role-bookkeeper" style="text-align:center;padding:10px">
+              <div style="font-size:1.3rem">📒</div>
+              <div style="font-size:12px;font-weight:700;margin-top:4px">Bookkeeper</div>
+              <div style="font-size:10px;color:var(--text-muted)">Tips only</div>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -1118,7 +1134,7 @@ function renderSettledBadge(p) {
 function renderStaffEarnings(p) {
   if (!p.staffRole) return '';
   const isDealer = p.staffRole === 'dealer';
-  const icons = {dealer:'Dealer', hostess:'Hostess', chef:'Chef', security:'Security', misc:'Misc'};
+  const icons = {dealer:'Dealer', hostess:'Hostess', chef:'Chef', security:'Security', misc:'Misc', host:'Host', bookkeeper:'Bookkeeper'};
   const icon = icons[p.staffRole] || p.staffRole;
   const totalTips = p.tips || 0;
   const totalDrop = p.drop || 0;
