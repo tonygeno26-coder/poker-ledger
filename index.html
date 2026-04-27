@@ -1614,8 +1614,8 @@ function markerOwed(p) {
 function playerBalance(p) {
   // positive = house owes player, negative = player owes house
 
-  // Total bought in (all types)
-  const totalBuyIn = (p.buyIns||[]).reduce((s,b) => s + parseFloat(b.amount||0), 0)
+  // Total bought in — exclude bonus (house expense, not player debt)
+  const totalBuyIn = (p.buyIns||[]).filter(b => b.type !== 'bonus').reduce((s,b) => s + parseFloat(b.amount||0), 0)
     || ((p.cashIn||0) + (p.chipsIn||0) + (p.eCashIn||0));
 
   // Chips cashed out from table
@@ -1904,7 +1904,8 @@ function calcAll() {
   // then add back all cash-outs (chips come back from players)
   // then add back dealer drop (chips turned in by dealers)
   const totalBuyInsAllPlayers = G.players.reduce((s, p) => {
-    return s + (p.buyIns||[]).reduce((t, b) => t + parseFloat(b.amount||0), 0);
+    // Exclude bonus from chip count - bonus chips come from house float, not cash
+    return s + (p.buyIns||[]).filter(b => b.type !== 'bonus').reduce((t, b) => t + parseFloat(b.amount||0), 0);
   }, 0);
   const totalCashOutsAllPlayers = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
   const totalDropAllDealers = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop||0) : 0), 0);
