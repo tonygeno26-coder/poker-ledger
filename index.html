@@ -1904,9 +1904,8 @@ function calcAll() {
   // then add back all cash-outs (chips come back from players)
   // then add back dealer drop (chips turned in by dealers)
   const totalBuyInsAllPlayers = G.players.reduce((s, p) => {
-    // Only cash + marker + electronic reduce chips on hand
-    // Bonus comes from float (already counted), electronic doesn't affect chips
-    return s + (p.buyIns||[]).filter(b => b.type === 'cash' || b.type === 'marker').reduce((t, b) => t + parseFloat(b.amount||0), 0);
+    // All buy-in types send chips out (cash, marker, electronic, bonus all become chips)
+    return s + (p.buyIns||[]).reduce((t, b) => t + parseFloat(b.amount||0), 0);
   }, 0);
   const totalCashOutsAllPlayers = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
   const totalDropAllDealers = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop||0) : 0), 0);
