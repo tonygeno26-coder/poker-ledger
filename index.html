@@ -908,7 +908,7 @@ function renderBuyInLog(p) {
   if (!buyIns.length) return '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No buy-ins yet — add one above</div>';
   return buyIns.map((b, i) =>
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px">'
-    + '<span style="color:var(--text-muted)">' + (BUYIN_LABELS[b.type] || b.type) + '</span>'
+    + '<span style="color:var(--text-muted)">' + (BUYIN_LABELS[b.type] || b.type) + (b.elecSourceName ? ' <span style="color:var(--purple-light);font-size:11px">from ' + b.elecSourceName + '</span>' : '') + '</span>'
     + '<span style="font-weight:700;color:var(--green)">+$' + fmt(b.amount) + '</span>'
     + '<button onclick="removeBuyIn(' + p.id + ',' + i + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px">✕</button>'
     + '</div>'
@@ -928,7 +928,11 @@ function addBuyIn(id) {
   if (!amount) { toast('Enter an amount first'); return; }
   if (!p.buyIns) p.buyIns = [];
   const buyType = p.buyInType || 'cash';
-  p.buyIns.push({ type: buyType, amount });
+  const elecSourceId = p.buyInElecSource || '';
+  const elecSourceName = elecSourceId && elecSourceId !== 'house'
+    ? (G.players.find(pl=>pl.id===parseInt(elecSourceId))?.name || '')
+    : (elecSourceId === 'house' ? 'House' : '');
+  p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName });
   p.buyInAmount = 0;
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
@@ -1174,6 +1178,17 @@ function renderStaffEarnings(p) {
   return html;
 }
 
+
+function buildPlayerOptions(excludeId, selectedVal) {
+  return G.players.filter(pl => pl.id !== excludeId).map(pl =>
+    '<option value="' + pl.id + '"' + (String(selectedVal) === String(pl.id) ? ' selected' : '') + '>' + pl.name + '</option>'
+  ).join('');
+}
+
+function toggleElecSource(section, id, type) {
+  const el = document.getElementById(section + '-elec-source-' + id);
+  if (el) el.style.display = type === 'electronic' ? 'block' : 'none';
+}
 
 function toggleStaffSection() {
   const section = document.getElementById('staff-section');
@@ -1730,7 +1745,7 @@ function renderPlayerDetail(id) {
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="io-field" style="flex:1;min-width:130px">
             <label>TYPE</label>
-            <select class="inp" onchange="updatePlayerField(${p.id},'buyInType',this.value)" style="width:100%">
+            <select class="inp" id="buyin-type-sel-${p.id}" onchange="updatePlayerField(${p.id},'buyInType',this.value);toggleElecSource('buyin',${p.id},this.value)" style="width:100%">
               <option value="cash" ${(p.buyInType||'cash')==='cash'?'selected':''}>💵 Cash Buy</option>
               <option value="marker" ${p.buyInType==='marker'?'selected':''}>📋 Marker</option>
               <option value="electronic" ${p.buyInType==='electronic'?'selected':''}>📱 Electronic</option>
@@ -1743,6 +1758,16 @@ function renderPlayerDetail(id) {
           </div>
           <div>
             <button class="btn btn-purple btn-sm" onclick="addBuyIn(${p.id})" style="margin-bottom:2px">＋ Add</button>
+          </div>
+        </div>
+        <div id="buyin-elec-source-${p.id}" style="display:${p.buyInType==='electronic'?'block':'none'};margin-top:8px">
+          <div class="io-field">
+            <label style="color:var(--purple-light)">📱 Sent from (player)</label>
+            <select class="inp" id="buyin-elec-player-${p.id}" onchange="updatePlayerField(${p.id},'buyInElecSource',this.value)" style="width:100%">
+              <option value="">— Select who sent —</option>
+              ${buildPlayerOptions(p.id, p.buyInElecSource)}
+              <option value="house" ${p.buyInElecSource==='house'?'selected':''}>🏠 House / External</option>
+            </select>
           </div>
         </div>
         <div id="buyin-log-${p.id}" style="margin-top:10px">
