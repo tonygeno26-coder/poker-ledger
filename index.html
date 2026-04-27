@@ -293,7 +293,11 @@ input, select, button, textarea { font-family: inherit; }
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
       <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
       <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
-      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div></div>
+      <div class="stat-box" onclick="toggleBreakdownDetail('ecash-detail')" style="cursor:pointer">
+        <div class="lbl">E-Cash On Hand ▾</div>
+        <div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div>
+        <div id="ecash-detail" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="calcAll()"></div>
@@ -2015,6 +2019,28 @@ function calcAll() {
   const eCashEl = document.getElementById('gn-ecash');
   eCashEl.textContent = (eCashOnHand < 0 ? '-' : '') + '$' + fmt(Math.abs(eCashOnHand));
   eCashEl.style.color = eCashOnHand < 0 ? 'var(--red)' : 'var(--purple-light)';
+
+  // Populate E-Cash detail breakdown
+  const eCashDetail = document.getElementById('ecash-detail');
+  if (eCashDetail) {
+    const elecEntries = G.players.flatMap(p =>
+      (p.buyIns||[]).filter(b => b.type === 'electronic').map(b => ({
+        player: p.name,
+        amount: b.amount,
+        to: b.elecSourceName || 'House'
+      }))
+    );
+    if (!elecEntries.length) {
+      eCashDetail.innerHTML = '<div style="color:var(--text-muted)">No electronic buy-ins yet</div>';
+    } else {
+      eCashDetail.innerHTML = elecEntries.map(e =>
+        '<div style="display:flex;justify-content:space-between;padding:3px 0">'
+        + '<span style="color:var(--text-muted)">' + e.player + ' → ' + e.to + '</span>'
+        + '<span style="color:var(--purple-light);font-weight:700">$' + fmt(e.amount) + '</span>'
+        + '</div>'
+      ).join('');
+    }
+  }
 
   // Host split
   renderHostSplit(profit);
