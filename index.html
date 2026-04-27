@@ -1626,8 +1626,8 @@ function playerBalance(p) {
   // Settle up: cash house paid player (winnings paid out)
   const settlePaidOut = p.settlement ? ((p.settlement.cashOut||0) + (p.settlement.elecOut||0)) : 0;
 
-  // Expenses house owes player (always positive for player)
-  const expenses = (p.expense || 0);
+  // Expenses house owes player — exclude bonus (already paid in chips, not a cash debt)
+  const expenses = (p.playerExpenses||[]).filter(e => !e.desc.includes('Bonus')).reduce((s,e)=>s+parseFloat(e.amount||0),0);
 
   // What player still owed after cashing out chips
   const debtAfterChips = Math.max(0, totalBuyIn - chipCashOut);
