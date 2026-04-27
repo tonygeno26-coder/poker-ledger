@@ -1612,6 +1612,39 @@ function saveSettleUp() {
 }
 
 
+function setCashOutPaid(id, paid) {
+  const p = G.players.find(p => p.id === id);
+  if (!p) return;
+  p.cashOutPaid = paid;
+  if (paid) {
+    // Auto-create settle transaction: house paid player their net profit
+    const netProfit = (p.cashOut || 0) - (p.buyIns||[]).filter(b=>b.type!=='bonus').reduce((s,b)=>s+parseFloat(b.amount||0),0);
+    if (netProfit > 0) {
+      // House owes player their profit
+      if (!p.settleTxns) p.settleTxns = [];
+      // Remove any existing auto-cashout-paid txn
+      p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
+      p.settleTxns.push({ id: Date.now(), dir: 'pay-out', method: 'cash', amount: netProfit, playerName: '', autoCashOutPaid: true, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+      if (!p.settlement) p.settlement = { txns: p.settleTxns, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
+    } else if (netProfit < 0) {
+      // Player owes house
+      if (!p.settleTxns) p.settleTxns = [];
+      p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
+      p.settleTxns.push({ id: Date.now(), dir: 'pay-in', method: 'cash', amount: Math.abs(netProfit), playerName: '', autoCashOutPaid: true, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+      if (!p.settlement) p.settlement = { txns: p.settleTxns, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
+    } else {
+      // Exactly even - just mark settled
+      if (!p.settlement) p.settlement = { txns: [], time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
+    }
+  } else {
+    // Unchecked - remove auto txns
+    if (p.settleTxns) p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
+    if (p.settleTxns && !p.settleTxns.length) p.settlement = null;
+  }
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast(paid ? '\u2705 Paid — balance zeroed' : 'Payment removed');
+}
+
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
@@ -1819,6 +1852,10 @@ function renderPlayerDetail(id) {
           <div>
             <button class="btn btn-purple btn-sm" onclick="submitCashOut(${p.id})" style="margin-bottom:2px">✓ Submit</button>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px">
+          <input type="checkbox" id="cashout-paid-${p.id}" ${p.cashOutPaid?'checked':''} onchange="setCashOutPaid(${p.id},this.checked)" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
+          <label for="cashout-paid-${p.id}" style="font-size:13px;color:var(--green);cursor:pointer;font-weight:600">✅ House paid player in cash</label>
         </div>
         <div id="cashout-display-${p.id}" style="margin-top:10px">
           ${p.cashOut ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px"><span style="color:var(--text-muted)">💸 Cash Out</span><span style="font-weight:700;color:var(--red)">-$' + fmt(p.cashOut) + '</span></div>' : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No cash out yet</div>'}
