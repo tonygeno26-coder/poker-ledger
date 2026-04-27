@@ -913,14 +913,14 @@ function addBuyIn(id) {
   p.buyInAmount = 0;
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
-  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast('Buy-in added!');
-  // Bonus buy-ins are a house expense
+  // Bonus buy-ins are a house expense — must be set BEFORE calcAll
   if (buyType === 'bonus') {
     if (!p.playerExpenses) p.playerExpenses = [];
-    p.playerExpenses.push({ id: Date.now(), desc: 'Bonus chips', amount });
+    p.playerExpenses.push({ id: Date.now(), desc: p.name + ' Bonus chips', amount });
     p.expense = p.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
   }
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Buy-in added!');
   const typeLabels = {cash:'Cash',marker:'Marker',electronic:'Electronic',bonus:'Bonus'};
   tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb5 Buy-in: <b>$' + fmt(amount) + '</b> (' + (typeLabels[buyType]||buyType) + ')\n<i>Pocketbooks</i>');
 }
