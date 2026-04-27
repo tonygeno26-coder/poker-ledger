@@ -1617,25 +1617,23 @@ function setCashOutPaid(id, paid) {
   if (!p) return;
   p.cashOutPaid = paid;
   if (paid) {
-    // Auto-create settle transaction: house paid player their net profit
+    const now = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     const netProfit = (p.cashOut || 0) - (p.buyIns||[]).filter(b=>b.type!=='bonus').reduce((s,b)=>s+parseFloat(b.amount||0),0);
-    if (netProfit > 0) {
-      // House owes player their profit
-      if (!p.settleTxns) p.settleTxns = [];
-      // Remove any existing auto-cashout-paid txn
-      p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
-      p.settleTxns.push({ id: Date.now(), dir: 'pay-out', method: 'cash', amount: netProfit, playerName: '', autoCashOutPaid: true, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-      if (!p.settlement) p.settlement = { txns: p.settleTxns, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
-    } else if (netProfit < 0) {
-      // Player owes house
-      if (!p.settleTxns) p.settleTxns = [];
-      p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
-      p.settleTxns.push({ id: Date.now(), dir: 'pay-in', method: 'cash', amount: Math.abs(netProfit), playerName: '', autoCashOutPaid: true, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-      if (!p.settlement) p.settlement = { txns: p.settleTxns, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
-    } else {
-      // Exactly even - just mark settled
-      if (!p.settlement) p.settlement = { txns: [], time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) };
+    if (!p.settleTxns) p.settleTxns = [];
+    p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
+    if (Math.abs(netProfit) >= 1) {
+      p.settleTxns.push({
+        id: Date.now(),
+        // pay-out = house paid player (profit); pay-in = player paid house (loss)
+        dir: netProfit > 0 ? 'pay-out' : 'pay-in',
+        method: 'cash',
+        amount: Math.abs(netProfit),
+        playerName: '',
+        autoCashOutPaid: true,
+        time: now
+      });
     }
+    p.settlement = { txns: p.settleTxns, time: now };
   } else {
     // Unchecked - remove auto txns
     if (p.settleTxns) p.settleTxns = p.settleTxns.filter(t => !t.autoCashOutPaid);
