@@ -1852,11 +1852,16 @@ function calcAll() {
   // Use settlement figures when a player is settled, otherwise use raw fields
   const totalCashIn = G.players.reduce((s, p) => {
     if (p.settlement) return s + (p.settlement.cashIn||0);
-    return s + (p.buyIns||[]).filter(b=>b.type==='cash'||b.type==='bonus').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.cashIn||0);
+    // Use buyIns if available, otherwise fall back to legacy cashIn
+    const hasBuyIns = (p.buyIns||[]).length > 0;
+    if (hasBuyIns) return s + (p.buyIns||[]).filter(b=>b.type==='cash'||b.type==='bonus').reduce((t,b)=>t+parseFloat(b.amount||0),0);
+    return s + (p.cashIn||0);
   }, 0);
   const totalECashIn = G.players.reduce((s, p) => {
     if (p.settlement) return s + (p.settlement.elecIn||0);
-    return s + (p.buyIns||[]).filter(b=>b.type==='electronic').reduce((t,b)=>t+parseFloat(b.amount||0),0) + (p.eCashIn||0);
+    const hasBuyIns = (p.buyIns||[]).length > 0;
+    if (hasBuyIns) return s + (p.buyIns||[]).filter(b=>b.type==='electronic').reduce((t,b)=>t+parseFloat(b.amount||0),0);
+    return s + (p.eCashIn||0);
   }, 0);
   const totalCashOut = G.players.reduce((s, p) => {
     if (p.settlement) return s + (p.settlement.cashOut||0);
