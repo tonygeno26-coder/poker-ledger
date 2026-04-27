@@ -1588,7 +1588,15 @@ function playerBalance(p) {
 
   // Tips only count in balance after explicitly settled (tipsSettled flag set)
   const tips = (p.tipsSettled && p.staffRole) ? (p.tips || 0) : 0;
-  return gameNet + expenses + tips;
+  const gameResult = gameNet + expenses + tips;
+
+  // If settled via player-pays transactions, those payments clear the balance
+  const playerPayments = (p.settleTxns || []).filter(t => t.dir === 'player-pays').reduce((s,t) => s + t.amount, 0);
+  if (p.tipsSettled && playerPayments > 0) {
+    // Player paid on behalf of house — balance is cleared
+    return 0;
+  }
+  return gameResult;
 }
 
 function renderPlayerGrid() {
