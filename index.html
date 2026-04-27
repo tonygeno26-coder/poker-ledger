@@ -1629,7 +1629,11 @@ function playerBalance(p) {
   const winnings = Math.max(0, (chipCashOut + settlePaidOut) - totalBuyIn);
 
   // Net: positive = house owes player, negative = player still owes house
-  const gameNet = remainingDebt > 0 ? -remainingDebt : winnings;
+  // For cash buy-ins with no cash-out yet = $0 (chips in play, no result)
+  const markerAmt = (p.buyIns||[]).filter(b=>b.type==='marker').reduce((s,b)=>s+parseFloat(b.amount||0),0);
+  const cashOnlyBuyIn = totalBuyIn - markerAmt;
+  const noActivity = chipCashOut === 0 && settlePaidIn === 0 && settlePaidOut === 0;
+  const gameNet = (noActivity && markerAmt === 0) ? 0 : (remainingDebt > 0 ? -remainingDebt : winnings);
 
   // Tips always count toward balance for staff — house owes them
   const tips = p.staffRole ? (p.tips || 0) : 0;
