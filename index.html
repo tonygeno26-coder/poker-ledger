@@ -955,6 +955,16 @@ function addBuyIn(id) {
     : (elecSourceId === 'house' ? 'House (cash box)' : '');
   const buyTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName, time: buyTime });
+  // If electronic sent to another player, that player now owes house
+  if (buyType === 'electronic' && elecSourceId && elecSourceId !== 'house') {
+    const recipient = G.players.find(pl => pl.id === parseInt(elecSourceId));
+    if (recipient) {
+      if (!recipient.receivedElec) recipient.receivedElec = [];
+      recipient.receivedElec.push({ from: p.name, amount, time: buyTime });
+      // Add to recipient's cash-in tracking (they owe house this amount)
+      recipient.cashIn = (recipient.cashIn || 0) + amount;
+    }
+  }
   p.buyInAmount = 0;
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
@@ -1741,8 +1751,16 @@ function playerBalance(p) {
 
   const markerAmt = (p.buyIns||[]).filter(b=>b.type==='marker').reduce((s,b)=>s+parseFloat(b.amount||0),0);
 
-  // Pre-settle net: what player won/lost based on buy-in vs chips returned
-  const preSettleNet = chipCashOut - totalBuyIn; // positive = player won, negative = player owes
+  // For electronic buy-ins sent TO another player, the house still owes the full cash out
+  // The recipient player owes the house — Andre's balance is based only on what HE paid to house directly
+  const directBuyIn = (p.buyIns||[]).filter(b => {
+    // Electronic sent to another player = NOT a direct payment to house
+    if (b.type === 'electronic' && b.elecSourceId && b.elecSourceId !== 'house') return false;
+    return b.type !== 'bonus';
+  }).reduce((s,b) => s + parseFloat(b.amount||0), 0);
+
+  // Pre-settle net: based only on direct buy-ins (cash, marker, electronic to house)
+  const preSettleNet = chipCashOut - directBuyIn; // positive = player won, negative = player owes
 
   let gameNet;
   if (hasSettle) {
