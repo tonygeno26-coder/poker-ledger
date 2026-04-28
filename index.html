@@ -1625,19 +1625,9 @@ function saveSettleUp() {
         G.settleCashIn = (G.settleCashIn || 0) + t.amount;
       }
     } else if (t.dir === 'player-pays') {
-      // Another player paid on behalf of house — that player is now owed by house
-      if (t.playerId) {
-        const payer = G.players.find(pl => pl.id === t.playerId);
-        if (payer) {
-          if (!payer.playerExpenses) payer.playerExpenses = [];
-          payer.playerExpenses.push({
-            id: Date.now(),
-            desc: 'Paid ' + p.name + ' (' + t.method + ')',
-            amount: t.amount
-          });
-          payer.expense = payer.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
-        }
-      }
+      // Another player paid on behalf of house
+      // Their balance is tracked via settleTxns, NOT as an expense
+      // Nothing to do here - playerBalance already handles player-pays transactions
     }
   });
 
@@ -2011,7 +2001,10 @@ function saveHosts() {
 // ========== CALC ALL ==========
 function calcAll() {
   const totalExpenses = G.expenses.reduce((s, e) => s + e.amount, 0);
-  const playerExpenses = G.players.reduce((s, p) => s + (p.expense||0), 0);
+  // Only count real expenses, not player-to-player settlements wrongly tagged as expenses
+  const playerExpenses = G.players.reduce((s, p) => {
+    return s + (p.playerExpenses||[]).filter(e => !e.desc.startsWith('Paid ')).reduce((t,e)=>t+parseFloat(e.amount||0),0);
+  }, 0);
   const allExpenses = totalExpenses + playerExpenses;
 
   // Use settlement figures when a player is settled, otherwise use raw fields
@@ -2107,7 +2100,7 @@ function calcAll() {
   if (expDetail) {
     const allExp = [
       ...G.expenses.map(e => ({name: e.name, amount: e.amount})),
-      ...G.players.flatMap(p => (p.playerExpenses||[]).map(e => ({name: p.name + ': ' + e.desc, amount: e.amount})))
+      ...G.players.flatMap(p => (p.playerExpenses||[]).filter(e => !e.desc.startsWith('Paid ')).map(e => ({name: p.name + ': ' + e.desc, amount: e.amount})))
     ];
     if (!allExp.length) {
       expDetail.innerHTML = '<div style="color:var(--text-muted)">No expenses yet</div>';
