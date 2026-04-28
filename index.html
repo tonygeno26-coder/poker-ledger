@@ -2032,9 +2032,13 @@ function calcAll() {
     return s + (p.cashOut||0);
   }, 0);
   const totalECashOut = G.players.reduce((s, p) => {
-    if (p.settlement) return s + (p.settlement.elecOut||0);
-    return s + (p.eCashOut||0);
+    // Electronic paid out via settle transactions
+    const settleElecOut = (p.settleTxns||[]).filter(t => t.method === 'electronic' && (t.dir === 'pay-out' || t.dir === 'player-pays')).reduce((t2,t)=>t2+t.amount,0);
+    if (p.settlement) return s + (p.settlement.elecOut||0) + settleElecOut;
+    return s + (p.eCashOut||0) + settleElecOut;
   }, 0);
+  // Also add electronic received by players on behalf of house (player-to-player buy-ins)
+  const elecReceivedByPlayers = G.players.reduce((s, p) => s + ((p.receivedElec||[]).reduce((t,e)=>t+e.amount,0)), 0);
   const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
   const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
   const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
@@ -2065,7 +2069,8 @@ function calcAll() {
   const totalCashOutsAllPlayers = G.players.reduce((s, p) => s + (p.cashOut||0), 0);
   const totalDropAllDealers = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop||0) : 0), 0);
   const chipsOnHand = chipFloat - totalBuyInsAllPlayers + totalCashOutsAllPlayers + totalDropAllDealers;
-  const eCashOnHand = totalECashIn - totalECashOut;
+  // E-cash on hand includes player-to-player electronic received on behalf of house
+  const eCashOnHand = totalECashIn + elecReceivedByPlayers - totalECashOut;
 
   G.taxPct = taxPct;
   G.bankStart = bankStart;
