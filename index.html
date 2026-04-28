@@ -2151,7 +2151,8 @@ function renderExpenseList() {
   // Buy-ins
   G.players.forEach(p => {
     (p.buyIns||[]).forEach(b => {
-      txLog.push({ time: b.time||'', icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: 'var(--purple-light)', sign: '+' });
+      const buyColor = b.type==='marker' ? 'var(--red)' : b.type==='bonus' ? 'var(--gold)' : 'var(--green)';
+      txLog.push({ time: b.time||'', icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: buyColor, sign: '+' });
     });
     // Cash outs
     if (p.cashOut) txLog.push({ time: '', icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
