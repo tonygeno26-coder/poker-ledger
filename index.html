@@ -1059,6 +1059,16 @@ async function showLinkCode(id) {
     codeEl.textContent = result.code;
     p.linkCode = result.code;
     autoSave();
+    // Generate QR code linking to the bot with the code
+    const botUser = result.botUsername || 'Pocketbooksclubbot';
+    const deepLink = 'https://t.me/' + botUser + '?start=' + result.code;
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(deepLink);
+    const qrWrap = document.getElementById('link-qr-' + id);
+    const qrImg = document.getElementById('link-qr-img-' + id);
+    if (qrWrap && qrImg) {
+      qrImg.src = qrUrl;
+      qrWrap.style.display = 'block';
+    }
   } else {
     codeEl.textContent = 'ERR';
     toast('Could not get link code — check backend connection');
@@ -1959,8 +1969,12 @@ function renderPlayerDetail(id) {
         <button class="btn btn-purple btn-sm" onclick="openSettleUp(${p.id})">🤝 Settle Up</button>
       </div>
       <div id="link-code-display-${p.id}" style="display:none;margin-top:10px;background:rgba(41,182,246,0.1);border:1px solid rgba(41,182,246,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Have ${p.name} message this code to @PocketbooksBot</div>
-        <div style="font-size:2rem;font-weight:900;letter-spacing:8px;color:#29b6f6" id="link-code-number-${p.id}">----</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Have ${p.name} scan or message this code to @Pocketbooksclubbot</div>
+        <div style="font-size:2rem;font-weight:900;letter-spacing:8px;color:#29b6f6;margin-bottom:10px" id="link-code-number-${p.id}">----</div>
+        <div id="link-qr-${p.id}" style="display:none;margin:8px auto">
+          <img id="link-qr-img-${p.id}" src="" alt="QR Code" style="width:160px;height:160px;border-radius:10px;background:#fff;padding:6px">
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Scan to open @Pocketbooksclubbot</div>
+        </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Code expires in 24 hours</div>
         ${p.telegramLinked ? '<div style="color:var(--green);font-size:12px;font-weight:700;margin-top:6px">\u2705 Telegram linked</div>' : ''}
       </div>
