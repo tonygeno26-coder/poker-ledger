@@ -2024,20 +2024,22 @@ function calcAll() {
   const totalECashIn = G.players.reduce((s, p) => {
     if (p.settlement) return s + (p.settlement.elecIn||0);
     const hasBuyIns = (p.buyIns||[]).length > 0;
-    if (hasBuyIns) return s + (p.buyIns||[]).filter(b=>b.type==='electronic').reduce((t,b)=>t+parseFloat(b.amount||0),0);
+    if (hasBuyIns) {
+      // Only count electronic sent directly to house, not to other players
+      return s + (p.buyIns||[]).filter(b => b.type==='electronic' && (!b.elecSourceId || b.elecSourceId==='house')).reduce((t,b)=>t+parseFloat(b.amount||0),0);
+    }
     return s + (p.eCashIn||0);
   }, 0);
   const totalCashOut = G.players.reduce((s, p) => {
     if (p.settlement) return s + (p.settlement.cashOut||0);
     return s + (p.cashOut||0);
   }, 0);
+  // Electronic paid out via settle transactions only
   const totalECashOut = G.players.reduce((s, p) => {
-    // Electronic paid out via settle transactions
     const settleElecOut = (p.settleTxns||[]).filter(t => t.method === 'electronic' && (t.dir === 'pay-out' || t.dir === 'player-pays')).reduce((t2,t)=>t2+t.amount,0);
-    if (p.settlement) return s + (p.settlement.elecOut||0) + settleElecOut;
-    return s + (p.eCashOut||0) + settleElecOut;
+    return s + settleElecOut + (p.eCashOut||0);
   }, 0);
-  // Also add electronic received by players on behalf of house (player-to-player buy-ins)
+  // Electronic received by players on behalf of house (player-to-player electronic buy-ins)
   const elecReceivedByPlayers = G.players.reduce((s, p) => s + ((p.receivedElec||[]).reduce((t,e)=>t+e.amount,0)), 0);
   const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
   const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
