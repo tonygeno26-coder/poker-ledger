@@ -903,9 +903,15 @@ function removePlayer(id) {
 function updatePlayerField(id, field, val) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
-  const strFields = ['playerNotes','buyInType','cosignECashIn','cosignECashOut'];
+  const strFields = ['playerNotes','buyInType','cosignECashIn','cosignECashOut','buyInElecSource'];
   p[field] = strFields.includes(field) ? val : (parseFloat(val) || 0);
-  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  // Don't re-render detail view on amount fields (causes focus loss while typing)
+  const amountFields = ['buyInAmount','cashOut','tips','drop','expense'];
+  if (amountFields.includes(field)) {
+    calcAll(); renderAll(); autoSave(); // skip renderPlayerDetail
+  } else {
+    calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  }
 }
 
 const BUYIN_LABELS = {cash:'💵 Cash',marker:'📋 Marker',electronic:'📱 Electronic',bonus:'🎁 Bonus'};
