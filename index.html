@@ -2145,7 +2145,7 @@ function renderExpenseList() {
     return;
   }
 
-  el.innerHTML = txLog.map(t =>
+  el.innerHTML = txLog.reverse().map(t =>
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px">'    + '<div style="display:flex;align-items:center;gap:8px">'    + '<span style="font-size:1rem">' + t.icon + '</span>'    + '<div><div style="font-weight:600;color:var(--text)">' + t.label + '</div>'    + (t.time ? '<div style="font-size:10px;color:var(--text-muted)">' + t.time + '</div>' : '')    + '</div></div>'    + '<span style="font-weight:800;color:' + t.color + '">' + t.sign + '$' + fmt(t.amount) + '</span>'    + '</div>'
   ).join('');
 }
