@@ -2039,8 +2039,11 @@ function calcAll() {
     const settleElecOut = (p.settleTxns||[]).filter(t => t.method === 'electronic' && (t.dir === 'pay-out' || t.dir === 'player-pays')).reduce((t2,t)=>t2+t.amount,0);
     return s + settleElecOut + (p.eCashOut||0);
   }, 0);
-  // Electronic received by players on behalf of house (player-to-player electronic buy-ins)
-  const elecReceivedByPlayers = G.players.reduce((s, p) => s + ((p.receivedElec||[]).reduce((t,e)=>t+e.amount,0)), 0);
+  // Electronic received by players on behalf of house
+  // Scan ALL buy-ins for electronic sent to another player
+  const elecReceivedByPlayers = G.players.reduce((s, p) => {
+    return s + (p.buyIns||[]).filter(b => b.type==='electronic' && b.elecSourceId && b.elecSourceId !== 'house').reduce((t,b)=>t+parseFloat(b.amount||0),0);
+  }, 0);
   const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
   const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
   const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
