@@ -301,10 +301,15 @@ input, select, button, textarea { font-family: inherit; }
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
       <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
       <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
-      <div class="stat-box" onclick="toggleBreakdownDetail('ecash-detail')" style="cursor:pointer">
-        <div class="lbl">E-Cash On Hand ▾</div>
+      <div class="stat-box">
+        <div class="lbl">E-CASH ON HAND</div>
         <div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div>
-        <div id="ecash-detail" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button onclick="toggleBreakdownDetail('ecash-txns')" style="flex:1;padding:4px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:6px;color:var(--purple-light);font-size:10px;font-weight:700;cursor:pointer">Transactions ▾</button>
+          <button onclick="toggleBreakdownDetail('ecash-balances')" style="flex:1;padding:4px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:6px;color:var(--purple-light);font-size:10px;font-weight:700;cursor:pointer">Balances ▾</button>
+        </div>
+        <div id="ecash-txns" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
+        <div id="ecash-balances" style="display:none;margin-top:8px;text-align:left;border-top:1px solid var(--border);padding-top:8px;font-size:11px"></div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
@@ -2135,34 +2140,59 @@ function calcAll() {
   eCashEl.style.color = eCashOnHand < 0 ? 'var(--red)' : 'var(--purple-light)';
 
   // Populate E-Cash detail breakdown
-  const eCashDetail = document.getElementById('ecash-detail');
-  if (eCashDetail) {
+  // E-CASH TRANSACTIONS dropdown
+  const eCashTxns = document.getElementById('ecash-txns');
+  if (eCashTxns) {
     const rows = [];
-    // Electronic buy-ins (in)
     G.players.forEach(p => {
       (p.buyIns||[]).filter(b => b.type === 'electronic').forEach(b => {
         const to = b.elecSourceName || 'House';
         rows.push({ label: p.name + ' → ' + to, amount: b.amount, color: 'var(--green)', sign: '+', time: b.time||'' });
       });
     });
-    // Electronic settle payments (out)
     G.players.forEach(p => {
       (p.settleTxns||[]).filter(t => t.method === 'electronic').forEach(t => {
         const dir = t.dir === 'pay-out' ? 'House → ' + p.name : t.dir === 'pay-in' ? p.name + ' → House' : (t.playerName||'?') + ' → ' + p.name;
         const elecIsOut = t.dir === 'pay-out' || t.dir === 'player-pays';
-        rows.push({ label: dir, amount: t.amount, color: elecIsOut ? 'var(--red)' : 'var(--green)', sign: elecIsOut ? '-' : '+', time: t.time||'', seq: t.id||0 });
+        rows.push({ label: dir, amount: t.amount, color: elecIsOut ? 'var(--red)' : 'var(--green)', sign: elecIsOut ? '-' : '+', time: t.time||'' });
       });
     });
-    if (!rows.length) {
-      eCashDetail.innerHTML = '<div style="color:var(--text-muted)">No electronic transactions yet</div>';
-    } else {
-      eCashDetail.innerHTML = rows.map(r =>
-        '<div style="display:flex;justify-content:space-between;padding:3px 0">'
-        + '<span style="color:var(--text-muted)">' + r.label + (r.time?' <span style="font-size:10px">' + r.time + '</span>':'') + '</span>'
-        + '<span style="color:' + r.color + ';font-weight:700">' + r.sign + '$' + fmt(r.amount) + '</span>'
-        + '</div>'
-      ).join('');
-    }
+    eCashTxns.innerHTML = rows.length ? rows.map(r =>
+      '<div style="display:flex;justify-content:space-between;padding:3px 0">'
+      + '<span style="color:var(--text-muted)">' + r.label + (r.time?' <span style="font-size:10px">' + r.time + '</span>':'') + '</span>'
+      + '<span style="color:' + r.color + ';font-weight:700">' + r.sign + '$' + fmt(r.amount) + '</span>'
+      + '</div>'
+    ).join('') : '<div style="color:var(--text-muted)">No electronic transactions yet</div>';
+  }
+
+  // E-CASH BALANCES dropdown — who currently holds e-cash
+  const eCashBals = document.getElementById('ecash-balances');
+  if (eCashBals) {
+    const balMap = {};
+    // Credits: electronic received by players (from other players' buy-ins)
+    G.players.forEach(p => {
+      (p.buyIns||[]).filter(b => b.type === 'electronic' && b.elecSourceId && b.elecSourceId !== 'house').forEach(b => {
+        const recip = b.elecSourceId;
+        const recipName = b.elecSourceName || ('Player ' + recip);
+        if (!balMap[recipName]) balMap[recipName] = 0;
+        balMap[recipName] += parseFloat(b.amount||0);
+      });
+    });
+    // Debits: electronic paid out via settlements
+    G.players.forEach(p => {
+      (p.settleTxns||[]).filter(t => t.method === 'electronic' && t.dir === 'player-pays').forEach(t => {
+        const payerName = t.playerName || 'Unknown';
+        if (!balMap[payerName]) balMap[payerName] = 0;
+        balMap[payerName] -= t.amount;
+      });
+    });
+    const entries = Object.entries(balMap).filter(([,v]) => Math.abs(v) >= 1);
+    eCashBals.innerHTML = entries.length ? entries.map(([name, bal]) =>
+      '<div style="display:flex;justify-content:space-between;padding:3px 0">'
+      + '<span style="color:var(--text-muted)">' + name + '</span>'
+      + '<span style="color:' + (bal > 0 ? 'var(--purple-light)' : 'var(--red)') + ';font-weight:700">' + (bal > 0 ? '+' : '') + '$' + fmt(Math.abs(bal)) + '</span>'
+      + '</div>'
+    ).join('') : '<div style="color:var(--text-muted)">No e-cash balances</div>';
   }
 
   // Host split
