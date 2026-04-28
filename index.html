@@ -954,7 +954,7 @@ function addBuyIn(id) {
     ? (G.players.find(pl=>pl.id===parseInt(elecSourceId))?.name || '')
     : (elecSourceId === 'house' ? 'House (cash box)' : '');
   const buyTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-  p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName, time: buyTime });
+  p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName, time: buyTime, seq: Date.now() });
   // If electronic sent to another player, that player now owes house
   if (buyType === 'electronic' && elecSourceId && elecSourceId !== 'house') {
     const recipient = G.players.find(pl => pl.id === parseInt(elecSourceId));
@@ -1093,11 +1093,11 @@ function logStaffTurn(id, field) {
   const time = new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
   if (field === 'tips') {
     if (!p.tipsLog) p.tipsLog = [];
-    p.tipsLog.push({ id: Date.now(), amount, time });
+    p.tipsLog.push({ id: Date.now(), amount, time, seq: Date.now() });
     p.tips = p.tipsLog.reduce((s, t) => s + t.amount, 0);
   } else {
     if (!p.dropLog) p.dropLog = [];
-    p.dropLog.push({ id: Date.now(), amount, time });
+    p.dropLog.push({ id: Date.now(), amount, time, seq: Date.now() });
     p.drop = p.dropLog.reduce((s, t) => s + t.amount, 0);
   }
   if (inputEl) inputEl.value = '';
@@ -1691,6 +1691,7 @@ function submitCashOut(id) {
   if (!amount) { toast('Enter a cash out amount first'); return; }
   p.cashOut = amount;
   p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  p.cashOutSeq = Date.now();
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Cash out $' + fmt(amount) + ' submitted!');
   tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
@@ -2156,7 +2157,7 @@ function calcAll() {
       (p.settleTxns||[]).filter(t => t.method === 'electronic').forEach(t => {
         const dir = t.dir === 'pay-out' ? 'House → ' + p.name : t.dir === 'pay-in' ? p.name + ' → House' : (t.playerName||'?') + ' → ' + p.name;
         const elecIsOut = t.dir === 'pay-out' || t.dir === 'player-pays';
-        rows.push({ label: dir, amount: t.amount, color: elecIsOut ? 'var(--red)' : 'var(--green)', sign: elecIsOut ? '-' : '+', time: t.time||'' });
+        rows.push({ label: dir, amount: t.amount, color: elecIsOut ? 'var(--red)' : 'var(--green)', sign: elecIsOut ? '-' : '+', time: t.time||'', seq: t.id||0 });
       });
     });
     if (!rows.length) {
@@ -2191,14 +2192,14 @@ function renderExpenseList() {
   G.players.forEach(p => {
     (p.buyIns||[]).forEach(b => {
       const buyColor = b.type==='marker' ? 'var(--red)' : b.type==='bonus' ? 'var(--gold)' : 'var(--green)';
-      txLog.push({ time: b.time||'', icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: buyColor, sign: '+' });
+      txLog.push({ time: b.time||'', seq: b.seq||0, icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: buyColor, sign: '+' });
     });
     // Cash outs
-    if (p.cashOut) txLog.push({ time: p.cashOutTime||'', icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
+    if (p.cashOut) txLog.push({ time: p.cashOutTime||'', seq: p.cashOutSeq||0, icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
     // Tips logs
-    (p.tipsLog||[]).forEach(t => { txLog.push({ time: t.time, icon: '💰', label: p.name + ' — Tips', amount: t.amount, color: 'var(--green)', sign: '+' }); });
+    (p.tipsLog||[]).forEach(t => { txLog.push({ time: t.time, seq: t.seq||t.id||0, icon: '💰', label: p.name + ' — Tips', amount: t.amount, color: 'var(--green)', sign: '+' }); });
     // Drop logs
-    (p.dropLog||[]).forEach(t => { txLog.push({ time: t.time, icon: '🎰', label: p.name + ' — Drop', amount: t.amount, color: 'var(--gold)', sign: '+' }); });
+    (p.dropLog||[]).forEach(t => { txLog.push({ time: t.time, seq: t.seq||t.id||0, icon: '🎰', label: p.name + ' — Drop', amount: t.amount, color: 'var(--gold)', sign: '+' }); });
     // Player expenses (non-bonus)
     (p.playerExpenses||[]).filter(e=>!e.desc.includes('Bonus')).forEach(e => { txLog.push({ time: '', icon: '🧧', label: p.name + ' — ' + e.desc, amount: e.amount, color: 'var(--orange)', sign: '-' }); });
     // Settle txns
@@ -2231,7 +2232,8 @@ function renderExpenseList() {
     return;
   }
 
-  el.innerHTML = txLog.reverse().map(t =>
+  txLog.sort((a,b) => (b.seq||0) - (a.seq||0));
+  el.innerHTML = txLog.map(t =>
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px">'    + '<div style="display:flex;align-items:center;gap:8px;flex:1">'    + '<span style="font-size:1rem">' + t.icon + '</span>'    + '<div style="font-weight:600;color:var(--text)">' + t.label + '</div>'    + '</div>'    + '<div style="font-size:11px;color:var(--text-muted);min-width:60px;text-align:center">' + (t.time||'') + '</div>'    + '<span style="font-weight:800;color:' + t.color + ';min-width:60px;text-align:right">' + t.sign + '$' + fmt(t.amount) + '</span>'    + '</div>'
   ).join('');
 }
