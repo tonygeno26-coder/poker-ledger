@@ -953,7 +953,8 @@ function addBuyIn(id) {
   const elecSourceName = elecSourceId && elecSourceId !== 'house'
     ? (G.players.find(pl=>pl.id===parseInt(elecSourceId))?.name || '')
     : (elecSourceId === 'house' ? 'House (cash box)' : '');
-  p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName });
+  const buyTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName, time: buyTime });
   p.buyInAmount = 0;
   p.cashIn = p.buyIns.filter(b => b.type === 'cash').reduce((s,b) => s + b.amount, 0);
   p.eCashIn = p.buyIns.filter(b => b.type === 'electronic').reduce((s,b) => s + b.amount, 0);
@@ -1679,6 +1680,7 @@ function submitCashOut(id) {
   const amount = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
   if (!amount) { toast('Enter a cash out amount first'); return; }
   p.cashOut = amount;
+  p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Cash out $' + fmt(amount) + ' submitted!');
   tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
@@ -2155,7 +2157,7 @@ function renderExpenseList() {
       txLog.push({ time: b.time||'', icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: buyColor, sign: '+' });
     });
     // Cash outs
-    if (p.cashOut) txLog.push({ time: '', icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
+    if (p.cashOut) txLog.push({ time: p.cashOutTime||'', icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
     // Tips logs
     (p.tipsLog||[]).forEach(t => { txLog.push({ time: t.time, icon: '💰', label: p.name + ' — Tips', amount: t.amount, color: 'var(--green)', sign: '+' }); });
     // Drop logs
@@ -2177,7 +2179,7 @@ function renderExpenseList() {
   }
 
   el.innerHTML = txLog.reverse().map(t =>
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px">'    + '<div style="display:flex;align-items:center;gap:8px">'    + '<span style="font-size:1rem">' + t.icon + '</span>'    + '<div><div style="font-weight:600;color:var(--text)">' + t.label + '</div>'    + (t.time ? '<div style="font-size:10px;color:var(--text-muted)">' + t.time + '</div>' : '')    + '</div></div>'    + '<span style="font-weight:800;color:' + t.color + '">' + t.sign + '$' + fmt(t.amount) + '</span>'    + '</div>'
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px">'    + '<div style="display:flex;align-items:center;gap:8px;flex:1">'    + '<span style="font-size:1rem">' + t.icon + '</span>'    + '<div style="font-weight:600;color:var(--text)">' + t.label + '</div>'    + '</div>'    + '<div style="font-size:11px;color:var(--text-muted);min-width:60px;text-align:center">' + (t.time||'') + '</div>'    + '<span style="font-weight:800;color:' + t.color + ';min-width:60px;text-align:right">' + t.sign + '$' + fmt(t.amount) + '</span>'    + '</div>'
   ).join('');
 }
 
