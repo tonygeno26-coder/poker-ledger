@@ -2155,7 +2155,8 @@ function calcAll() {
     G.players.forEach(p => {
       (p.settleTxns||[]).filter(t => t.method === 'electronic').forEach(t => {
         const dir = t.dir === 'pay-out' ? 'House → ' + p.name : t.dir === 'pay-in' ? p.name + ' → House' : (t.playerName||'?') + ' → ' + p.name;
-        rows.push({ label: dir, amount: t.amount, color: t.dir==='pay-out'?'var(--red)':'var(--green)', sign: t.dir==='pay-out'?'-':'+', time: t.time||'' });
+        const elecIsOut = t.dir === 'pay-out' || t.dir === 'player-pays';
+        rows.push({ label: dir, amount: t.amount, color: elecIsOut ? 'var(--red)' : 'var(--green)', sign: elecIsOut ? '-' : '+', time: t.time||'' });
       });
     });
     if (!rows.length) {
