@@ -2143,20 +2143,28 @@ function calcAll() {
   // Populate E-Cash detail breakdown
   const eCashDetail = document.getElementById('ecash-detail');
   if (eCashDetail) {
-    const elecEntries = G.players.flatMap(p =>
-      (p.buyIns||[]).filter(b => b.type === 'electronic').map(b => ({
-        player: p.name,
-        amount: b.amount,
-        to: b.elecSourceName || 'House'
-      }))
-    );
-    if (!elecEntries.length) {
-      eCashDetail.innerHTML = '<div style="color:var(--text-muted)">No electronic buy-ins yet</div>';
+    const rows = [];
+    // Electronic buy-ins (in)
+    G.players.forEach(p => {
+      (p.buyIns||[]).filter(b => b.type === 'electronic').forEach(b => {
+        const to = b.elecSourceName || 'House';
+        rows.push({ label: p.name + ' → ' + to, amount: b.amount, color: 'var(--green)', sign: '+', time: b.time||'' });
+      });
+    });
+    // Electronic settle payments (out)
+    G.players.forEach(p => {
+      (p.settleTxns||[]).filter(t => t.method === 'electronic').forEach(t => {
+        const dir = t.dir === 'pay-out' ? 'House → ' + p.name : t.dir === 'pay-in' ? p.name + ' → House' : (t.playerName||'?') + ' → ' + p.name;
+        rows.push({ label: dir, amount: t.amount, color: t.dir==='pay-out'?'var(--red)':'var(--green)', sign: t.dir==='pay-out'?'-':'+', time: t.time||'' });
+      });
+    });
+    if (!rows.length) {
+      eCashDetail.innerHTML = '<div style="color:var(--text-muted)">No electronic transactions yet</div>';
     } else {
-      eCashDetail.innerHTML = elecEntries.map(e =>
+      eCashDetail.innerHTML = rows.map(r =>
         '<div style="display:flex;justify-content:space-between;padding:3px 0">'
-        + '<span style="color:var(--text-muted)">' + e.player + ' → ' + e.to + '</span>'
-        + '<span style="color:var(--purple-light);font-weight:700">$' + fmt(e.amount) + '</span>'
+        + '<span style="color:var(--text-muted)">' + r.label + (r.time?' <span style="font-size:10px">' + r.time + '</span>':'') + '</span>'
+        + '<span style="color:' + r.color + ';font-weight:700">' + r.sign + '$' + fmt(r.amount) + '</span>'
         + '</div>'
       ).join('');
     }
