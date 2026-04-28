@@ -2184,8 +2184,24 @@ function renderExpenseList() {
     (p.playerExpenses||[]).filter(e=>!e.desc.includes('Bonus')).forEach(e => { txLog.push({ time: '', icon: '🧧', label: p.name + ' — ' + e.desc, amount: e.amount, color: 'var(--orange)', sign: '-' }); });
     // Settle txns
     (p.settleTxns||[]).forEach(t => {
-      const dirLabel = t.dir==='pay-out'?'House paid player':t.dir==='pay-in'?'Player paid house':'Player paid player';
-      txLog.push({ time: t.time, icon: t.method==='cash'?'💵':'📱', label: p.name + ' — ' + dirLabel + (t.playerName?' ('+t.playerName+')':''), amount: t.amount, color: t.dir==='pay-out'?'var(--red)':'var(--green)', sign: t.dir==='pay-out'?'-':'+' });
+      let dirLabel, icon, color, sign;
+      if (t.dir === 'pay-out') {
+        dirLabel = 'Settlement — House paid';
+        icon = t.method === 'cash' ? '💵' : '📱';
+        color = 'var(--orange)';
+        sign = '-';
+      } else if (t.dir === 'pay-in') {
+        dirLabel = 'Settlement — Player paid';
+        icon = t.method === 'cash' ? '💵' : '📱';
+        color = 'var(--green)';
+        sign = '+';
+      } else {
+        dirLabel = 'Settlement — ' + (t.playerName||'Player') + ' paid';
+        icon = t.method === 'cash' ? '💵' : '📱';
+        color = 'var(--purple-light)';
+        sign = '+';
+      }
+      txLog.push({ time: t.time, icon, label: p.name + ' — ' + dirLabel + (t.playerName?' (from '+t.playerName+')':''), amount: t.amount, color, sign });
     });
   });
   // House-level expenses
