@@ -244,8 +244,8 @@ input, select, button, textarea { font-family: inherit; }
     <!-- LEFT: Expenses -->
     <div>
       <div class="card">
-        <div class="card-title">🧾 Expenses <button class="btn btn-outline btn-xs ml-auto" onclick="openExpenseModal()">＋ Add</button></div>
-        <div id="expense-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No expenses yet</div></div>
+        <div class="card-title">📝 Transaction Log</div>
+        <div id="expense-list" style="max-height:280px;overflow-y:auto"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div></div>
       </div>
     </div>
 
@@ -2114,21 +2114,40 @@ function renderAll() {
 
 function renderExpenseList() {
   const el = document.getElementById('expense-list');
-  if (!G.expenses.length) {
-    el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No expenses yet</div>`;
+
+  // Build full transaction log from all player activity
+  const txLog = [];
+
+  // Buy-ins
+  G.players.forEach(p => {
+    (p.buyIns||[]).forEach(b => {
+      txLog.push({ time: b.time||'', icon: b.type==='marker'?'📋':b.type==='electronic'?'📱':b.type==='bonus'?'🎁':'💵', label: p.name + ' — ' + (BUYIN_LABELS[b.type]||b.type) + ' Buy-in' + (b.elecSourceName?' → '+b.elecSourceName:''), amount: b.amount, color: 'var(--purple-light)', sign: '+' });
+    });
+    // Cash outs
+    if (p.cashOut) txLog.push({ time: '', icon: '💸', label: p.name + ' — Cash Out', amount: p.cashOut, color: 'var(--green)', sign: '-' });
+    // Tips logs
+    (p.tipsLog||[]).forEach(t => { txLog.push({ time: t.time, icon: '💰', label: p.name + ' — Tips', amount: t.amount, color: 'var(--green)', sign: '+' }); });
+    // Drop logs
+    (p.dropLog||[]).forEach(t => { txLog.push({ time: t.time, icon: '🎰', label: p.name + ' — Drop', amount: t.amount, color: 'var(--gold)', sign: '+' }); });
+    // Player expenses (non-bonus)
+    (p.playerExpenses||[]).filter(e=>!e.desc.includes('Bonus')).forEach(e => { txLog.push({ time: '', icon: '🧧', label: p.name + ' — ' + e.desc, amount: e.amount, color: 'var(--orange)', sign: '-' }); });
+    // Settle txns
+    (p.settleTxns||[]).forEach(t => {
+      const dirLabel = t.dir==='pay-out'?'House paid player':t.dir==='pay-in'?'Player paid house':'Player paid player';
+      txLog.push({ time: t.time, icon: t.method==='cash'?'💵':'📱', label: p.name + ' — ' + dirLabel + (t.playerName?' ('+t.playerName+')':''), amount: t.amount, color: t.dir==='pay-out'?'var(--red)':'var(--green)', sign: t.dir==='pay-out'?'-':'+' });
+    });
+  });
+  // House-level expenses
+  G.expenses.forEach(e => { txLog.push({ time: e.time||'', icon: '🧾', label: e.name, amount: e.amount, color: 'var(--red)', sign: '-' }); });
+
+  if (!txLog.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div>';
     return;
   }
-  el.innerHTML = G.expenses.map(e => `
-    <div class="exp-row">
-      <div>
-        <div class="exp-name">${e.name}</div>
-        <div class="exp-sub">${e.time || ''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="exp-amt">$${fmt(e.amount)}</div>
-        <button onclick="removeExpense(${e.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>
-      </div>
-    </div>`).join('');
+
+  el.innerHTML = txLog.map(t =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px">'    + '<div style="display:flex;align-items:center;gap:8px">'    + '<span style="font-size:1rem">' + t.icon + '</span>'    + '<div><div style="font-weight:600;color:var(--text)">' + t.label + '</div>'    + (t.time ? '<div style="font-size:10px;color:var(--text-muted)">' + t.time + '</div>' : '')    + '</div></div>'    + '<span style="font-weight:800;color:' + t.color + '">' + t.sign + '$' + fmt(t.amount) + '</span>'    + '</div>'
+  ).join('');
 }
 
 function renderOwedList() {
