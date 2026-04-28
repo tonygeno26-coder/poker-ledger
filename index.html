@@ -249,17 +249,25 @@ input, select, button, textarea { font-family: inherit; }
       </div>
     </div>
 
-    <!-- RIGHT: Owed + Owes -->
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <!-- HOUSE OWES PLAYERS -->
-      <div class="card">
-        <div class="card-title">💸 House Owes <span id="owed-count" class="badge ml-auto" style="display:none;background:var(--green);color:#000">0</span></div>
-        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div></div>
+    <!-- RIGHT: Owed + Owes — tabbed card -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <!-- TAB HEADERS -->
+      <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button id="tab-owes-btn" onclick="switchOwesTab('owes')"
+          style="flex:1;padding:14px;background:var(--red-dim);border:none;cursor:pointer;font-size:13px;font-weight:800;color:var(--red);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px">
+          🔴 Owes House <span id="owes-count" class="badge badge-red" style="display:none">0</span>
+        </button>
+        <button id="tab-owed-btn" onclick="switchOwesTab('owed')"
+          style="flex:1;padding:14px;background:transparent;border:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:6px">
+          💸 House Owes <span id="owed-count" class="badge" style="display:none;background:var(--green);color:#000">0</span>
+        </button>
       </div>
-      <!-- PLAYERS OWE HOUSE -->
-      <div class="card">
-        <div class="card-title" style="color:var(--red)">🔴 Owes House <span id="owes-count" class="badge badge-red ml-auto" style="display:none">0</span></div>
+      <!-- TAB CONTENT -->
+      <div id="owes-panel" style="padding:12px">
         <div id="owes-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div></div>
+      </div>
+      <div id="owed-panel" style="display:none;padding:12px">
+        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div></div>
       </div>
     </div>
   </div>
@@ -1113,6 +1121,20 @@ function renderStaffLog(p, field) {
       + '<button onclick="' + onclick + '" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">&times;</button>'
       + '</div>';
   }).join('');
+}
+
+function switchOwesTab(tab) {
+  const isOwes = tab === 'owes';
+  document.getElementById('owes-panel').style.display = isOwes ? 'block' : 'none';
+  document.getElementById('owed-panel').style.display = isOwes ? 'none' : 'block';
+  const owesBtn = document.getElementById('tab-owes-btn');
+  const owedBtn = document.getElementById('tab-owed-btn');
+  owesBtn.style.background = isOwes ? 'var(--red-dim)' : 'transparent';
+  owesBtn.style.color = isOwes ? 'var(--red)' : 'var(--text-muted)';
+  owesBtn.style.fontWeight = isOwes ? '800' : '700';
+  owedBtn.style.background = isOwes ? 'transparent' : 'rgba(16,185,129,0.1)';
+  owedBtn.style.color = isOwes ? 'var(--text-muted)' : 'var(--green)';
+  owedBtn.style.fontWeight = isOwes ? '700' : '800';
 }
 
 function toggleBreakdownDetail(id) {
