@@ -1735,9 +1735,11 @@ function playerBalance(p) {
     // No settle yet
     const noActivity = chipCashOut === 0;
     if (noActivity && markerAmt === 0) {
-      gameNet = 0; // chips in play, no result yet
+      gameNet = 0; // all cash buy-ins, chips in play, no result yet
+    } else if (noActivity && markerAmt > 0) {
+      gameNet = -markerAmt; // only show marker debt, cash buy-ins are already paid
     } else {
-      gameNet = preSettleNet; // show current win/loss
+      gameNet = preSettleNet; // has cash-out, show full win/loss
     }
   }
 
