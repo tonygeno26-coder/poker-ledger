@@ -2756,38 +2756,55 @@ function calcAll() {
   }, 0);
   const allExpenses = totalExpenses + playerExpenses;
 
-  // Use settlement figures when a player is settled, otherwise use raw fields
-  const totalCashIn = G.players.reduce((s, p) => {
-    // Always derive from buyIns — cash type only, ecash/marker/bonus excluded from physical cash
-    const hasBuyIns = (p.buyIns||[]).length > 0;
-    if (hasBuyIns) return s + (p.buyIns||[]).filter(b=>b.type==='cash').reduce((t,b)=>t+parseFloat(b.amount||0),0);
-    if (p.settlement) return s + (p.settlement.cashIn||0);
-    // Fallback: p.cashIn is set only from cash buy-ins via addBuyIn filter
-    return s + (p.cashIn||0);
+  // ── WALLET CALCULATIONS — cash and e-cash are strictly separate ─────────────
+  // CASH BUY-INS: physical cash only
+  const cashBuyInsOnly = G.players.reduce(function(s, p) {
+    return s + (p.buyIns||[]).filter(function(b){ return b.type==='cash'; })
+      .reduce(function(t,b){ return t+parseFloat(b.amount||0); },0);
   }, 0);
-  const totalECashIn = G.players.reduce((s, p) => {
-    if (p.settlement) return s + (p.settlement.elecIn||0);
-    const hasBuyIns = (p.buyIns||[]).length > 0;
-    if (hasBuyIns) {
-      // Only count electronic sent directly to house, not to other players
-      return s + (p.buyIns||[]).filter(b => b.type==='electronic' && (!b.elecSourceId || b.elecSourceId==='house')).reduce((t,b)=>t+parseFloat(b.amount||0),0);
+
+  // ECASH BUY-INS: electronic to house only (not player-to-player)
+  const eCashBuyInsOnly = G.players.reduce(function(s, p) {
+    return s + (p.buyIns||[]).filter(function(b){
+      return b.type==='electronic' && (!b.elecSourceId || b.elecSourceId==='house');
+    }).reduce(function(t,b){ return t+parseFloat(b.amount||0); },0);
+  }, 0);
+
+  // CASH PAYOUTS: cash paid out to players (settle txns method=cash dir=pay-out, or p.cashOut for regular players)
+  const cashPayoutsOnly = G.players.reduce(function(s, p) {
+    // Staff: cashOut = net transfer paid in cash
+    // Regular player: cashOut = chip cash-out (physical cash paid)
+    // Use settleTxns cash pay-outs if settled, else p.cashOut
+    if (p.staffRole) {
+      // Staff transfer paid in cash = p.cashOut (net payout)
+      return s + (p.cashOut || 0);
     }
-    return s + (p.eCashIn||0);
+    if ((p.settleTxns||[]).length) {
+      return s + (p.settleTxns||[]).filter(function(t){ return t.method==='cash' && t.dir==='pay-out'; })
+        .reduce(function(t2,t){ return t2+t.amount; },0);
+    }
+    return s + (p.cashOut || 0);
   }, 0);
-  const totalCashOut = G.players.reduce((s, p) => {
-    if (p.settlement) return s + (p.settlement.cashOut||0);
-    return s + (p.cashOut||0);
+
+  // ECASH PAYOUTS: electronic paid out to players only
+  const eCashPayoutsOnly = G.players.reduce(function(s, p) {
+    var settleElec = (p.settleTxns||[]).filter(function(t){ return t.method==='electronic' && (t.dir==='pay-out'||t.dir==='player-pays'); })
+      .reduce(function(t2,t){ return t2+t.amount; },0);
+    return s + settleElec + (p.eCashOut||0);
   }, 0);
-  // Electronic paid out via settle transactions only
-  const totalECashOut = G.players.reduce((s, p) => {
-    const settleElecOut = (p.settleTxns||[]).filter(t => t.method === 'electronic' && (t.dir === 'pay-out' || t.dir === 'player-pays')).reduce((t2,t)=>t2+t.amount,0);
-    return s + settleElecOut + (p.eCashOut||0);
+
+  // ECASH received by players on behalf of house (player-to-player electronic)
+  const elecReceivedByPlayers = G.players.reduce(function(s, p) {
+    return s + (p.buyIns||[]).filter(function(b){ return b.type==='electronic' && b.elecSourceId && b.elecSourceId!=='house'; })
+      .reduce(function(t,b){ return t+parseFloat(b.amount||0); },0);
   }, 0);
-  // Electronic received by players on behalf of house
-  // Scan ALL buy-ins for electronic sent to another player
-  const elecReceivedByPlayers = G.players.reduce((s, p) => {
-    return s + (p.buyIns||[]).filter(b => b.type==='electronic' && b.elecSourceId && b.elecSourceId !== 'house').reduce((t,b)=>t+parseFloat(b.amount||0),0);
-  }, 0);
+
+  // Aliases for legacy code compatibility
+  const totalCashIn   = cashBuyInsOnly;
+  const totalECashIn  = eCashBuyInsOnly;
+  const totalCashOut  = cashPayoutsOnly;
+  const totalECashOut = eCashPayoutsOnly;
+  // ─────────────────────────────────────────────────────────────────────────
   const totalChipsIn = G.players.reduce((s, p) => s + (p.chipsIn||0), 0);
   const totalChipsOut = G.players.reduce((s, p) => s + (p.chipsOut||0), 0);
   const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
@@ -2887,23 +2904,16 @@ function calcAll() {
 
   // Game numbers
   // ── VISIBLE COH DEBUG ───────────────────────────────────────────────────────
-  const _cashBuyInsOnly = G.players.reduce(function(s,p){ return s+(p.buyIns||[]).filter(function(b){return b.type==='cash';}).reduce(function(t,b){return t+parseFloat(b.amount||0);},0); },0);
-  const _eCashBuyInsOnly = totalECashIn;
-  const _markerBuyInsOnly = _markerBuyIns;
-  const _cashOutPaidCashOnly = G.players.reduce(function(s,p){ var hasCash=(p.settleTxns||[]).some(function(t){return t.method==='cash'&&t.dir==='pay-out';}); return s+(hasCash?(p.settleTxns||[]).filter(function(t){return t.method==='cash'&&t.dir==='pay-out';}).reduce(function(t2,t){return t2+t.amount;},0):(p.cashOut||0)); },0);
-  const _eCashOutOnly = totalECashOut;
-  const _taxWithheld = houseTipsTax;
-  const _totalDropPhysical = dealerDrop;
-  const _expenses = allExpenses;
+  // debug vars now use direct calc vars above
   console.table({
     LOCATION:                    'VISIBLE COH',
     startingBank:                bankStart,
-    cashBuyInsOnly:              _cashBuyInsOnly,
-    eCashBuyInsOnly:             _eCashBuyInsOnly,
-    markerBuyIns:                _markerBuyInsOnly,
-    cashOutPaidCashOnly:         _cashOutPaidCashOnly,
-    eCashOutPaidOnly:            _eCashOutOnly,
-    taxWithheld_houseTipsTax:    _taxWithheld,
+    cashBuyInsOnly:              cashBuyInsOnly,
+    eCashBuyInsOnly:             eCashBuyInsOnly,
+    markerBuyIns:                _markerBuyIns,
+    cashPayoutsOnly:             cashPayoutsOnly,
+    eCashPayoutsOnly:            eCashPayoutsOnly,
+    taxWithheld_houseTipsTax:    houseTipsTax,
     totalCashIn_formula:         totalCashIn,
     totalCashOut_formula:        totalCashOut,
     dealerDrop:                  _totalDropPhysical,
