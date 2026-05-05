@@ -855,8 +855,69 @@ function appendTxn(txn) {
   };
   G.txnLog.push(record);
   console.log('[ledger] txn #' + G._txnSeq + ':', record.type, '$' + record.amount, record.playerName || '', '| total txns:', G.txnLog.length);
+  auditTxnLog();
   return record;
 }
+// =============================================
+
+
+// ========== LEDGER AUDIT — Phase 1.5 ==========
+function auditTxnLog() {
+  const log = G.txnLog || [];
+  const issues = [];
+  const seqSeen = new Set();
+  const idSeen  = new Set();
+  const totals  = {};
+
+  if (!Array.isArray(log)) { console.error('[audit] G.txnLog is not an array!'); return; }
+
+  const REQUIRED_FIELDS = ['id','seq','type','amount','timestamp'];
+  const NEEDS_PLAYER = ['BUY_IN_CASH','BUY_IN_MARKER','BUY_IN_ECASH','BUY_IN_BONUS',
+    'CASH_OUT','MARKER_PAYMENT','TIP','DROP','PLAYER_EXPENSE','SETTLEMENT'];
+
+  log.forEach(function(t, i) {
+    // Required fields
+    REQUIRED_FIELDS.forEach(function(f) {
+      if (t[f] === undefined || t[f] === null || t[f] === '') issues.push('txn['+i+'] missing field: ' + f);
+    });
+    // Positive amount
+    if (typeof t.amount !== 'number' || t.amount <= 0) issues.push('txn['+i+'] bad amount: ' + t.amount);
+    // Unique seq
+    if (seqSeen.has(t.seq)) issues.push('txn['+i+'] duplicate seq: ' + t.seq);
+    else seqSeen.add(t.seq);
+    // Unique id
+    if (idSeen.has(t.id)) issues.push('txn['+i+'] duplicate id: ' + t.id);
+    else idSeen.add(t.id);
+    // Player required
+    if (NEEDS_PLAYER.includes(t.type)) {
+      if (!t.playerId) issues.push('txn['+i+'] type '+t.type+' missing playerId');
+      if (!t.playerName) issues.push('txn['+i+'] type '+t.type+' missing playerName');
+    }
+    // Totals by type
+    totals[t.type] = (totals[t.type] || 0) + t.amount;
+  });
+
+  // Seq order check
+  for (var i = 1; i < log.length; i++) {
+    if (log[i].seq < log[i-1].seq) issues.push('seq out of order at index ' + i + ': ' + log[i].seq + ' < ' + log[i-1].seq);
+  }
+
+  // Print report
+  console.groupCollapsed('[ledger audit] ' + log.length + ' txns | ' + (issues.length ? issues.length + ' ISSUES' : 'CLEAN'));
+  console.log('Totals by type:', totals);
+  if (issues.length) {
+    console.warn('Issues found:');
+    issues.forEach(function(iss) { console.warn('  ✗', iss); });
+  } else {
+    console.log('✅ All checks passed');
+  }
+  console.table(log.map(function(t) {
+    return { seq: t.seq, type: t.type, amount: t.amount, player: t.playerName || '-', method: t.method, note: t.note };
+  }));
+  console.groupEnd();
+  return { clean: issues.length === 0, issues: issues, totals: totals, count: log.length };
+}
+window.auditTxnLog = auditTxnLog;
 // =============================================
 
 // ========== INIT ==========
