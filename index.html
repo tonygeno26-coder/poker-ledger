@@ -2329,10 +2329,22 @@ function playerBalance(p) {
     const grossTransfer = netPaid + taxHeld; // reconstruct gross transfer
     gameResult = grossOwed - grossTransfer;
     if (Math.abs(gameResult) < 0.01) gameResult = 0;
-    console.log('[staff balance calc] staff:', p.name,
-      '| grossTips:', tips, '| taxWithheld:', taxHeld,
-      '| netTransferPaid:', netPaid, '| grossTransfer:', grossTransfer,
-      '| adjustedBalance:', gameResult);
+    console.log('[dealer balance displayed]',
+      'staff:', p.name,
+      '| tipsTurnedIn:', p.tips,
+      '| tipsTaxAlreadyDeducted:', p.tipsTaxAmount||0,
+      '| dropCredit:', p.drop||0,
+      '| cashOutPaid_net:', netPaid,
+      '| taxWithheld:', taxHeld,
+      '| expenses:', expenses,
+      '| grossOwed:', grossOwed,
+      '| grossTransfer:', grossTransfer,
+      '| previewGross_cashOutGross:', p.cashOutGross||0,
+      '| previewTax_cashOutTax:', p.cashOutTax||0,
+      '| tipTransfer:', p.tipTransfer||0,
+      '| tipsSettled:', p.tipsSettled||false,
+      '| finalDisplayedBalance:', gameResult
+    );
   } else {
     gameResult = gameNet + expenses + tips;
   }
