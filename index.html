@@ -2311,7 +2311,14 @@ function playerBalance(p) {
 
   // Tips always count toward balance for staff — house owes them
   const tips = p.staffRole ? (p.tips || 0) : 0;
-  const gameResult = gameNet + expenses + tips;
+  // Staff cash-out tax withheld — reduces what house owes staff
+  const staffTaxWithheld = (p.staffCashOutTax || 0);
+  const gameResult = gameNet + expenses + tips - staffTaxWithheld;
+  if (p.staffRole && staffTaxWithheld > 0) {
+    console.log('[staff balance calc] staff:', p.name,
+      '| tips:', tips, '| grossBalance (pre-tax):', gameNet + expenses + tips,
+      '| taxWithheld:', staffTaxWithheld, '| adjustedBalance:', gameResult);
+  }
 
   // If settled via player-pays transactions, those payments clear the balance
   const playerPayments = (p.settleTxns || []).filter(t => t.dir === 'player-pays').reduce((s,t) => s + t.amount, 0);
