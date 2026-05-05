@@ -801,6 +801,7 @@ let G = {
   taxPct: 0,
   bankStart: 0,
   chipFloat: 0,
+  sessionSettings: { bankStart: 0, chipFloat: 0, taxPercent: 0 },
   txnLog: [],
   _txnSeq: 0,
   sessionId: null
@@ -2265,6 +2266,8 @@ function calcAll() {
   G.taxPct = taxPct;
   G.bankStart = bankStart;
   G.chipFloat = chipFloat;
+  // Sync canonical sessionSettings
+  G.sessionSettings = { bankStart: bankStart, chipFloat: chipFloat, taxPercent: taxPct };
 
   // Update breakdown
   setText('b-drop', '$' + fmt(dealerDrop));
