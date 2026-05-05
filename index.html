@@ -938,9 +938,11 @@ function restoreInputs() {
   setVal('g-date', G.date || new Date().toISOString().split('T')[0]);
   setVal('g-type', G.type);
   setVal('g-stakes', G.stakes);
-  setVal('tax-pct', G.taxPct);
-  setVal('bank-start', G.bankStart);
-  setVal('chip-float', G.chipFloat);
+  // Restore session settings from canonical source (with legacy fallback)
+  const ss = G.sessionSettings || {};
+  setVal('tax-pct',    ss.taxPercent  ?? G.taxPct    ?? 0);
+  setVal('bank-start', ss.bankStart   ?? G.bankStart  ?? 0);
+  setVal('chip-float', ss.chipFloat   ?? G.chipFloat  ?? 0);
   updateGameLabel();
 }
 
@@ -2235,7 +2237,12 @@ function calcAll() {
   const totalTips = G.players.reduce((s, p) => s + (p.tipTransfer||0), 0);
 
   const drop = totalCashIn + totalECashIn; // total money brought in
-  const taxPct = parseFloat(getVal('tax-pct')) || 0;
+  // Save DOM inputs → G.sessionSettings (single source of truth)
+  G.sessionSettings.taxPercent = parseFloat(getVal('tax-pct')) || 0;
+  G.sessionSettings.bankStart  = parseFloat(getVal('bank-start')) || 0;
+  G.sessionSettings.chipFloat  = parseFloat(getVal('chip-float')) || 0;
+  const taxPct    = G.sessionSettings.taxPercent;
+  console.log('[calcAll] using sessionSettings', JSON.stringify(G.sessionSettings));
   const tax = drop * (taxPct / 100);
 
   // House tips tax collected from staff settlements
@@ -2246,8 +2253,8 @@ function calcAll() {
 
   const profit = dealerDrop + houseTipsTax - allExpenses;
 
-  const bankStart = parseFloat(getVal('bank-start')) || 0;
-  const chipFloat = parseFloat(getVal('chip-float')) || 0;
+  const bankStart = G.sessionSettings.bankStart;
+  const chipFloat = G.sessionSettings.chipFloat;
   const cashOnHand = bankStart + totalCashIn - totalCashOut;
 
   // Chips on hand: start with float, subtract all buy-ins (chips go out to players)
@@ -2263,11 +2270,10 @@ function calcAll() {
   // E-cash on hand includes player-to-player electronic received on behalf of house
   const eCashOnHand = totalECashIn + elecReceivedByPlayers - totalECashOut;
 
-  G.taxPct = taxPct;
-  G.bankStart = bankStart;
-  G.chipFloat = chipFloat;
-  // Sync canonical sessionSettings
-  G.sessionSettings = { bankStart: bankStart, chipFloat: chipFloat, taxPercent: taxPct };
+  // Legacy aliases (read-only, derived from G.sessionSettings)
+  G.taxPct = G.sessionSettings.taxPercent;
+  G.bankStart = G.sessionSettings.bankStart;
+  G.chipFloat = G.sessionSettings.chipFloat;
 
   // Update breakdown
   setText('b-drop', '$' + fmt(dealerDrop));
@@ -2598,9 +2604,9 @@ function saveGame() {
     expenses: G.expenses,
     players: G.players,
     hosts: G.hosts,
-    taxPct: G.taxPct,
-    bankStart: G.bankStart,
-    chipFloat: G.chipFloat,
+    taxPct: G.sessionSettings.taxPercent,
+    bankStart: G.sessionSettings.bankStart,
+    chipFloat: G.sessionSettings.chipFloat,
     savedAt: new Date().toISOString()
   };
   G.id = game.id;
