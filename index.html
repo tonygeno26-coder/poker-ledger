@@ -980,6 +980,110 @@ window.calculateSessionSummary = calculateSessionSummary;
 window.runShadowCalc = runShadowCalc;
 // ===================================================
 
+
+// ========== LEDGER SCENARIO TESTS — Phase 3.5 ==========
+function testLedgerScenarios() {
+  const ss = { bankStart: 500, chipFloat: 1000, taxPercent: 5 };
+  let passed = 0, failed = 0;
+
+  function check(label, actual, expected) {
+    const ok = Math.abs(actual - expected) < 0.01;
+    if (!ok) {
+      console.warn('  FAIL [' + label + '] expected=' + expected + ' got=' + actual);
+      failed++;
+    } else {
+      console.log('  PASS [' + label + '] = ' + actual);
+      passed++;
+    }
+  }
+
+  // ── Scenario 1: All cash buy-ins and cash outs ───────────────────────────
+  console.group('Scenario 1: Cash buy-ins + cash outs');
+  var s1 = calculateSessionSummary([
+    { type:'BUY_IN_CASH', amount:200, playerId:'1', playerName:'Alice', method:'CASH', seq:1, id:'t1', timestamp:'' },
+    { type:'BUY_IN_CASH', amount:150, playerId:'2', playerName:'Bob',   method:'CASH', seq:2, id:'t2', timestamp:'' },
+    { type:'CASH_OUT',    amount:300, playerId:'1', playerName:'Alice', method:'CASH', seq:3, id:'t3', timestamp:'' },
+  ], ss);
+  check('s1.cashOnHand',    s1.cashOnHand,    500 + 200 + 150 - 300); // 550
+  check('s1.chipsOnHand',   s1.chipsOnHand,   1000 - 200 - 150 + 300); // 950
+  check('s1.totalBuyIns',   s1.totalBuyIns,   350);
+  check('s1.totalCashOut',  s1.totalCashOut,  300);
+  check('s1.profitEstimate',s1.profitEstimate, 0); // no tips/drop/expenses
+  console.groupEnd();
+
+  // ── Scenario 2: Marker buy-in with partial payment ───────────────────────
+  console.group('Scenario 2: Marker buy-in + partial payment');
+  var s2 = calculateSessionSummary([
+    { type:'BUY_IN_MARKER',  amount:400, playerId:'3', playerName:'Carlo', method:'CHIP', seq:1, id:'t1', timestamp:'' },
+    { type:'MARKER_PAYMENT', amount:150, playerId:'3', playerName:'Carlo', method:'CASH', seq:2, id:'t2', timestamp:'' },
+  ], ss);
+  check('s2.unpaidMarkers[3]', s2.unpaidMarkers['3'], 250);  // 400-150
+  check('s2.playersOwingHouse', s2.playersOwingHouse, 250);
+  check('s2.chipsOnHand',      s2.chipsOnHand, 1000 - 400);  // 600
+  check('s2.cashOnHand',       s2.cashOnHand,  500 + 150);   // payment comes in as cash
+  console.groupEnd();
+
+  // ── Scenario 3: E-cash buy-in and e-cash cash out ────────────────────────
+  console.group('Scenario 3: E-cash in + e-cash out');
+  var s3 = calculateSessionSummary([
+    { type:'BUY_IN_ECASH', amount:500, playerId:'4', playerName:'Dana', method:'ECASH', seq:1, id:'t1', timestamp:'' },
+    { type:'CASH_OUT',     amount:600, playerId:'4', playerName:'Dana', method:'ECASH', seq:2, id:'t2', timestamp:'' },
+  ], ss);
+  check('s3.eCashOnHand',  s3.eCashOnHand,  500 - 600);  // -100 (house paid out more than received)
+  check('s3.chipsOnHand',  s3.chipsOnHand,  1000 - 500 + 600);  // 1100
+  check('s3.cashOnHand',   s3.cashOnHand,   500);  // bankStart unchanged (ecash doesn't touch cash)
+  console.groupEnd();
+
+  // ── Scenario 4: Expenses, tax, tips, dealer drop ─────────────────────────
+  console.group('Scenario 4: Expenses + tax + tips + drop');
+  var s4 = calculateSessionSummary([
+    { type:'BUY_IN_CASH', amount:1000, playerId:'5', playerName:'Eve', method:'CASH',  seq:1, id:'t1', timestamp:'' },
+    { type:'DROP',        amount:100,  playerId:'6', playerName:'Dealer1', method:'CHIP', seq:2, id:'t2', timestamp:'' },
+    { type:'TIP',         amount:50,   playerId:'6', playerName:'Dealer1', method:'CASH', seq:3, id:'t3', timestamp:'' },
+    { type:'HOUSE_EXPENSE',amount:80,  playerId:null, playerName:null, method:'CASH',  seq:4, id:'t4', timestamp:'' },
+    { type:'TAX',         amount:20,   playerId:null, playerName:null, method:'CASH',  seq:5, id:'t5', timestamp:'' },
+  ], ss);
+  check('s4.cashOnHand',    s4.cashOnHand,    500 + 1000 + 100 - 80 - 20);  // 1500
+  check('s4.chipsOnHand',   s4.chipsOnHand,   1000 - 1000 + 100);  // 100 (drop returns chips)
+  check('s4.totalDrop',     s4.totalDrop,     100);
+  check('s4.totalTips',     s4.totalTips,     50);
+  check('s4.totalExpenses', s4.totalExpenses, 80);
+  check('s4.totalTax',      s4.totalTax,      20);
+  check('s4.profitEstimate',s4.profitEstimate, 100 + 50 - 80 - 20); // 50
+  console.groupEnd();
+
+  // ── Scenario 5: Mixed — cash, marker, ecash, bonus, settlement ───────────
+  console.group('Scenario 5: Mixed session');
+  var s5 = calculateSessionSummary([
+    { type:'BUY_IN_CASH',   amount:300, playerId:'7', playerName:'Frank', method:'CASH',  seq:1, id:'t1', timestamp:'' },
+    { type:'BUY_IN_MARKER', amount:200, playerId:'7', playerName:'Frank', method:'CHIP',  seq:2, id:'t2', timestamp:'' },
+    { type:'BUY_IN_ECASH',  amount:100, playerId:'8', playerName:'Grace', method:'ECASH', seq:3, id:'t3', timestamp:'' },
+    { type:'BUY_IN_BONUS',  amount:50,  playerId:'8', playerName:'Grace', method:'OTHER', seq:4, id:'t4', timestamp:'' },
+    { type:'CASH_OUT',      amount:900, playerId:'7', playerName:'Frank', method:'CASH',  seq:5, id:'t5', timestamp:'' },
+    { type:'MARKER_PAYMENT',amount:200, playerId:'7', playerName:'Frank', method:'CASH',  seq:6, id:'t6', timestamp:'' },
+    { type:'TIP',           amount:40,  playerId:'9', playerName:'Staff1',method:'CASH',  seq:7, id:'t7', timestamp:'' },
+    { type:'PLAYER_EXPENSE',amount:30,  playerId:'8', playerName:'Grace', method:'CASH',  seq:8, id:'t8', timestamp:'' },
+    { type:'DROP',          amount:60,  playerId:'10',playerName:'Dealer',method:'CHIP',  seq:9, id:'t9', timestamp:'' },
+  ], ss);
+  check('s5.unpaidMarkers[7]',  s5.unpaidMarkers['7'],  0);      // marker fully paid
+  check('s5.playersOwingHouse', s5.playersOwingHouse,   0);
+  check('s5.totalBuyIns',       s5.totalBuyIns,         650);    // 300+200+100+50
+  check('s5.eCashOnHand',       s5.eCashOnHand,         100);    // ecash in, cash out
+  // cashOnHand: bankStart(500) + cash_buyin(300) + marker_payment(200) + drop(60) - cash_out(900) - expense(30)
+  check('s5.cashOnHand',        s5.cashOnHand,          500+300+200+60-900-30);  // 130
+  check('s5.chipsOnHand',       s5.chipsOnHand,         1000-300-200-100-50+900+60);  // 1310
+  check('s5.profitEstimate',    s5.profitEstimate,       60+40-30-0); // drop+tips-expenses
+  console.groupEnd();
+
+  console.log('');
+  console.log('═══ RESULTS: ' + passed + ' passed, ' + failed + ' failed ═══');
+  if (failed === 0) console.log('✅ ALL SCENARIOS PASS — ready for Phase 4');
+  else              console.warn('❌ ' + failed + ' SCENARIOS FAILED — fix before Phase 4');
+  return { passed, failed };
+}
+window.testLedgerScenarios = testLedgerScenarios;
+// ========================================================
+
 // ========== LEDGER AUDIT — Phase 1.5 ==========
 function auditTxnLog() {
   const log = G.txnLog || [];
