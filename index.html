@@ -2182,14 +2182,18 @@ function submitCashOut(id) {
   if (taxAdj < 0)     { toast('Tax adjustment cannot be negative'); return; }
   if (taxAdj > gross) { toast('Tax ($' + fmt(taxAdj) + ') cannot exceed cash-out ($' + fmt(gross) + ')'); return; }
   const netPayout = gross - taxAdj;
-  const method    = 'CASH';   // future: read from a method selector if added
-  p.cashOut     = gross;
+  const taxPct    = gross > 0 ? Math.round(taxAdj / gross * 100) : 0;
+  const method    = 'CASH';
+  // Balance is driven by NET payout — that's what the player actually receives
+  const balanceBefore = p.cashOut || 0;
+  p.cashOut     = netPayout;   // ← NET, not gross — playerBalance reads this
+  p.cashOutGross = gross;      // store gross for display/audit
   p.cashOutTax  = taxAdj;
   p.cashOutNet  = netPayout;
   p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   p.cashOutSeq  = Date.now();
   if (taxAdj > 0) p.staffCashOutTax = taxAdj;
-  console.log('[transfer split] staff:', p.name, '| gross:', gross, '| tax:', taxAdj, '| net:', netPayout, '| method:', method);
+  console.log('[transfer submit]', 'staff:', p.name, '| gross:', gross, '| taxPct:', taxPct+'%', '| taxAmount:', taxAdj, '| netAmount:', netPayout, '| balanceBefore:', balanceBefore, '| balanceAfter (cashOut):', netPayout);
   // ── LEDGER: Transfer split ────────────────────────────────────────────────
   // 1. Chips return for the FULL gross amount (chips don't know about tax split)
   //    We emit CASH_OUT for net (actual cash leaving house to player)
