@@ -956,22 +956,30 @@ function calculateSessionSummary(txnLog, sessionSettings) {
 
       case 'TAX':
         result.totalTax += amt;
-        if ((t.note||'').includes('staff tax withheld')) {
-          // Staff tax: house keeps this money from cash-out — cashOnHand already reduced by full CASH_OUT
-          // Add it back (house withheld it, didn't pay it out) and count as house income
-          if (method === 'ECASH') result.eCashOnHand += amt; // net: not paid out
-          else                    result.cashOnHand  += amt; // net: kept by house
-          result.profitEstimate += amt; // direct profit addition
+        if (method === 'CHIP') {
+          // Staff tax withheld: no cash movement — retained from chip return
+          // Chips return via separate ADJUSTMENT, this is pure profit
+          result.profitEstimate += amt;
+        } else if ((t.note||'').includes('staff tax withheld')) {
+          // Legacy path: add back to cash and profit
+          if (method === 'ECASH') result.eCashOnHand += amt;
+          else                    result.cashOnHand  += amt;
+          result.profitEstimate += amt;
         } else {
-          // Regular tax (e.g. % of drop) — house pays out
+          // Regular tax (% of drop etc.) — house pays out
           if (method === 'ECASH') result.eCashOnHand -= amt;
           else                    result.cashOnHand  -= amt;
         }
         break;
 
       case 'ADJUSTMENT':
-        if (method === 'ECASH') result.eCashOnHand += amt;
-        else                    result.cashOnHand  += amt;
+        if (method === 'CHIP') {
+          result.chipsOnHand += amt;   // chip return only, no cash movement
+        } else if (method === 'ECASH') {
+          result.eCashOnHand += amt;
+        } else {
+          result.cashOnHand  += amt;
+        }
         break;
     }
   });
@@ -2105,37 +2113,44 @@ function submitCashOut(id) {
   if (!p) return;
   const inputEl = document.getElementById('cashout-input-' + id);
   const taxEl   = document.getElementById('cashout-tax-' + id);
-  const amount  = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
+  const gross   = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
   const taxAdj  = parseFloat(taxEl ? taxEl.value : p.cashOutTax) || 0;
-  if (!amount) { toast('Enter a cash out amount first'); return; }
-  // Validation
-  if (taxAdj < 0) { toast('Tax adjustment cannot be negative'); return; }
-  if (taxAdj > amount) { toast('Tax adjustment ($' + fmt(taxAdj) + ') cannot exceed cash-out ($' + fmt(amount) + ')'); return; }
-  const netPayout = amount - taxAdj;
-  p.cashOut    = amount;
-  p.cashOutTax = taxAdj;
-  p.cashOutNet = netPayout;
+  if (!gross) { toast('Enter a cash out amount first'); return; }
+  if (taxAdj < 0)     { toast('Tax adjustment cannot be negative'); return; }
+  if (taxAdj > gross) { toast('Tax ($' + fmt(taxAdj) + ') cannot exceed cash-out ($' + fmt(gross) + ')'); return; }
+  const netPayout = gross - taxAdj;
+  const method    = 'CASH';   // future: read from a method selector if added
+  p.cashOut     = gross;
+  p.cashOutTax  = taxAdj;
+  p.cashOutNet  = netPayout;
   p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   p.cashOutSeq  = Date.now();
-  // Debug
-  if (p.staffRole) {
-    console.log('[staff tax] staff:', p.name, '| grossCashOut:', amount, '| taxAdjustment:', taxAdj, '| netPayout:', netPayout, '| profitImpact: +$' + fmt(taxAdj));
+  if (taxAdj > 0) p.staffCashOutTax = taxAdj;
+  console.log('[transfer split] staff:', p.name, '| gross:', gross, '| tax:', taxAdj, '| net:', netPayout, '| method:', method);
+  // ── LEDGER: Transfer split ────────────────────────────────────────────────
+  // 1. Chips return for the FULL gross amount (chips don't know about tax split)
+  //    We emit CASH_OUT for net (actual cash leaving house to player)
+  // 2. Net payout → CASH_OUT: reduces cashOnHand, increases chipsOnHand by net
+  if (netPayout > 0) {
+    appendTxn({ type: TXN.CASH_OUT, amount: netPayout, playerId: String(p.id), playerName: p.name,
+      method, note: 'transfer split — net payout to ' + p.name });
   }
-  // Ledger: gross cash-out first
-  appendTxn({ type: TXN.CASH_OUT, amount, playerId: String(p.id), playerName: p.name, note: 'cash out gross' });
-  // Ledger: staff tax withheld as house income (TAX type = profit increase)
+  // 3. Tax withheld → TAX: house retains this portion, chips return for this slice too
+  //    Chips are returned via a separate ADJUSTMENT so total chip return = gross
   if (taxAdj > 0) {
-    appendTxn({ type: TXN.TAX, amount: taxAdj, playerId: String(p.id), playerName: p.name, note: 'staff tax withheld' });
-    // Store on player for display
-    if (!p.tipsTaxAmount) p.tipsTaxAmount = 0;
-    p.staffCashOutTax = taxAdj; // separate field to distinguish from tips tax
+    appendTxn({ type: TXN.TAX, amount: taxAdj, playerId: String(p.id), playerName: p.name,
+      method: 'CHIP', note: 'staff tax withheld — house retains' });
+    // Chip return for the tax portion (gross - net already handled above; this completes the gross chip return)
+    appendTxn({ type: TXN.ADJUSTMENT, amount: taxAdj, playerId: String(p.id), playerName: p.name,
+      method: 'CHIP', note: 'chip return offset for tax split (gross chip return)' });
   }
+  // ─────────────────────────────────────────────────────────────────────────
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   const msg = taxAdj > 0
-    ? 'Cash out $' + fmt(amount) + ' | Tax $' + fmt(taxAdj) + ' withheld | Net $' + fmt(netPayout)
-    : 'Cash out $' + fmt(amount) + ' submitted!';
+    ? '✅ Transfer split: Gross $' + fmt(gross) + ' | Tax $' + fmt(taxAdj) + ' | Net $' + fmt(netPayout)
+    : '✅ Cash out $' + fmt(gross) + ' submitted';
   toast(msg);
-  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>' + (taxAdj?'\n\ud83d\udcb0 Tax withheld: <b>$' + fmt(taxAdj) + '</b>\nNet: <b>$' + fmt(netPayout) + '</b>':'') + '\n<i>Pocketbooks</i>');
+  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(gross) + '</b>' + (taxAdj?'\n\ud83d\udcb0 Tax withheld: <b>$' + fmt(taxAdj) + '</b>\nNet paid: <b>$' + fmt(netPayout) + '</b>':'') + '\n<i>Pocketbooks</i>');
 }
 
 function removeBuyIn(id, idx) {
@@ -2346,7 +2361,8 @@ function renderPlayerDetail(id) {
         ${p.staffRole ? `<div style="margin-top:8px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="io-field" style="flex:1;min-width:120px">
             <label style="color:var(--gold)">STAFF TAX WITHHELD ($)</label>
-            <input type="number" class="amount-btn" id="cashout-tax-${p.id}" placeholder="0" value="${p.cashOutTax > 0 ? p.cashOutTax : ''}" oninput="updatePlayerField(${p.id},'cashOutTax',this.value)" min="0" style="width:100%;border-color:rgba(245,158,11,0.4)">
+            <input type="number" class="amount-btn" id="cashout-tax-${p.id}" placeholder="0" value="${p.cashOutTax > 0 ? p.cashOutTax : ''}" oninput="updatePlayerField(${p.id},'cashOutTax',this.value);(function(){var g=parseFloat(document.getElementById('cashout-input-${p.id}').value)||0;var t=parseFloat(this.value)||0;var el=document.getElementById('cashout-net-preview-${p.id}');if(el)el.textContent=g>0?'Net paid: $'+fmt(g-t):'';}).call(this)" min="0" style="width:100%;border-color:rgba(245,158,11,0.4)">
+            <div id="cashout-net-preview-${p.id}" style="font-size:12px;color:var(--green);margin-top:3px;font-weight:700">${p.cashOutTax>0&&p.cashOut>0?'Net paid: $'+fmt(p.cashOut-p.cashOutTax):''}</div>
           </div>
           <div style="font-size:11px;color:var(--gold);padding-bottom:8px;max-width:160px">House Tax Withheld — reduces payout, increases profit</div>
         </div>` : ''}
