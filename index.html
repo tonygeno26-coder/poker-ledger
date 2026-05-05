@@ -1113,6 +1113,32 @@ function testLedgerScenarios() {
   check('s5.profitEstimate',    s5.profitEstimate,       60+40-30-0); // drop+tips-expenses
   console.groupEnd();
 
+  // ── Scenario 6: Staff balance — drop excluded ───────────────────────────
+  console.group('Scenario 6: Staff balance (drop must be excluded)');
+  function _staffBal(p) {
+    var tips = p.staffRole ? (p.tips||0) : 0;
+    var staffExpenses = (p.playerExpenses||[]).filter(function(e){
+      var d=(e.desc||'').toLowerCase();
+      return !e.desc.includes('Bonus')&&!d.includes('drop')&&!d.includes('rake');
+    }).reduce(function(s,e){return s+parseFloat(e.amount||0);},0);
+    var grossOwed     = tips + staffExpenses;
+    var netPaid       = p.cashOut||0;
+    var taxHeld       = p.staffCashOutTax||0;
+    var grossTransfer = netPaid + taxHeld;
+    var result        = grossOwed - grossTransfer;
+    return Math.abs(result)<0.01 ? 0 : result;
+  }
+  // Test 6a: tips=$100, drop=$60, no payout — balance should be $100 (drop excluded)
+  var s6a = _staffBal({ staffRole:'dealer', tips:100, drop:60, cashOut:0, staffCashOutTax:0, playerExpenses:[] });
+  check('s6a balance (tips=100, drop=60, no payout)', s6a, 100);
+  // Test 6b: same but $100 transfer payout (0% tax) — balance should be $0
+  var s6b = _staffBal({ staffRole:'dealer', tips:100, drop:60, cashOut:100, staffCashOutTax:0, playerExpenses:[] });
+  check('s6b balance (after $100 transfer payout)', s6b, 0);
+  // Test 6c: tips=$100, tax withheld=$20, net paid=$80 — balance should be $0
+  var s6c = _staffBal({ staffRole:'dealer', tips:100, drop:60, cashOut:80, staffCashOutTax:20, playerExpenses:[] });
+  check('s6c balance (tax=20%, net=$80 paid)', s6c, 0);
+  console.groupEnd();
+
   console.log('');
   console.log('═══ RESULTS: ' + passed + ' passed, ' + failed + ' failed ═══');
   if (failed === 0) console.log('✅ ALL SCENARIOS PASS — ready for Phase 4');
@@ -2251,6 +2277,29 @@ function markerOwed(p) {
 }
 
 function playerBalance(p) {
+  // ─────────────────────────────────────────────────────────────────
+  // ACCOUNTING RULES — DO NOT CHANGE WITHOUT UNDERSTANDING THESE:
+  //
+  // DEALER DROP = house revenue only.
+  // Drop MUST NEVER appear in dealer/staff payable balance.
+  // Drop belongs to the house, not the dealer.
+  //
+  // STAFF BALANCE formula:
+  //   grossOwed    = tips + approved staff expenses/reimbursements
+  //   grossTransfer = netTransferPaid + taxWithheld (= original gross)
+  //   balance       = grossOwed - grossTransfer
+  //
+  // Staff balance INCLUDES:
+  //   ✓ tips owed to staff
+  //   ✓ approved reimbursements / expenses
+  //   ✓ minus transfers already paid (net amount)
+  //   ✓ minus tax withheld by house
+  //
+  // Staff balance EXCLUDES:
+  //   ✗ dealer drop (house revenue, not staff earnings)
+  //   ✗ chip buy-ins / cash-outs (not applicable to pure staff)
+  //   ✗ bonus chips
+  // ─────────────────────────────────────────────────────────────────
   // positive = house owes player, negative = player owes house
 
   // Total bought in — exclude bonus (house expense, not player debt)
