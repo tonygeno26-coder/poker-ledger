@@ -2424,27 +2424,18 @@ function playerBalance(p) {
         calc_expenses_in_formula: expenses,
         calc_staffTaxWithheld:    staffTaxWithheld,
         calc_grossOwed:           grossOwed,
-        calc_netPaid:             netPaid,
-        calc_taxHeld:             taxHeld,
-        calc_grossTransfer:       grossTransfer,
+        calc_taxWithheld:         taxWithheld,
+        calc_transfersPaid:       transfersPaid,
         FINAL_BALANCE:            gameResult
       });
     } catch(e) { console.warn('table err:', e); }
-    console.log('[dealer balance displayed]',
+    console.log('[staff tax balance]',
       'staff:', p.name,
-      '| tipsTurnedIn:', p.tips,
-      '| tipsTaxAlreadyDeducted:', p.tipsTaxAmount||0,
-      '| dropCredit:', p.drop||0,
-      '| cashOutPaid_net:', netPaid,
-      '| taxWithheld:', taxHeld,
-      '| expenses:', expenses,
+      '| tips:', tips,
       '| grossOwed:', grossOwed,
-      '| grossTransfer:', grossTransfer,
-      '| previewGross_cashOutGross:', p.cashOutGross||0,
-      '| previewTax_cashOutTax:', p.cashOutTax||0,
-      '| tipTransfer:', p.tipTransfer||0,
-      '| tipsSettled:', p.tipsSettled||false,
-      '| finalDisplayedBalance:', gameResult
+      '| taxWithheld:', taxWithheld,
+      '| transfersPaid:', transfersPaid,
+      '| finalBalance:', gameResult
     );
   } else {
     gameResult = gameNet + expenses + tips;
