@@ -2446,10 +2446,11 @@ function calcAll() {
 
   // Use settlement figures when a player is settled, otherwise use raw fields
   const totalCashIn = G.players.reduce((s, p) => {
-    if (p.settlement) return s + (p.settlement.cashIn||0);
-    // Use buyIns if available — cash only, bonus is house expense not cash received
+    // Always derive from buyIns — cash type only, ecash/marker/bonus excluded from physical cash
     const hasBuyIns = (p.buyIns||[]).length > 0;
     if (hasBuyIns) return s + (p.buyIns||[]).filter(b=>b.type==='cash').reduce((t,b)=>t+parseFloat(b.amount||0),0);
+    if (p.settlement) return s + (p.settlement.cashIn||0);
+    // Fallback: p.cashIn is set only from cash buy-ins via addBuyIn filter
     return s + (p.cashIn||0);
   }, 0);
   const totalECashIn = G.players.reduce((s, p) => {
@@ -2499,6 +2500,8 @@ function calcAll() {
   const bankStart = G.sessionSettings.bankStart;
   const chipFloat = G.sessionSettings.chipFloat;
   const cashOnHand = bankStart + totalCashIn - totalCashOut;
+  const _markerBuyIns = G.players.reduce((s, p) => s + (p.buyIns||[]).filter(b=>b.type==='marker').reduce((t,b)=>t+parseFloat(b.amount||0),0), 0);
+  console.log('[cashOnHand debug] cashBuyIns:', totalCashIn, '| eCashBuyIns:', totalECashIn, '| markerBuyIns:', _markerBuyIns, '| startingBank:', bankStart, '| cashOnHandFinal:', cashOnHand);
 
   // Chips on hand: start with float, subtract all buy-ins (chips go out to players)
   // then add back all cash-outs (chips come back from players)
