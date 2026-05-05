@@ -2311,13 +2311,30 @@ function playerBalance(p) {
 
   // Tips always count toward balance for staff — house owes them
   const tips = p.staffRole ? (p.tips || 0) : 0;
-  // Staff cash-out tax withheld — reduces what house owes staff
-  const staffTaxWithheld = (p.staffCashOutTax || 0);
-  const gameResult = gameNet + expenses + tips - staffTaxWithheld;
-  if (p.staffRole && staffTaxWithheld > 0) {
+  const staffTaxWithheld = p.staffCashOutTax || 0;
+
+  let gameResult;
+  if (p.staffRole) {
+    // Staff balance: what house owes them MINUS what's already been paid out via Transfer
+    // tips = gross tips earned
+    // tipsTaxAmount = already deducted from p.tips in saveSettleUp, do NOT deduct again
+    // staffCashOutTax = tax withheld during Transfer Balance (reduces owed amount)
+    // p.cashOut = net paid out via Transfer Balance (reduces remaining owed)
+    const grossOwed = tips + expenses; // what house owes staff total
+    const netPaid   = p.cashOut || 0;  // what was paid via Transfer Balance (NET)
+    const taxHeld   = staffTaxWithheld; // additional tax withheld (already excluded from net)
+    // remaining = grossOwed - netPaid - taxHeld
+    // But taxHeld was already excluded from netPaid (net = gross - tax)
+    // So remaining = grossOwed - (netPaid + taxHeld) = grossOwed - grossTransfer
+    const grossTransfer = netPaid + taxHeld; // reconstruct gross transfer
+    gameResult = grossOwed - grossTransfer;
+    if (Math.abs(gameResult) < 0.01) gameResult = 0;
     console.log('[staff balance calc] staff:', p.name,
-      '| tips:', tips, '| grossBalance (pre-tax):', gameNet + expenses + tips,
-      '| taxWithheld:', staffTaxWithheld, '| adjustedBalance:', gameResult);
+      '| grossTips:', tips, '| taxWithheld:', taxHeld,
+      '| netTransferPaid:', netPaid, '| grossTransfer:', grossTransfer,
+      '| adjustedBalance:', gameResult);
+  } else {
+    gameResult = gameNet + expenses + tips;
   }
 
   // If settled via player-pays transactions, those payments clear the balance
