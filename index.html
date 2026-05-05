@@ -2390,15 +2390,12 @@ function playerBalance(p) {
       return t === 'PLAYER_EXPENSE';
     }).reduce(function(s,e){ return s+parseFloat(e.amount||0); }, 0);
     // p.drop is house revenue — structurally excluded (not in this path at all)
-    const grossOwed = tips + staffExpenses; // what house owes staff total
-    const netPaid   = p.cashOut || 0;  // what was paid via Transfer Balance (NET)
-    const taxHeld   = staffTaxWithheld; // additional tax withheld (already excluded from net)
-    // Override expenses with staffExpenses (drop-excluded)
-    // remaining = grossOwed - netPaid - taxHeld
-    // But taxHeld was already excluded from netPaid (net = gross - tax)
-    // So remaining = grossOwed - (netPaid + taxHeld) = grossOwed - grossTransfer
-    const grossTransfer = netPaid + taxHeld; // reconstruct gross transfer
-    gameResult = grossOwed - grossTransfer;
+    const grossOwed     = tips + staffExpenses; // total owed to staff
+    const taxWithheld   = staffTaxWithheld;      // house retains — NOT paid to dealer
+    const transfersPaid = p.cashOut || 0;         // net cash already paid to dealer
+    // CORRECT FORMULA: grossOwed - taxWithheld - transfersPaid
+    // Tax and transfers are independent subtractions — never combine them
+    gameResult = grossOwed - taxWithheld - transfersPaid;
     if (Math.abs(gameResult) < 0.01) gameResult = 0;
     // FULL FIELD DUMP — find exact source of wrong value
     try {
