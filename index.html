@@ -2874,6 +2874,32 @@ function calcAll() {
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
 
   // Game numbers
+  // ── VISIBLE COH DEBUG ───────────────────────────────────────────────────────
+  const _cashBuyInsOnly = G.players.reduce(function(s,p){ return s+(p.buyIns||[]).filter(function(b){return b.type==='cash';}).reduce(function(t,b){return t+parseFloat(b.amount||0);},0); },0);
+  const _eCashBuyInsOnly = totalECashIn;
+  const _markerBuyInsOnly = _markerBuyIns;
+  const _cashOutPaidCashOnly = G.players.reduce(function(s,p){ var hasCash=(p.settleTxns||[]).some(function(t){return t.method==='cash'&&t.dir==='pay-out';}); return s+(hasCash?(p.settleTxns||[]).filter(function(t){return t.method==='cash'&&t.dir==='pay-out';}).reduce(function(t2,t){return t2+t.amount;},0):(p.cashOut||0)); },0);
+  const _eCashOutOnly = totalECashOut;
+  const _taxWithheld = houseTipsTax;
+  const _totalDropPhysical = dealerDrop;
+  const _expenses = allExpenses;
+  console.table({
+    LOCATION:                    'VISIBLE COH',
+    startingBank:                bankStart,
+    cashBuyInsOnly:              _cashBuyInsOnly,
+    eCashBuyInsOnly:             _eCashBuyInsOnly,
+    markerBuyIns:                _markerBuyInsOnly,
+    cashOutPaidCashOnly:         _cashOutPaidCashOnly,
+    eCashOutPaidOnly:            _eCashOutOnly,
+    taxWithheld_houseTipsTax:    _taxWithheld,
+    totalCashIn_formula:         totalCashIn,
+    totalCashOut_formula:        totalCashOut,
+    dealerDrop:                  _totalDropPhysical,
+    expenses:                    _expenses,
+    finalCashOnHandDisplayed:    cashOnHand,
+    formula:                     'bankStart('+bankStart+')+totalCashIn('+totalCashIn+')-totalCashOut('+totalCashOut+')='+cashOnHand
+  });
+  // ─────────────────────────────────────────────────────────────────────────
   setText('gn-cash', '$' + fmt(cashOnHand));
   setText('gn-chips', '$' + fmt(chipsOnHand));
   const eCashEl = document.getElementById('gn-ecash');
