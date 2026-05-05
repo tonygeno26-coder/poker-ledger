@@ -2486,6 +2486,29 @@ function renderPlayerDetail(id) {
   detail.style.display = 'block';
   const bal = playerBalance(p);
   const balClass = bal > 0 ? 'var(--green)' : bal < 0 ? 'var(--red)' : 'var(--text-muted)';
+  // ── VISIBLE BALANCE RENDER TRACE ─────────────────────────────────────────
+  console.table({
+    LOCATION:             'VISIBLE BALANCE RENDER',
+    playerName:           p.name,
+    playerId:             p.id,
+    staffRole:            p.staffRole || null,
+    renderedBalance:      bal,
+    p_tips:               p.tips || 0,
+    p_drop:               p.drop || 0,
+    p_cashOut:            p.cashOut || 0,
+    p_cashOutGross:       p.cashOutGross || 0,
+    p_cashOutTax:         p.cashOutTax || 0,
+    p_staffCashOutTax:    p.staffCashOutTax || 0,
+    p_tipTransfer:        p.tipTransfer || 0,
+    p_tipsTaxAmount:      p.tipsTaxAmount || 0,
+    playerExpensesTotal:  (p.playerExpenses||[]).reduce(function(s,e){return s+Number(e.amount||0);},0),
+    playerExpenses_raw:   JSON.stringify((p.playerExpenses||[]).map(function(e){return {desc:e.desc,amount:e.amount,txnType:e.txnType};})),
+    tipsLogTotal:         (p.tipsLog||[]).reduce(function(s,t){return s+Number(t.amount||0);},0),
+    dropLogTotal:         (p.dropLog||[]).reduce(function(s,t){return s+Number(t.amount||0);},0),
+    settleTxns_count:     (p.settleTxns||[]).length,
+    balanceFormulaResult: bal
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   detail.innerHTML = `
     <div class="player-detail">
