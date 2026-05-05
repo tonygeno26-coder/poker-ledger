@@ -800,14 +800,73 @@ let G = {
   hosts: [],
   taxPct: 0,
   bankStart: 0,
-  chipFloat: 0
+  chipFloat: 0,
+  txnLog: [],
+  _txnSeq: 0,
+  sessionId: null
 };
+
+
+// ========== LEDGER ENGINE — Phase 1 ==========
+const TXN = {
+  BUY_IN_CASH:    'BUY_IN_CASH',
+  BUY_IN_MARKER:  'BUY_IN_MARKER',
+  BUY_IN_ECASH:   'BUY_IN_ECASH',
+  BUY_IN_BONUS:   'BUY_IN_BONUS',
+  CASH_OUT:       'CASH_OUT',
+  MARKER_PAYMENT: 'MARKER_PAYMENT',
+  TIP:            'TIP',
+  DROP:           'DROP',
+  PLAYER_EXPENSE: 'PLAYER_EXPENSE',
+  HOUSE_EXPENSE:  'HOUSE_EXPENSE',
+  TAX:            'TAX',
+  SETTLEMENT:     'SETTLEMENT',
+  ADJUSTMENT:     'ADJUSTMENT',
+};
+
+const PLAYER_TXN_TYPES = ['BUY_IN_CASH','BUY_IN_MARKER','BUY_IN_ECASH','BUY_IN_BONUS','CASH_OUT','MARKER_PAYMENT','TIP','DROP','PLAYER_EXPENSE','SETTLEMENT'];
+
+function appendTxn(txn) {
+  // Validation
+  const amt = parseFloat(txn.amount);
+  if (!amt || isNaN(amt) || amt <= 0) {
+    console.warn('[ledger] appendTxn rejected — amount must be positive:', txn);
+    return null;
+  }
+  if (PLAYER_TXN_TYPES.includes(txn.type) && !txn.playerId) {
+    console.warn('[ledger] appendTxn rejected — playerId required for type:', txn.type);
+    return null;
+  }
+  if (!G.txnLog) G.txnLog = [];
+  if (!G._txnSeq) G._txnSeq = 0;
+  G._txnSeq++;
+  const record = {
+    id:          txn.id || ('T' + Date.now() + '_' + G._txnSeq),
+    seq:         G._txnSeq,
+    sessionId:   G.sessionId || 'session-1',
+    playerId:    txn.playerId    || null,
+    playerName:  txn.playerName  || null,
+    type:        txn.type,
+    amount:      amt,
+    method:      txn.method      || 'CASH',
+    timestamp:   txn.timestamp   || new Date().toISOString(),
+    note:        txn.note        || '',
+    createdBy:   txn.createdBy   || 'system',
+  };
+  G.txnLog.push(record);
+  console.log('[ledger] txn #' + G._txnSeq + ':', record.type, '$' + record.amount, record.playerName || '', '| total txns:', G.txnLog.length);
+  return record;
+}
+// =============================================
 
 // ========== INIT ==========
 function init() {
   document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
   const saved = ls('pb-current');
   if (saved) try { G = {...G, ...JSON.parse(saved)}; restoreInputs(); } catch(e){}
+  if (!G.sessionId) G.sessionId = 'S' + Date.now();
+  if (!G.txnLog) G.txnLog = [];
+  if (!G._txnSeq) G._txnSeq = 0;
   calcAll();
   renderAll();
 }
@@ -858,6 +917,8 @@ function addExpense() {
   const amount = parseFloat(getVal('exp-amount')) || 0;
   if (!name || !amount) return toast('Enter name and amount');
   G.expenses.push({ id: Date.now(), name: name.toUpperCase(), amount, time: new Date().toLocaleTimeString() });
+  // Ledger
+  appendTxn({ type: TXN.HOUSE_EXPENSE, amount, note: name });
   closeModal('modal-expense');
   calcAll();
   renderAll();
@@ -960,6 +1021,11 @@ function addBuyIn(id) {
     : (elecSourceId === 'house' ? 'House (cash box)' : '');
   const buyTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   p.buyIns.push({ type: buyType, amount, elecSourceId, elecSourceName, time: buyTime, seq: Date.now() });
+  // Ledger
+  const _buyTxnType = buyType === 'cash' ? TXN.BUY_IN_CASH : buyType === 'marker' ? TXN.BUY_IN_MARKER : buyType === 'electronic' ? TXN.BUY_IN_ECASH : TXN.BUY_IN_BONUS;
+  appendTxn({ type: _buyTxnType, amount, playerId: String(p.id), playerName: p.name,
+    method: buyType === 'electronic' ? 'ECASH' : buyType === 'bonus' ? 'OTHER' : 'CASH',
+    note: buyType + ' buy-in' + (elecSourceName ? ' via ' + elecSourceName : '') });
   // If electronic sent to another player, that player now owes house
   if (buyType === 'electronic' && elecSourceId && elecSourceId !== 'house') {
     const recipient = G.players.find(pl => pl.id === parseInt(elecSourceId));
@@ -1017,6 +1083,8 @@ function addPlayerExpense(id) {
   if (!amount) { toast('Enter an amount'); return; }
   if (!p.playerExpenses) p.playerExpenses = [];
   p.playerExpenses.push({ id: Date.now(), desc: desc || 'Expense', amount });
+  // Ledger
+  appendTxn({ type: TXN.PLAYER_EXPENSE, amount, playerId: String(p.id), playerName: p.name, note: desc || 'expense' });
   // Keep legacy p.expense in sync for calcAll
   p.expense = p.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
   document.getElementById('pexp-desc-' + id).value = '';
@@ -1111,10 +1179,14 @@ function logStaffTurn(id, field) {
   if (field === 'tips') {
     if (!p.tipsLog) p.tipsLog = [];
     p.tipsLog.push({ id: Date.now(), amount, time, seq: Date.now() });
+  // Ledger
+  appendTxn({ type: TXN.TIP, amount: amount, playerId: String(p.id), playerName: p.name, note: 'tips' });
     p.tips = p.tipsLog.reduce((s, t) => s + t.amount, 0);
   } else {
     if (!p.dropLog) p.dropLog = [];
     p.dropLog.push({ id: Date.now(), amount, time, seq: Date.now() });
+  // Ledger
+  appendTxn({ type: TXN.DROP, amount: amount, playerId: String(p.id), playerName: p.name, note: 'dealer drop' });
     p.drop = p.dropLog.reduce((s, t) => s + t.amount, 0);
   }
   if (inputEl) inputEl.value = '';
@@ -1622,6 +1694,12 @@ function saveSettleUp() {
 
   // Store transactions
   p.settleTxns = txns;
+  // Ledger — emit one txn per settle entry
+  txns.forEach(function(t) {
+    appendTxn({ type: TXN.SETTLEMENT, amount: t.amount, playerId: String(p.id), playerName: p.name,
+      method: t.method === 'electronic' ? 'ECASH' : 'CASH',
+      note: 'settle-up: ' + t.dir + (t.playerName ? ' (' + t.playerName + ')' : '') });
+  });
 
   // Build legacy settlement object for display
   p.settlement = {
@@ -1678,6 +1756,9 @@ function setCashOutPaid(id, paid) {
         autoCashOutPaid: true,
         time: now
       });
+      // Ledger
+      appendTxn({ type: TXN.SETTLEMENT, amount: Math.abs(netProfit), playerId: String(p.id), playerName: p.name,
+        method: 'CASH', note: netProfit > 0 ? 'house paid player' : 'player paid house' });
     }
     p.settlement = { txns: p.settleTxns, time: now };
   } else {
@@ -1713,6 +1794,8 @@ function submitCashOut(id) {
   p.cashOut = amount;
   p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   p.cashOutSeq = Date.now();
+  // Ledger
+  appendTxn({ type: TXN.CASH_OUT, amount, playerId: String(p.id), playerName: p.name, note: 'cash out' });
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
   toast('Cash out $' + fmt(amount) + ' submitted!');
   tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
