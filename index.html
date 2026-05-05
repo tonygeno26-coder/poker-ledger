@@ -3274,13 +3274,32 @@ function endGame() {
 }
 
 function newGame() {
+  console.log('[new game clicked]',
+    'currentPlayers:', G.players ? G.players.length : 0,
+    '| txnLogLength:', (G.txnLog||[]).length,
+    '| sessionSettings:', JSON.stringify(G.sessionSettings||{}),
+    '| localStorageKey: pb-current'
+  );
   if (!confirm('Start new game? Save first if needed.')) return;
-  localStorage.removeItem('pb-current');
-  G = { id: null, location:'', date: new Date().toISOString().split('T')[0], type:'', stakes:'', expenses:[], players:[], hosts:[], taxPct:0, bankStart:0, chipFloat:0 };
-  restoreInputs();
-  document.getElementById('player-detail-view').style.display = 'none';
-  calcAll(); renderAll();
-  toast('New game started! 🃏');
+  try {
+    localStorage.removeItem('pb-current');
+    G = {
+      id: null, location: '', date: new Date().toISOString().split('T')[0],
+      type: '', stakes: '', expenses: [], players: [], hosts: [],
+      taxPct: 0, bankStart: 0, chipFloat: 0,
+      sessionSettings: { bankStart: 0, chipFloat: 0, taxPercent: 0 },
+      txnLog: [], _txnSeq: 0, sessionId: 'S' + Date.now()
+    };
+    restoreInputs();
+    var dv = document.getElementById('player-detail-view');
+    if (dv) dv.style.display = 'none';
+    calcAll(); renderAll();
+    toast('New game started! \ud83c\udccf');
+    console.log('[new game] reset complete | sessionId:', G.sessionId);
+  } catch(e) {
+    console.error('[new game] error:', e);
+    toast('Error starting new game: ' + e.message);
+  }
 }
 
 // ========== AUTO SAVE ==========
