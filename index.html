@@ -1220,6 +1220,85 @@ function auditTxnLog() {
 window.auditTxnLog = auditTxnLog;
 // =============================================
 
+
+// ========== WALLET SEPARATION TESTS ==========
+function testWalletSeparation() {
+  var ss = { bankStart: 0, chipFloat: 1000, taxPercent: 0 };
+  var passed = 0, failed = 0;
+  function check(label, actual, expected) {
+    var ok = Math.abs(actual - expected) < 0.01;
+    if (ok) { console.log('  PASS [' + label + '] = ' + actual); passed++; }
+    else     { console.warn('  FAIL [' + label + '] expected=' + expected + ' got=' + actual); failed++; }
+  }
+
+  // ── Test 1: Cash buy-in $1,000 ───────────────────────────────────────────
+  console.group('Wallet Test 1: cash buy-in $1,000');
+  var t1 = calculateSessionSummary([
+    { type:'BUY_IN_CASH', amount:1000, playerId:'1', playerName:'P1', method:'CASH', seq:1, id:'t1', timestamp:'' }
+  ], ss);
+  check('cashOnHand',  t1.cashOnHand,  1000);
+  check('eCashOnHand', t1.eCashOnHand, 0);
+  console.groupEnd();
+
+  // ── Test 2: E-cash buy-in $1,000 ─────────────────────────────────────────
+  console.group('Wallet Test 2: e-cash buy-in $1,000');
+  var t2 = calculateSessionSummary([
+    { type:'BUY_IN_ECASH', amount:1000, playerId:'1', playerName:'P1', method:'ECASH', seq:1, id:'t1', timestamp:'' }
+  ], ss);
+  check('cashOnHand',  t2.cashOnHand,  0);
+  check('eCashOnHand', t2.eCashOnHand, 1000);
+  console.groupEnd();
+
+  // ── Test 3: Cash $1,000 + E-cash $1,000 ──────────────────────────────────
+  console.group('Wallet Test 3: cash $1,000 + e-cash $1,000');
+  var t3 = calculateSessionSummary([
+    { type:'BUY_IN_CASH',  amount:1000, playerId:'1', playerName:'P1', method:'CASH',  seq:1, id:'t1', timestamp:'' },
+    { type:'BUY_IN_ECASH', amount:1000, playerId:'2', playerName:'P2', method:'ECASH', seq:2, id:'t2', timestamp:'' }
+  ], ss);
+  check('cashOnHand',  t3.cashOnHand,  1000);
+  check('eCashOnHand', t3.eCashOnHand, 1000);
+  console.groupEnd();
+
+  // ── Test 4: Cash payout only ─────────────────────────────────────────────
+  console.group('Wallet Test 4: cash payout $100 (cash only decreases)');
+  var t4 = calculateSessionSummary([
+    { type:'BUY_IN_CASH', amount:1000, playerId:'1', playerName:'P1', method:'CASH', seq:1, id:'t1', timestamp:'' },
+    { type:'CASH_OUT',    amount:100,  playerId:'1', playerName:'P1', method:'CASH', seq:2, id:'t2', timestamp:'' }
+  ], ss);
+  check('cashOnHand after $100 payout',  t4.cashOnHand,  900);  // 1000-100
+  check('eCashOnHand unchanged',         t4.eCashOnHand, 0);
+  console.groupEnd();
+
+  // ── Test 5: E-cash payout only ───────────────────────────────────────────
+  console.group('Wallet Test 5: e-cash payout $100 (e-cash only decreases)');
+  var t5 = calculateSessionSummary([
+    { type:'BUY_IN_CASH',  amount:1000, playerId:'1', playerName:'P1', method:'CASH',  seq:1, id:'t1', timestamp:'' },
+    { type:'BUY_IN_ECASH', amount:1000, playerId:'2', playerName:'P2', method:'ECASH', seq:2, id:'t2', timestamp:'' },
+    { type:'CASH_OUT',     amount:100,  playerId:'2', playerName:'P2', method:'ECASH', seq:3, id:'t3', timestamp:'' }
+  ], ss);
+  check('cashOnHand unchanged',          t5.cashOnHand,  1000);
+  check('eCashOnHand after $100 payout', t5.eCashOnHand, 900);  // 1000-100
+  console.groupEnd();
+
+  // ── Test 6: Marker buy-in — no wallet impact ──────────────────────────────
+  console.group('Wallet Test 6: marker buy-in $500 (no cash or ecash movement)');
+  var t6 = calculateSessionSummary([
+    { type:'BUY_IN_MARKER', amount:500, playerId:'3', playerName:'P3', method:'CHIP', seq:1, id:'t1', timestamp:'' }
+  ], ss);
+  check('cashOnHand  unchanged', t6.cashOnHand,  0);
+  check('eCashOnHand unchanged', t6.eCashOnHand, 0);
+  check('unpaidMarkers P3',      t6.unpaidMarkers['3'], 500);
+  console.groupEnd();
+
+  console.log('');
+  console.log('WALLET TESTS: ' + passed + ' passed, ' + failed + ' failed');
+  if (failed === 0) console.log('✅ All wallet separation tests pass');
+  else              console.error('❌ ' + failed + ' wallet test(s) failed — cash/e-cash may be mixing');
+  return { passed, failed };
+}
+window.testWalletSeparation = testWalletSeparation;
+// ==============================================
+
 // ========== INIT ==========
 function init() {
   document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
