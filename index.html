@@ -862,6 +862,124 @@ function appendTxn(txn) {
 // =============================================
 
 
+
+// ========== SHADOW CALCULATION — Phase 3 ==========
+function calculateSessionSummary(txnLog, sessionSettings) {
+  const ss = sessionSettings || {};
+  const result = {
+    totalBuyIns:        0,
+    totalBuyInsCash:    0,
+    totalBuyInsEcash:   0,
+    totalBuyInsMarker:  0,
+    totalBuyInsBonus:   0,
+    totalCashOut:       0,
+    totalDrop:          0,
+    totalTips:          0,
+    totalExpenses:      0,
+    totalTax:           0,
+    cashOnHand:         parseFloat(ss.bankStart)  || 0,
+    chipsOnHand:        parseFloat(ss.chipFloat)  || 0,
+    eCashOnHand:        0,
+    playersOwingHouse:  0,
+    houseOwingPlayers:  0,
+    unpaidMarkers:      {},   // { playerId: amount }
+    profitEstimate:     0,
+  };
+
+  (txnLog || []).forEach(function(t) {
+    const amt = parseFloat(t.amount) || 0;
+    switch (t.type) {
+      case 'BUY_IN_CASH':
+        result.totalBuyIns     += amt;
+        result.totalBuyInsCash += amt;
+        result.cashOnHand      += amt;   // cash received
+        result.chipsOnHand     -= amt;   // chips leave float
+        break;
+      case 'BUY_IN_ECASH':
+        result.totalBuyIns      += amt;
+        result.totalBuyInsEcash += amt;
+        result.eCashOnHand      += amt;
+        result.chipsOnHand      -= amt;
+        break;
+      case 'BUY_IN_MARKER':
+        result.totalBuyIns       += amt;
+        result.totalBuyInsMarker += amt;
+        result.chipsOnHand       -= amt;
+        if (t.playerId) result.unpaidMarkers[t.playerId] = (result.unpaidMarkers[t.playerId] || 0) + amt;
+        break;
+      case 'BUY_IN_BONUS':
+        result.totalBuyIns      += amt;
+        result.totalBuyInsBonus += amt;
+        result.chipsOnHand      -= amt;   // chips out, no cash in
+        break;
+      case 'CASH_OUT':
+        result.totalCashOut += amt;
+        result.chipsOnHand  += amt;   // chips return
+        if (t.method === 'ECASH') result.eCashOnHand -= amt;
+        else                      result.cashOnHand  -= amt;
+        break;
+      case 'DROP':
+        result.totalDrop   += amt;
+        result.cashOnHand  += amt;
+        result.chipsOnHand += amt;   // dealer returns chips to float
+        break;
+      case 'TIP':
+        result.totalTips += amt;
+        break;
+      case 'PLAYER_EXPENSE':
+      case 'HOUSE_EXPENSE':
+        result.totalExpenses += amt;
+        result.cashOnHand    -= amt;
+        break;
+      case 'TAX':
+        result.totalTax   += amt;
+        result.cashOnHand -= amt;
+        break;
+      case 'MARKER_PAYMENT':
+        result.cashOnHand += amt;
+        if (t.playerId) result.unpaidMarkers[t.playerId] = Math.max(0, (result.unpaidMarkers[t.playerId] || 0) - amt);
+        break;
+      case 'ADJUSTMENT':
+        result.cashOnHand += amt;   // positive = credit, use negative amount for debit
+        break;
+    }
+  });
+
+  // Derive owed totals
+  Object.values(result.unpaidMarkers).forEach(function(v) {
+    if (v > 0) result.playersOwingHouse += v;
+  });
+
+  result.profitEstimate = result.totalDrop + result.totalTips - result.totalExpenses - result.totalTax;
+  return result;
+}
+
+// Run shadow calc and compare with current dashboard values
+function runShadowCalc() {
+  const shadow = calculateSessionSummary(G.txnLog, G.sessionSettings);
+
+  // Read current displayed values
+  const oldCash   = parseFloat((document.getElementById('gn-cash')   || {}).textContent || '0') || 0;
+  const oldChips  = parseFloat((document.getElementById('gn-chips')  || {}).textContent || '0') || 0;
+  const oldProfit = parseFloat((document.getElementById('b-profit')  || {}).textContent || '0') || 0;
+
+  console.groupCollapsed('[shadowCalc] ledger vs dashboard');
+  console.log('old (dashboard):', { cashOnHand: oldCash, chipsOnHand: oldChips, profit: oldProfit });
+  console.log('new (ledger):   ', { cashOnHand: shadow.cashOnHand, chipsOnHand: shadow.chipsOnHand, profitEstimate: shadow.profitEstimate });
+  const diffs = [];
+  if (Math.abs(oldCash   - shadow.cashOnHand)       >= 1) diffs.push('cashOnHand: old=' + oldCash   + ' new=' + shadow.cashOnHand);
+  if (Math.abs(oldChips  - shadow.chipsOnHand)      >= 1) diffs.push('chipsOnHand: old=' + oldChips  + ' new=' + shadow.chipsOnHand);
+  if (Math.abs(oldProfit - shadow.profitEstimate)   >= 1) diffs.push('profit: old=' + oldProfit + ' new=' + shadow.profitEstimate);
+  if (diffs.length) { console.warn('Differences detected:'); diffs.forEach(function(d){ console.warn('  Δ', d); }); }
+  else              { console.log('✅ ledger matches dashboard'); }
+  console.log('Full shadow summary:', shadow);
+  console.groupEnd();
+  return shadow;
+}
+window.calculateSessionSummary = calculateSessionSummary;
+window.runShadowCalc = runShadowCalc;
+// ===================================================
+
 // ========== LEDGER AUDIT — Phase 1.5 ==========
 function auditTxnLog() {
   const log = G.txnLog || [];
