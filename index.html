@@ -2442,6 +2442,8 @@ function renderPlayerDetail(id) {
             <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:8px;margin-top:-4px">
               <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
             </div>
+            <!-- Hidden input so submitCashOut can read taxAdj -->
+            <input type="hidden" id="cashout-tax-${p.id}" value="${p.cashOutTax||0}">
           </div>
           <!-- Live preview -->
           <div id="transfer-preview-${p.id}" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px${p.cashOut > 0 ? '' : ';display:none'}">
