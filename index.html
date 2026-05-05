@@ -877,75 +877,96 @@ function calculateSessionSummary(txnLog, sessionSettings) {
     totalTips:          0,
     totalExpenses:      0,
     totalTax:           0,
-    cashOnHand:         parseFloat(ss.bankStart)  || 0,
-    chipsOnHand:        parseFloat(ss.chipFloat)  || 0,
-    eCashOnHand:        0,
+    cashOnHand:         parseFloat(ss.bankStart)  || 0,   // physical cash only
+    chipsOnHand:        parseFloat(ss.chipFloat)  || 0,   // chip inventory
+    eCashOnHand:        0,                                // electronic — separate wallet
     playersOwingHouse:  0,
     houseOwingPlayers:  0,
-    unpaidMarkers:      {},   // { playerId: amount }
+    unpaidMarkers:      {},
     profitEstimate:     0,
   };
 
   (txnLog || []).forEach(function(t) {
     const amt = parseFloat(t.amount) || 0;
+    const method = (t.method || 'CASH').toUpperCase();
     switch (t.type) {
       case 'BUY_IN_CASH':
         result.totalBuyIns     += amt;
         result.totalBuyInsCash += amt;
-        result.cashOnHand      += amt;   // cash received
+        result.cashOnHand      += amt;   // physical cash received
         result.chipsOnHand     -= amt;   // chips leave float
         break;
+
       case 'BUY_IN_ECASH':
         result.totalBuyIns      += amt;
         result.totalBuyInsEcash += amt;
-        result.eCashOnHand      += amt;
-        result.chipsOnHand      -= amt;
+        result.eCashOnHand      += amt;  // electronic received — NOT cash
+        result.chipsOnHand      -= amt;  // chips leave float
         break;
+
       case 'BUY_IN_MARKER':
         result.totalBuyIns       += amt;
         result.totalBuyInsMarker += amt;
-        result.chipsOnHand       -= amt;
+        result.chipsOnHand       -= amt; // chips issued on credit
+        // no cash or ecash movement — player owes house
         if (t.playerId) result.unpaidMarkers[t.playerId] = (result.unpaidMarkers[t.playerId] || 0) + amt;
         break;
+
       case 'BUY_IN_BONUS':
         result.totalBuyIns      += amt;
         result.totalBuyInsBonus += amt;
-        result.chipsOnHand      -= amt;   // chips out, no cash in
+        result.chipsOnHand      -= amt;  // chips out, no money in (house expense)
         break;
+
       case 'CASH_OUT':
         result.totalCashOut += amt;
-        result.chipsOnHand  += amt;   // chips return
-        if (t.method === 'ECASH') result.eCashOnHand -= amt;
-        else                      result.cashOnHand  -= amt;
+        result.chipsOnHand  += amt;      // chips return to float
+        if (method === 'ECASH') {
+          result.eCashOnHand -= amt;     // paid out electronically
+        } else {
+          result.cashOnHand  -= amt;     // paid out in physical cash
+        }
         break;
+
+      case 'MARKER_PAYMENT':
+        if (method === 'ECASH') {
+          result.eCashOnHand += amt;
+        } else {
+          result.cashOnHand  += amt;     // cash received for marker payoff
+        }
+        if (t.playerId) result.unpaidMarkers[t.playerId] = Math.max(0, (result.unpaidMarkers[t.playerId] || 0) - amt);
+        break;
+
       case 'DROP':
         result.totalDrop   += amt;
-        result.cashOnHand  += amt;
-        result.chipsOnHand += amt;   // dealer returns chips to float
+        result.cashOnHand  += amt;       // dealer turns in cash
+        result.chipsOnHand += amt;       // chips return with dealer drop
         break;
+
       case 'TIP':
-        result.totalTips += amt;
+        result.totalTips += amt;         // money movement tracked via settlement separately
         break;
+
       case 'PLAYER_EXPENSE':
       case 'HOUSE_EXPENSE':
         result.totalExpenses += amt;
-        result.cashOnHand    -= amt;
+        if (method === 'ECASH') result.eCashOnHand -= amt;
+        else                    result.cashOnHand  -= amt;
         break;
+
       case 'TAX':
         result.totalTax   += amt;
-        result.cashOnHand -= amt;
+        if (method === 'ECASH') result.eCashOnHand -= amt;
+        else                    result.cashOnHand  -= amt;
         break;
-      case 'MARKER_PAYMENT':
-        result.cashOnHand += amt;
-        if (t.playerId) result.unpaidMarkers[t.playerId] = Math.max(0, (result.unpaidMarkers[t.playerId] || 0) - amt);
-        break;
+
       case 'ADJUSTMENT':
-        result.cashOnHand += amt;   // positive = credit, use negative amount for debit
+        if (method === 'ECASH') result.eCashOnHand += amt;
+        else                    result.cashOnHand  += amt;
         break;
     }
   });
 
-  // Derive owed totals
   Object.values(result.unpaidMarkers).forEach(function(v) {
     if (v > 0) result.playersOwingHouse += v;
   });
@@ -1031,7 +1052,7 @@ function testLedgerScenarios() {
   ], ss);
   check('s3.eCashOnHand',  s3.eCashOnHand,  500 - 600);  // -100 (house paid out more than received)
   check('s3.chipsOnHand',  s3.chipsOnHand,  1000 - 500 + 600);  // 1100
-  check('s3.cashOnHand',   s3.cashOnHand,   500);  // bankStart unchanged (ecash doesn't touch cash)
+  check('s3.cashOnHand',   s3.cashOnHand,   500);  // bankStart — ecash wallets are separate
   console.groupEnd();
 
   // ── Scenario 4: Expenses, tax, tips, dealer drop ─────────────────────────
