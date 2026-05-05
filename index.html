@@ -825,7 +825,9 @@ const TXN = {
   ADJUSTMENT:     'ADJUSTMENT',
 };
 
-const PLAYER_TXN_TYPES = ['BUY_IN_CASH','BUY_IN_MARKER','BUY_IN_ECASH','BUY_IN_BONUS','CASH_OUT','MARKER_PAYMENT','TIP','DROP','PLAYER_EXPENSE','SETTLEMENT'];
+const PLAYER_TXN_TYPES = ['BUY_IN_CASH','BUY_IN_MARKER','BUY_IN_ECASH','BUY_IN_BONUS','CASH_OUT','MARKER_PAYMENT','TIP','PLAYER_EXPENSE','SETTLEMENT'];
+// DROP and HOUSE_EXPENSE are house-level — should NOT require playerId
+const HOUSE_ONLY_TXN_TYPES = ['DROP','HOUSE_EXPENSE','TAX'];
 
 function appendTxn(txn) {
   // Validation
@@ -837,6 +839,11 @@ function appendTxn(txn) {
   if (PLAYER_TXN_TYPES.includes(txn.type) && !txn.playerId) {
     console.warn('[ledger] appendTxn rejected — playerId required for type:', txn.type);
     return null;
+  }
+  // DROP must never carry a playerId — it is house revenue
+  if (typeof HOUSE_ONLY_TXN_TYPES !== 'undefined' && HOUSE_ONLY_TXN_TYPES.includes(txn.type) && txn.playerId) {
+    console.warn('[ledger] appendTxn WARNING — DROP/HOUSE_EXPENSE should not have playerId. Stripping it.', txn);
+    txn = Object.assign({}, txn, { playerId: null });
   }
   if (!G.txnLog) G.txnLog = [];
   if (!G._txnSeq) G._txnSeq = 0;
@@ -1392,7 +1399,7 @@ function addBuyIn(id) {
   // Bonus buy-ins are a house expense — must be set BEFORE calcAll
   if (buyType === 'bonus') {
     if (!p.playerExpenses) p.playerExpenses = [];
-    p.playerExpenses.push({ id: Date.now(), desc: p.name + ' Bonus chips', amount });
+    p.playerExpenses.push({ id: Date.now(), desc: p.name + ' Bonus chips', amount, txnType: 'HOUSE_EXPENSE' });
     p.expense = p.playerExpenses.reduce((s,e) => s + parseFloat(e.amount||0), 0);
   }
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
@@ -1432,7 +1439,7 @@ function addPlayerExpense(id) {
   const amount = parseFloat(document.getElementById('pexp-amt-' + id)?.value) || 0;
   if (!amount) { toast('Enter an amount'); return; }
   if (!p.playerExpenses) p.playerExpenses = [];
-  p.playerExpenses.push({ id: Date.now(), desc: desc || 'Expense', amount });
+  p.playerExpenses.push({ id: Date.now(), desc: desc || 'Expense', amount, txnType: 'PLAYER_EXPENSE' });
   // Ledger
   appendTxn({ type: TXN.PLAYER_EXPENSE, amount, playerId: String(p.id), playerName: p.name, note: desc || 'expense' });
   // Keep legacy p.expense in sync for calcAll
@@ -1536,7 +1543,8 @@ function logStaffTurn(id, field) {
     if (!p.dropLog) p.dropLog = [];
     p.dropLog.push({ id: Date.now(), amount, time, seq: Date.now() });
   // Ledger
-  appendTxn({ type: TXN.DROP, amount: amount, playerId: String(p.id), playerName: p.name, note: 'dealer drop' });
+  // DROP is house revenue — no playerId (playerId stripped by appendTxn validation)
+  appendTxn({ type: TXN.DROP, amount: amount, playerId: null, playerName: p.name, note: 'dealer drop — house revenue' });
     p.drop = p.dropLog.reduce((s, t) => s + t.amount, 0);
   }
   if (inputEl) inputEl.value = '';
@@ -2369,13 +2377,20 @@ function playerBalance(p) {
     // tipsTaxAmount = already deducted from p.tips in saveSettleUp, do NOT deduct again
     // staffCashOutTax = tax withheld during Transfer Balance (reduces owed amount)
     // p.cashOut = net paid out via Transfer Balance (reduces remaining owed)
-    // Exclude any playerExpense that is actually dealer drop (drop belongs to house, not dealer)
+    // STRICT TYPE-BASED FILTER: only include PLAYER_EXPENSE type entries
+    // Never infer from description. DROP is always house revenue, never staff earnings.
     const staffExpenses = (p.playerExpenses||[]).filter(function(e) {
-      var d = (e.desc||'').toLowerCase();
-      return !e.desc.includes('Bonus') && !d.includes('drop') && !d.includes('rake');
+      // Type guard: default legacy entries to PLAYER_EXPENSE, never allow DROP
+      var t = e.txnType || 'PLAYER_EXPENSE';
+      if (t === 'DROP' || t === 'HOUSE_EXPENSE') {
+        console.warn('[ERROR] DROP or HOUSE_EXPENSE detected in playerExpenses for', p.name, e);
+        return false;
+      }
+      if (e.desc && e.desc.includes('Bonus')) return false; // bonus = house expense
+      return t === 'PLAYER_EXPENSE';
     }).reduce(function(s,e){ return s+parseFloat(e.amount||0); }, 0);
-    // p.drop is house revenue — never owed to dealer
-    const grossOwed = tips + staffExpenses; // what house owes staff total (drop excluded)
+    // p.drop is house revenue — structurally excluded (not in this path at all)
+    const grossOwed = tips + staffExpenses; // what house owes staff total
     const netPaid   = p.cashOut || 0;  // what was paid via Transfer Balance (NET)
     const taxHeld   = staffTaxWithheld; // additional tax withheld (already excluded from net)
     // Override expenses with staffExpenses (drop-excluded)
