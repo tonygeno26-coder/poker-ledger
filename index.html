@@ -955,9 +955,18 @@ function calculateSessionSummary(txnLog, sessionSettings) {
         break;
 
       case 'TAX':
-        result.totalTax   += amt;
-        if (method === 'ECASH') result.eCashOnHand -= amt;
-        else                    result.cashOnHand  -= amt;
+        result.totalTax += amt;
+        if ((t.note||'').includes('staff tax withheld')) {
+          // Staff tax: house keeps this money from cash-out — cashOnHand already reduced by full CASH_OUT
+          // Add it back (house withheld it, didn't pay it out) and count as house income
+          if (method === 'ECASH') result.eCashOnHand += amt; // net: not paid out
+          else                    result.cashOnHand  += amt; // net: kept by house
+          result.profitEstimate += amt; // direct profit addition
+        } else {
+          // Regular tax (e.g. % of drop) — house pays out
+          if (method === 'ECASH') result.eCashOnHand -= amt;
+          else                    result.cashOnHand  -= amt;
+        }
         break;
 
       case 'ADJUSTMENT':
@@ -2094,18 +2103,39 @@ function clearCashOut(id) {
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
-  // Read directly from the input field to ensure latest value
   const inputEl = document.getElementById('cashout-input-' + id);
-  const amount = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
+  const taxEl   = document.getElementById('cashout-tax-' + id);
+  const amount  = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
+  const taxAdj  = parseFloat(taxEl ? taxEl.value : p.cashOutTax) || 0;
   if (!amount) { toast('Enter a cash out amount first'); return; }
-  p.cashOut = amount;
+  // Validation
+  if (taxAdj < 0) { toast('Tax adjustment cannot be negative'); return; }
+  if (taxAdj > amount) { toast('Tax adjustment ($' + fmt(taxAdj) + ') cannot exceed cash-out ($' + fmt(amount) + ')'); return; }
+  const netPayout = amount - taxAdj;
+  p.cashOut    = amount;
+  p.cashOutTax = taxAdj;
+  p.cashOutNet = netPayout;
   p.cashOutTime = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-  p.cashOutSeq = Date.now();
-  // Ledger
-  appendTxn({ type: TXN.CASH_OUT, amount, playerId: String(p.id), playerName: p.name, note: 'cash out' });
+  p.cashOutSeq  = Date.now();
+  // Debug
+  if (p.staffRole) {
+    console.log('[staff tax] staff:', p.name, '| grossCashOut:', amount, '| taxAdjustment:', taxAdj, '| netPayout:', netPayout, '| profitImpact: +$' + fmt(taxAdj));
+  }
+  // Ledger: gross cash-out first
+  appendTxn({ type: TXN.CASH_OUT, amount, playerId: String(p.id), playerName: p.name, note: 'cash out gross' });
+  // Ledger: staff tax withheld as house income (TAX type = profit increase)
+  if (taxAdj > 0) {
+    appendTxn({ type: TXN.TAX, amount: taxAdj, playerId: String(p.id), playerName: p.name, note: 'staff tax withheld' });
+    // Store on player for display
+    if (!p.tipsTaxAmount) p.tipsTaxAmount = 0;
+    p.staffCashOutTax = taxAdj; // separate field to distinguish from tips tax
+  }
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast('Cash out $' + fmt(amount) + ' submitted!');
-  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>\n<i>Pocketbooks</i>');
+  const msg = taxAdj > 0
+    ? 'Cash out $' + fmt(amount) + ' | Tax $' + fmt(taxAdj) + ' withheld | Net $' + fmt(netPayout)
+    : 'Cash out $' + fmt(amount) + ' submitted!';
+  toast(msg);
+  tgNotify(id, '\ud83c\udccf <b>' + p.name + '</b>\n\ud83d\udcb8 Cash out: <b>$' + fmt(amount) + '</b>' + (taxAdj?'\n\ud83d\udcb0 Tax withheld: <b>$' + fmt(taxAdj) + '</b>\nNet: <b>$' + fmt(netPayout) + '</b>':'') + '\n<i>Pocketbooks</i>');
 }
 
 function removeBuyIn(id, idx) {
@@ -2313,6 +2343,13 @@ function renderPlayerDetail(id) {
             <button class="btn btn-purple btn-sm" onclick="submitCashOut(${p.id})" style="margin-bottom:2px">✓ Submit</button>
           </div>
         </div>
+        ${p.staffRole ? `<div style="margin-top:8px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="io-field" style="flex:1;min-width:120px">
+            <label style="color:var(--gold)">STAFF TAX WITHHELD ($)</label>
+            <input type="number" class="amount-btn" id="cashout-tax-${p.id}" placeholder="0" value="${p.cashOutTax > 0 ? p.cashOutTax : ''}" oninput="updatePlayerField(${p.id},'cashOutTax',this.value)" min="0" style="width:100%;border-color:rgba(245,158,11,0.4)">
+          </div>
+          <div style="font-size:11px;color:var(--gold);padding-bottom:8px;max-width:160px">House Tax Withheld — reduces payout, increases profit</div>
+        </div>` : ''}
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px">
           <input type="checkbox" id="cashout-paid-${p.id}" ${p.cashOutPaid?'checked':''} onchange="setCashOutPaid(${p.id},this.checked)" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
           <label for="cashout-paid-${p.id}" style="font-size:13px;color:var(--green);cursor:pointer;font-weight:600">✅ House paid player in cash</label>
@@ -2490,7 +2527,7 @@ function calcAll() {
   const tax = drop * (taxPct / 100);
 
   // House tips tax collected from staff settlements
-  const houseTipsTax = G.players.reduce((s, p) => s + (p.tipsTaxAmount || 0), 0);
+  const houseTipsTax = G.players.reduce((s, p) => s + (p.tipsTaxAmount || 0) + (p.staffCashOutTax || 0), 0);
 
   // Dealer drop is also house revenue
   const dealerDrop = G.players.reduce((s, p) => s + (p.staffRole === 'dealer' ? (p.drop || 0) : 0), 0);
