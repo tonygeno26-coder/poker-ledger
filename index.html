@@ -2121,44 +2121,53 @@ function toggleTransferSection(id) {
 
 function updateTransferPreview(id) {
   const p = G.players.find(pl => pl.id === id);
-  const grossEl = document.getElementById('cashout-input-' + id);
-  const taxEl   = document.getElementById('cashout-tax-' + id);
-  const slider  = document.getElementById('cashout-tax-slider-' + id);
-  const gross   = parseFloat(grossEl ? grossEl.value : 0) || 0;
-  const tax     = parseFloat(taxEl   ? taxEl.value   : 0) || 0;
-  const net     = Math.max(0, gross - tax);
-  const pct     = gross > 0 ? Math.round(tax / gross * 100) : 0;
-  // Slider stays 0-100%, just update displayed percent
+  var pid2 = parseInt(id);
+  var grossEl = document.getElementById('cashout-input-' + pid2);
+  var taxEl   = document.getElementById('cashout-tax-'   + pid2);
+  var slider  = document.getElementById('cashout-tax-slider-' + pid2);
+  var gross   = parseFloat(grossEl ? grossEl.value : 0) || 0;
+  var tax     = parseFloat(taxEl   ? taxEl.value   : 0) || 0;
+  var net     = Math.max(0, gross - tax);
+  var pct     = gross > 0 ? Math.round(tax / gross * 100) : 0;
   if (slider) slider.value = pct;
-  const pctEl = document.getElementById('transfer-tax-pct-' + id);
-  if (pctEl) pctEl.textContent = pct + '%';
+  var pctEl2 = document.getElementById('transfer-tax-pct-' + pid2);
+  if (pctEl2) pctEl2.textContent = pct + '%';
   // Update preview
-  const prev = document.getElementById('transfer-preview-' + id);
-  if (prev) prev.style.display = gross > 0 ? 'block' : 'none';
-  const pg = document.getElementById('preview-gross-' + id);
-  const pt = document.getElementById('preview-tax-' + id);
-  const pn = document.getElementById('preview-net-' + id);
-  if (pg) pg.textContent = '$' + fmt(gross);
-  if (pt) pt.textContent = '$' + fmt(tax);
-  if (pn) pn.textContent = '$' + fmt(net);
-  const txd = document.getElementById('transfer-tax-display-' + id);
-  if (txd) txd.textContent = '$' + fmt(tax);
+  var prev2 = document.getElementById('transfer-preview-' + pid2);
+  if (prev2) prev2.style.display = gross > 0 ? 'block' : 'none';
+  var pg2 = document.getElementById('preview-gross-' + pid2);
+  var pt2 = document.getElementById('preview-tax-'   + pid2);
+  var pn2 = document.getElementById('preview-net-'   + pid2);
+  if (pg2) pg2.textContent = '$' + fmt(gross);
+  if (pt2) pt2.textContent = '$' + fmt(tax);
+  if (pn2) pn2.textContent = '$' + fmt(net);
+  var txd2 = document.getElementById('transfer-tax-display-' + pid2);
+  if (txd2) txd2.textContent = '$' + fmt(tax);
 }
 
 function updateTaxSliderPct(id, pctVal) {
-  const pct   = Math.min(100, Math.max(0, parseFloat(pctVal) || 0));
-  const p     = G.players ? G.players.find(pl => pl.id === id) : null;
-  const gross = p ? (parseFloat(document.getElementById('cashout-input-' + id)?.value) || p.cashOut || 0) : 0;
-  const tax   = Math.round(gross * pct / 100);
+  var pct  = Math.min(100, Math.max(0, parseFloat(pctVal) || 0));
+  var pid  = parseInt(id);
+  var p    = G.players ? G.players.find(function(pl){ return pl.id === pid; }) : null;
+  var gEl  = document.getElementById('cashout-input-' + pid);
+  var gross = parseFloat(gEl ? gEl.value : 0) || (p ? p.cashOut : 0) || 0;
+  var tax  = Math.round(gross * pct / 100);
   if (p) p.cashOutTax = tax;
-  // Sync hidden input for submitCashOut to read
-  const inp = document.getElementById('cashout-tax-' + id);
+  var inp  = document.getElementById('cashout-tax-' + pid);
   if (inp) inp.value = tax || '';
-  const pctEl = document.getElementById('transfer-tax-pct-' + id);
+  var pctEl = document.getElementById('transfer-tax-pct-' + pid);
   if (pctEl) pctEl.textContent = pct + '%';
-  const taxEl = document.getElementById('transfer-tax-display-' + id);
+  var taxEl = document.getElementById('transfer-tax-display-' + pid);
   if (taxEl) taxEl.textContent = '$' + fmt(tax);
-  updateTransferPreview(id);
+  // Update preview directly (no optional chaining)
+  var prev  = document.getElementById('transfer-preview-' + pid);
+  if (prev && gross > 0) prev.style.display = 'block';
+  var pg = document.getElementById('preview-gross-' + pid);
+  var pt = document.getElementById('preview-tax-' + pid);
+  var pn = document.getElementById('preview-net-' + pid);
+  if (pg) pg.textContent = '$' + fmt(gross);
+  if (pt) pt.textContent = '$' + fmt(tax);
+  if (pn) pn.textContent = '$' + fmt(Math.max(0, gross - tax));
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
