@@ -3344,6 +3344,32 @@ function init() {
 }
 
 // ========== START ==========
+// ── TEST RESET HELPER ────────────────────────────────────────────────────────
+window.resetPokerStateForTesting = function() {
+  var KEY = 'pb-current';
+  console.log('[reset] removing localStorage key:', KEY);
+  console.log('[reset] current value:', localStorage.getItem(KEY));
+  localStorage.removeItem(KEY);
+  console.log('[reset] done — reloading...');
+  location.reload();
+};
+
+window.dumpPokerState = function() {
+  var KEY = 'pb-current';
+  console.log('[state] key:', KEY);
+  var raw = localStorage.getItem(KEY);
+  if (!raw) { console.log('[state] empty — no session saved'); return; }
+  var s = JSON.parse(raw);
+  console.log('[state] players:', s.players ? s.players.length : 0);
+  (s.players||[]).forEach(function(p) {
+    console.log('  player:', p.name, '| staffRole:', p.staffRole, '| tips:', p.tips, '| cashOut:', p.cashOut, '| cashOutGross:', p.cashOutGross, '| cashOutTax:', p.cashOutTax, '| staffCashOutTax:', p.staffCashOutTax, '| tipsTaxAmount:', p.tipsTaxAmount, '| drop:', p.drop, '| buyIns:', (p.buyIns||[]).length);
+  });
+  console.log('[state] sessionSettings:', s.sessionSettings);
+  console.log('[state] txnLog entries:', (s.txnLog||[]).length);
+};
+
+console.log('[app] localStorage key: pb-current | run resetPokerStateForTesting() to clear | run dumpPokerState() to inspect');
+// ─────────────────────────────────────────────────────────────────────────────
 init();
 </script>
 </body>
