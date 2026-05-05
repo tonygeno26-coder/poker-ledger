@@ -2329,6 +2329,36 @@ function playerBalance(p) {
     const grossTransfer = netPaid + taxHeld; // reconstruct gross transfer
     gameResult = grossOwed - grossTransfer;
     if (Math.abs(gameResult) < 0.01) gameResult = 0;
+    // FULL FIELD DUMP — find exact source of wrong value
+    try {
+      console.table({
+        playerName:           p.name,
+        staffRole:            p.staffRole,
+        p_tips:               p.tips,
+        tipsLogTotal:         (p.tipsLog||[]).reduce(function(s,t){return s+Number(t.amount||0);},0),
+        p_cashOut:            p.cashOut,
+        p_cashOutGross:       p.cashOutGross||0,
+        p_cashOutTax:         p.cashOutTax||0,
+        p_staffCashOutTax:    p.staffCashOutTax||0,
+        p_tipTransfer:        p.tipTransfer||0,
+        p_drop:               p.drop||0,
+        p_tipsTaxAmount:      p.tipsTaxAmount||0,
+        p_tipsSettled:        p.tipsSettled||false,
+        playerExpensesTotal:  (p.playerExpenses||[]).reduce(function(s,e){return s+Number(e.amount||0);},0),
+        settleTxnsTotal:      (p.settleTxns||[]).reduce(function(s,x){return s+Number(x.amount||0);},0),
+        txnLog_TIP_forPlayer:     (G.txnLog||[]).filter(function(t){return String(t.playerId)===String(p.id)&&t.type==='TIP';}).reduce(function(s,t){return s+Number(t.amount||0);},0),
+        txnLog_CASHOUT_forPlayer: (G.txnLog||[]).filter(function(t){return String(t.playerId)===String(p.id)&&(t.type==='CASH_OUT'||t.type==='TRANSFER');}).reduce(function(s,t){return s+Number(t.amount||0);},0),
+        txnLog_TAX_forPlayer:     (G.txnLog||[]).filter(function(t){return String(t.playerId)===String(p.id)&&(t.type==='TAX'||t.type==='TAX_WITHHELD');}).reduce(function(s,t){return s+Number(t.amount||0);},0),
+        calc_tips_in_formula:     tips,
+        calc_expenses_in_formula: expenses,
+        calc_staffTaxWithheld:    staffTaxWithheld,
+        calc_grossOwed:           grossOwed,
+        calc_netPaid:             netPaid,
+        calc_taxHeld:             taxHeld,
+        calc_grossTransfer:       grossTransfer,
+        FINAL_BALANCE:            gameResult
+      });
+    } catch(e) { console.warn('table err:', e); }
     console.log('[dealer balance displayed]',
       'staff:', p.name,
       '| tipsTurnedIn:', p.tips,
