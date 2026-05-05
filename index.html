@@ -792,20 +792,26 @@ input, select, button, textarea { font-family: inherit; }
 
 <script>
 // ========== STATE ==========
-let G = {
-  id: null,
-  location: '', date: '', type: '', stakes: '',
-  expenses: [],
-  players: [],
-  hosts: [],
-  taxPct: 0,
-  bankStart: 0,
-  chipFloat: 0,
-  sessionSettings: { bankStart: 0, chipFloat: 0, taxPercent: 0 },
-  txnLog: [],
-  _txnSeq: 0,
-  sessionId: null
-};
+function createDefaultState() {
+  return {
+    id:              null,
+    location:        '',
+    date:            new Date().toISOString().split('T')[0],
+    type:            '',
+    stakes:          '',
+    expenses:        [],
+    players:         [],
+    hosts:           [],
+    taxPct:          0,
+    bankStart:       0,
+    chipFloat:       0,
+    sessionSettings: { bankStart: 0, chipFloat: 0, taxPercent: 0 },
+    txnLog:          [],
+    _txnSeq:         0,
+    sessionId:       'S' + Date.now(),
+  };
+}
+let G = createDefaultState();
 
 
 // ========== LEDGER ENGINE — Phase 1 ==========
@@ -1218,10 +1224,16 @@ window.auditTxnLog = auditTxnLog;
 function init() {
   document.getElementById('g-date').value = new Date().toISOString().split('T')[0];
   const saved = ls('pb-current');
-  if (saved) try { G = {...G, ...JSON.parse(saved)}; restoreInputs(); } catch(e){}
-  if (!G.sessionId) G.sessionId = 'S' + Date.now();
-  if (!G.txnLog) G.txnLog = [];
-  if (!G._txnSeq) G._txnSeq = 0;
+  if (saved) try {
+    // Merge saved state onto createDefaultState() so new fields always exist
+    G = Object.assign(createDefaultState(), JSON.parse(saved));
+    restoreInputs();
+  } catch(e) { console.warn('init restore error:', e); }
+  // Guards for fields that must always exist
+  if (!G.sessionId)       G.sessionId       = 'S' + Date.now();
+  if (!G.txnLog)          G.txnLog          = [];
+  if (!G._txnSeq)         G._txnSeq         = 0;
+  if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPercent: 0 };
   calcAll();
   renderAll();
 }
@@ -3283,13 +3295,7 @@ function newGame() {
   if (!confirm('Start new game? Save first if needed.')) return;
   try {
     localStorage.removeItem('pb-current');
-    G = {
-      id: null, location: '', date: new Date().toISOString().split('T')[0],
-      type: '', stakes: '', expenses: [], players: [], hosts: [],
-      taxPct: 0, bankStart: 0, chipFloat: 0,
-      sessionSettings: { bankStart: 0, chipFloat: 0, taxPercent: 0 },
-      txnLog: [], _txnSeq: 0, sessionId: 'S' + Date.now()
-    };
+    G = createDefaultState();
     restoreInputs();
     var dv = document.getElementById('player-detail-view');
     if (dv) dv.style.display = 'none';
