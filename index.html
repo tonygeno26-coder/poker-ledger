@@ -2108,13 +2108,64 @@ function clearCashOut(id) {
   toast('Cash out cleared');
 }
 
+
+// ── TRANSFER BALANCE HELPERS ─────────────────────────────────────────────────
+function toggleTransferSection(id) {
+  const sec = document.getElementById('transfer-section-' + id);
+  const tog = document.getElementById('transfer-toggle-' + id);
+  if (!sec) return;
+  const visible = sec.style.display !== 'none';
+  sec.style.display = visible ? 'none' : 'block';
+  if (tog) tog.textContent = visible ? '▼ expand' : '▲ collapse';
+}
+
+function updateTransferPreview(id) {
+  const p = G.players.find(pl => pl.id === id);
+  const grossEl = document.getElementById('cashout-input-' + id);
+  const taxEl   = document.getElementById('cashout-tax-' + id);
+  const slider  = document.getElementById('cashout-tax-slider-' + id);
+  const gross   = parseFloat(grossEl ? grossEl.value : 0) || 0;
+  const tax     = parseFloat(taxEl   ? taxEl.value   : 0) || 0;
+  const net     = Math.max(0, gross - tax);
+  // Update slider max
+  if (slider) slider.max = gross;
+  // Update preview
+  const prev = document.getElementById('transfer-preview-' + id);
+  if (prev) prev.style.display = gross > 0 ? 'block' : 'none';
+  const pg = document.getElementById('preview-gross-' + id);
+  const pt = document.getElementById('preview-tax-' + id);
+  const pn = document.getElementById('preview-net-' + id);
+  if (pg) pg.textContent = '$' + fmt(gross);
+  if (pt) pt.textContent = '$' + fmt(tax);
+  if (pn) pn.textContent = '$' + fmt(net);
+  const txd = document.getElementById('transfer-tax-display-' + id);
+  if (txd) txd.textContent = '$' + fmt(tax);
+}
+
+function updateTaxSlider(id, val) {
+  const tax = parseFloat(val) || 0;
+  const inp = document.getElementById('cashout-tax-' + id);
+  if (inp) inp.value = tax || '';
+  if (G.players) { const p = G.players.find(pl => pl.id === id); if (p) p.cashOutTax = tax; }
+  updateTransferPreview(id);
+}
+
+function updateTaxInput(id, val) {
+  const tax    = parseFloat(val) || 0;
+  const slider = document.getElementById('cashout-tax-slider-' + id);
+  if (slider) slider.value = tax;
+  if (G.players) { const p = G.players.find(pl => pl.id === id); if (p) p.cashOutTax = tax; }
+  updateTransferPreview(id);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function submitCashOut(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
   const inputEl = document.getElementById('cashout-input-' + id);
   const taxEl   = document.getElementById('cashout-tax-' + id);
   const gross   = parseFloat(inputEl ? inputEl.value : p.cashOut) || 0;
-  const taxAdj  = parseFloat(taxEl ? taxEl.value : p.cashOutTax) || 0;
+  const taxAdj  = parseFloat(taxEl ? taxEl.value : 0) || parseFloat(p.cashOutTax) || 0;
   if (!gross) { toast('Enter a cash out amount first'); return; }
   if (taxAdj < 0)     { toast('Tax adjustment cannot be negative'); return; }
   if (taxAdj > gross) { toast('Tax ($' + fmt(taxAdj) + ') cannot exceed cash-out ($' + fmt(gross) + ')'); return; }
@@ -2346,36 +2397,67 @@ function renderPlayerDetail(id) {
         </div>
       </div>
 
-      <!-- CASH OUT SECTION -->
-      <div style="margin-bottom:14px">
-        <div class="io-title">💸 Cash Out</div>
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <div class="io-field" style="flex:1;min-width:120px">
-            <label>AMOUNT</label>
-            <input type="number" class="amount-btn" id="cashout-input-${p.id}" placeholder="0" value="${p.cashOut > 0 ? p.cashOut : ''}" oninput="updatePlayerField(${p.id},'cashOut',this.value)" min="0" style="width:100%" onblur="if(!this.value)this.value=''">
-          </div>
-          <div>
-            <button class="btn btn-purple btn-sm" onclick="submitCashOut(${p.id})" style="margin-bottom:2px">✓ Submit</button>
-          </div>
+      <!-- TRANSFER BALANCE SECTION -->
+      <div style="margin-bottom:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(139,92,246,0.1);border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleTransferSection(${p.id})">
+          <div class="io-title" style="margin:0">💸 Transfer Balance</div>
+          <span id="transfer-toggle-${p.id}" style="font-size:12px;color:var(--text-muted)">${p.cashOut > 0 ? '▲ collapse' : '▼ expand'}</span>
         </div>
-        ${p.staffRole ? `<div style="margin-top:8px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <div class="io-field" style="flex:1;min-width:120px">
-            <label style="color:var(--gold)">STAFF TAX WITHHELD ($)</label>
-            <input type="number" class="amount-btn" id="cashout-tax-${p.id}" placeholder="0" value="${p.cashOutTax > 0 ? p.cashOutTax : ''}" oninput="updatePlayerField(${p.id},'cashOutTax',this.value);(function(){var g=parseFloat(document.getElementById('cashout-input-${p.id}').value)||0;var t=parseFloat(this.value)||0;var el=document.getElementById('cashout-net-preview-${p.id}');if(el)el.textContent=g>0?'Net paid: $'+fmt(g-t):'';}).call(this)" min="0" style="width:100%;border-color:rgba(245,158,11,0.4)">
-            <div id="cashout-net-preview-${p.id}" style="font-size:12px;color:var(--green);margin-top:3px;font-weight:700">${p.cashOutTax>0&&p.cashOut>0?'Net paid: $'+fmt(p.cashOut-p.cashOutTax):''}</div>
+        <div id="transfer-section-${p.id}" style="padding:14px;${p.cashOut > 0 ? '' : 'display:none'}">
+          <!-- Amount input -->
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+            <div class="io-field" style="flex:1;min-width:120px">
+              <label>GROSS AMOUNT</label>
+              <input type="number" class="amount-btn" id="cashout-input-${p.id}" placeholder="0"
+                value="${p.cashOut > 0 ? p.cashOut : ''}"
+                oninput="updatePlayerField(${p.id},'cashOut',this.value);updateTransferPreview(${p.id})"
+                min="0" style="width:100%">
+            </div>
           </div>
-          <div style="font-size:11px;color:var(--gold);padding-bottom:8px;max-width:160px">House Tax Withheld — reduces payout, increases profit</div>
-        </div>` : ''}
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px">
-          <input type="checkbox" id="cashout-paid-${p.id}" ${p.cashOutPaid?'checked':''} onchange="setCashOutPaid(${p.id},this.checked)" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
-          <label for="cashout-paid-${p.id}" style="font-size:13px;color:var(--green);cursor:pointer;font-weight:600">✅ House paid player in cash</label>
-        </div>
-        <div id="cashout-display-${p.id}" style="margin-top:10px">
-          ${p.cashOut ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px"><span style="color:var(--text-muted)">💸 Cash Out</span><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:var(--red)">-$' + fmt(p.cashOut) + '</span><button onclick="clearCashOut(' + p.id + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;line-height:1">&times;</button></div></div>' : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No cash out yet</div>'}
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--red-dim);border-radius:8px;margin-top:4px">
-          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">TOTAL CASH OUT</span>
-          <span style="font-weight:800;font-size:16px;color:var(--red)">$${fmt(p.cashOut||0)}</span>
+          <!-- Tax slider (always visible) -->
+          <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <label style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px">Tax / House Withheld</label>
+              <span id="transfer-tax-display-${p.id}" style="font-size:13px;font-weight:800;color:var(--gold)">$${fmt(p.cashOutTax||0)}</span>
+            </div>
+            <input type="range" id="cashout-tax-slider-${p.id}" min="0" max="${p.cashOut||0}" step="5"
+              value="${p.cashOutTax||0}"
+              oninput="updateTaxSlider(${p.id},this.value)"
+              style="width:100%;accent-color:var(--gold);margin-bottom:6px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input type="number" class="amount-btn" id="cashout-tax-${p.id}" placeholder="0"
+                value="${p.cashOutTax > 0 ? p.cashOutTax : ''}"
+                oninput="updateTaxInput(${p.id},this.value)"
+                min="0" style="width:80px;font-size:13px">
+              <span style="font-size:11px;color:var(--text-muted);align-self:center">— or enter manually</span>
+            </div>
+          </div>
+          <!-- Live preview -->
+          <div id="transfer-preview-${p.id}" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px${p.cashOut > 0 ? '' : ';display:none'}">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:13px;color:var(--text-muted)">Gross Transfer</span>
+              <span style="font-size:13px;font-weight:700" id="preview-gross-${p.id}">$${fmt(p.cashOut||0)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:13px;color:var(--gold)">Tax Withheld</span>
+              <span style="font-size:13px;font-weight:700;color:var(--gold)" id="preview-tax-${p.id}">$${fmt(p.cashOutTax||0)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0">
+              <span style="font-size:14px;font-weight:800;color:var(--green)">Net Amount</span>
+              <span style="font-size:14px;font-weight:900;color:var(--green)" id="preview-net-${p.id}">$${fmt((p.cashOut||0)-(p.cashOutTax||0))}</span>
+            </div>
+          </div>
+          <!-- House paid checkbox -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px">
+            <input type="checkbox" id="cashout-paid-${p.id}" ${p.cashOutPaid?'checked':''} onchange="setCashOutPaid(${p.id},this.checked)" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
+            <label for="cashout-paid-${p.id}" style="font-size:13px;color:var(--green);cursor:pointer;font-weight:600">✅ House paid player</label>
+          </div>
+          <!-- Submit -->
+          <button class="btn btn-purple" style="width:100%;padding:10px" onclick="submitCashOut(${p.id})">✓ Submit Transfer</button>
+          <!-- Submitted summary -->
+          <div id="cashout-display-${p.id}" style="margin-top:10px">
+            ${p.cashOut ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px"><span style="color:var(--text-muted)">💸 Transfer</span><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:var(--red)">-$' + fmt(p.cashOut) + (p.cashOutTax?' <span style="font-size:11px;color:var(--gold);">(tax $' + fmt(p.cashOutTax) + ')</span>':'') + '</span><button onclick="clearCashOut(' + p.id + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;line-height:1">&times;</button></div></div>' : ''}
+          </div>
         </div>
       </div>
 
