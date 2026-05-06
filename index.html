@@ -1543,7 +1543,7 @@ function updatePlayerField(id, field, val) {
   const strFields = ['playerNotes','buyInType','cosignECashIn','cosignECashOut','buyInElecSource'];
   p[field] = strFields.includes(field) ? val : (parseFloat(val) || 0);
   // Don't re-render detail view on amount fields (causes focus loss while typing)
-  const amountFields = ['buyInAmount','cashOut','tips','drop','expense'];
+  const amountFields = ['cashOut','tips','drop','expense']; // buyInAmount reads DOM directly
   if (amountFields.includes(field)) {
     calcAll(); renderAll(); autoSave(); // skip renderPlayerDetail
   } else {
@@ -1574,8 +1574,13 @@ function renderBuyInSummary(p) {
 function addBuyIn(id) {
   const p = G.players.find(p => p.id === id);
   if (!p) return;
-  const amount = parseFloat(p.buyInAmount) || 0;
-  if (!amount) { toast('Enter an amount first'); return; }
+  // Read DOM directly — re-renders wipe p.buyInAmount before Add fires
+  const inputId = 'buyin-amount-' + id;
+  const el = document.getElementById(inputId);
+  const raw = el ? el.value : (p.buyInAmount > 0 ? String(p.buyInAmount) : '');
+  const amount = Number(String(raw).replace(/,/g, '')) || parseFloat(p.buyInAmount) || 0;
+  console.table({ playerId: p.id, inputId: inputId, inputFound: !!el, rawValue: raw, parsedAmount: amount, failed: !amount });
+  if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
   if (!p.buyIns) p.buyIns = [];
   const buyType = p.buyInType || 'cash';
   const elecSourceId = p.buyInElecSource || '';
@@ -2742,7 +2747,7 @@ function renderPlayerDetail(id) {
           </div>
           <div class="io-field" style="flex:1;min-width:100px">
             <label>AMOUNT</label>
-            <input type="number" class="amount-btn" placeholder="0" value="${p.buyInAmount > 0 ? p.buyInAmount : ''}" oninput="updatePlayerField(${p.id},'buyInAmount',this.value)" min="0" onblur="if(!this.value)this.value=''" style="width:100%">
+            <input type="number" class="amount-btn" id="buyin-amount-${p.id}" placeholder="0" value="${p.buyInAmount > 0 ? p.buyInAmount : ''}" oninput="updatePlayerField(${p.id},'buyInAmount',this.value)" min="0" onblur="if(!this.value)this.value=''" style="width:100%">
           </div>
           <div>
             <button class="btn btn-purple btn-sm" onclick="addBuyIn(${p.id})" style="margin-bottom:2px">＋ Add</button>
