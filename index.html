@@ -298,13 +298,37 @@ input,select,button,textarea{font-family:inherit}
     <div class="modal-title">🎲 Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')">✕</button></div>
     <div style="margin-bottom:12px">
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Enter quantity of each denomination:</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        <div class="inp-group"><div class="inp-label" style="color:#ef4444">$1</div><input class="inp" type="number" id="cc-d1" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
-        <div class="inp-group"><div class="inp-label" style="color:#ef4444">$5</div><input class="inp" type="number" id="cc-d5" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
-        <div class="inp-group"><div class="inp-label" style="color:#3b82f6">$25</div><input class="inp" type="number" id="cc-d25" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
-        <div class="inp-group"><div class="inp-label" style="color:#8b5cf6">$100</div><input class="inp" type="number" id="cc-d100" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
-        <div class="inp-group"><div class="inp-label" style="color:#f59e0b">$500</div><input class="inp" type="number" id="cc-d500" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
-        <div class="inp-group"><div class="inp-label" style="color:#10b981">$1000</div><input class="inp" type="number" id="cc-d1000" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$5</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$5 Chips — qty</div>
+          <input class="inp" type="number" id="cc-d5" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
+          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d5-val">$0</div>
+        </div>
+        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$25</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$25 Chips — qty</div>
+          <input class="inp" type="number" id="cc-d25" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
+          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d25-val">$0</div>
+        </div>
+        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$100</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$100 Chips — qty</div>
+          <input class="inp" type="number" id="cc-d100" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
+          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d100-val">$0</div>
+        </div>
+        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#000;flex-shrink:0">$500</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$500 Chips — qty</div>
+          <input class="inp" type="number" id="cc-d500" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
+          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d500-val">$0</div>
+        </div>
+        <div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$1000 Chips — qty</div>
+          <input class="inp" type="number" id="cc-d1000" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
+          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d1000-val">$0</div>
+        </div>
       </div>
     </div>
     <div id="cc-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
@@ -1020,7 +1044,7 @@ function calcEcashByReceiver() {
 
 
 // ── CHIP COUNT ────────────────────────────────────────────────────────────────
-var CC_DENOMS = [1, 5, 25, 100, 500, 1000];
+var CC_DENOMS = [5, 25, 100, 500, 1000]; // $1 chips excluded
 
 function getExpectedChips() {
   var d = calcDashboard();
@@ -1036,18 +1060,18 @@ function openChipCountModal() {
   document.getElementById('cc-variance-display').style.color = 'var(--text-muted)';
   setText('cc-total-display', '$0');
   openModal('modal-chip-count');
-  setTimeout(function(){ var el=document.getElementById('cc-d1'); if(el) el.focus(); }, 100);
+  setTimeout(function(){ var el=document.getElementById('cc-d5'); if(el) el.focus(); }, 100);
 }
 
 function updateCCTotal() {
-  var total = CC_DENOMS.reduce(function(s,d){
-    return s + ((parseFloat(document.getElementById('cc-d'+d)||{}).value || 0) || (parseFloat((document.getElementById('cc-d'+d)||{value:'0'}).value)||0)) * d;
-  }, 0);
-  // simpler:
-  total = 0;
+  var total = 0;
   CC_DENOMS.forEach(function(d){
     var el = document.getElementById('cc-d'+d);
-    total += (parseFloat(el?el.value:0)||0) * d;
+    var qty = parseFloat(el?el.value:0)||0;
+    var val = qty * d;
+    total += val;
+    var valEl = document.getElementById('cc-d'+d+'-val');
+    if (valEl) valEl.textContent = val > 0 ? '$' + fmt(val) : '$0';
   });
   var exp = getExpectedChips();
   var variance = total - exp;
@@ -1077,6 +1101,13 @@ function saveChipCount() {
     timestamp: new Date().toISOString(),
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     chips: chips,
+    denominations: {
+      five:        chips[5]    || 0,
+      twentyFive:  chips[25]   || 0,
+      hundred:     chips[100]  || 0,
+      fiveHundred: chips[500]  || 0,
+      thousand:    chips[1000] || 0
+    },
     actualTotal: total,
     expectedTotal: exp,
     variance: variance,
