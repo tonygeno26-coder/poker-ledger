@@ -1186,6 +1186,59 @@ function updateRunningExpected() {
   updateRunningTotal();
 }
 
+// ── DEALER / TABLE BANKS ──────────────────────────────────────────────────────
+function getBankTotal() {
+  return (G.dealerBanks || []).reduce(function(s, b) { return s + (b.amount||0); }, 0);
+}
+
+function addDealerBank() {
+  console.log('[chip-bank] add bank clicked');
+  if (!G.dealerBanks) G.dealerBanks = [];
+  G.dealerBanks.push({ id: Date.now(), name: '', amount: 0 });
+  renderDealerBanks();
+  updateRunningTotal();
+  // Focus the new name input
+  var rows = document.querySelectorAll('.bank-name-inp');
+  if (rows.length) rows[rows.length-1].focus();
+}
+
+function removeDealerBank(id) {
+  G.dealerBanks = (G.dealerBanks || []).filter(function(b) { return b.id !== id; });
+  renderDealerBanks();
+  updateRunningTotal();
+  autoSave();
+}
+
+function updateBankField(id, field, val) {
+  var b = (G.dealerBanks || []).find(function(b) { return b.id === id; });
+  if (!b) return;
+  b[field] = field === 'amount' ? (parseFloat(val)||0) : val;
+  setText('rc-banks-total', '$' + fmt(getBankTotal()));
+  setText('rc-banks-subtotal', '$' + fmt(getBankTotal()));
+  updateRunningTotal();
+  autoSave();
+}
+
+function renderDealerBanks() {
+  var el = document.getElementById('dealer-banks-list');
+  if (!el) return;
+  var banks = G.dealerBanks || [];
+  if (!banks.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:6px">No banks added — click + Add Bank</div>';
+  } else {
+    el.innerHTML = banks.map(function(b) {
+      return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">'
+        + '<input class="inp bank-name-inp" type="text" placeholder="Table / Bank name" value="' + (b.name||'') + '" oninput="updateBankField(' + b.id + ',\'name\',this.value)" style="flex:1;padding:6px 8px;font-size:12px">'
+        + '<input class="inp" type="number" placeholder="Amount" value="' + (b.amount||'') + '" oninput="updateBankField(' + b.id + ',\'amount\',this.value)" min="0" style="width:90px;padding:6px 8px;font-size:12px;text-align:right">'
+        + '<button onclick="removeDealerBank(' + b.id + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0">✕</button>'
+        + '</div>';
+    }).join('');
+  }
+  setText('rc-banks-total', '$' + fmt(getBankTotal()));
+  setText('rc-banks-subtotal', '$' + fmt(getBankTotal()));
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function updateRunningTotal() {
   var total = calcChipsFromInputs('rc-d', '-rv');
   var exp   = getExpectedChips();
