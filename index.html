@@ -215,6 +215,7 @@ input, select, button, textarea { font-family: inherit; }
   <div class="flex-row no-print" style="gap:8px">
     <button class="btn btn-outline btn-sm" onclick="newGame()">＋ New Game</button>
     <button class="btn btn-purple btn-sm" onclick="saveGame()">💾 Save</button>
+    <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red);font-size:11px" onclick="resetLocalData()" title="Clear all localStorage and reload fresh">🗑️ Reset Data</button>
   </div>
 </div>
 
@@ -3492,6 +3493,24 @@ function endGame() {
   if (!confirm('End this game? This will save it to history and reset for a new game.')) return;
   saveGame();
   toast('Game ended and saved! 🏁');
+}
+
+function resetLocalData() {
+  if (!confirm('Clear ALL local data and start completely fresh? This cannot be undone.')) return;
+  // All keys this app uses
+  var keys = ['pb-current','pb-history','pb-player-profiles','pb-player-limits',
+              'pb-join-requests','pb-club-players','pb-club','pb-active-club',
+              'pb-clubs','pb-player','pb-tickets','pb-balance','pb-balance-start',
+              'pb-ledger','hostActiveBets','pb-sports-token'];
+  var cleared = [];
+  keys.forEach(function(k){
+    if (localStorage.getItem(k) !== null) {
+      localStorage.removeItem(k);
+      cleared.push(k);
+    }
+  });
+  console.log('[reset local data] cleared keys:', cleared);
+  location.reload();
 }
 
 function newGame() {
