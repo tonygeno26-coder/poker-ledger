@@ -177,7 +177,9 @@ input,select,button,textarea{font-family:inherit}
   </div>
 
   <div class="game-numbers">
-    <div class="card-title">🎰 Game Numbers</div>
+    <div class="card-title" style="justify-content:space-between">🎰 Game Numbers
+      <button class="btn btn-outline btn-sm" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()">🎲 Count Chips</button>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
       <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
       <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
@@ -1052,6 +1054,7 @@ function getExpectedChips() {
 }
 
 function openChipCountModal() {
+  console.log('[chip count modal opened] expected chips:', getExpectedChips());
   CC_DENOMS.forEach(function(d){ setVal('cc-d'+d, ''); });
   setVal('cc-note', '');
   var exp = getExpectedChips();
