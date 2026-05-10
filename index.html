@@ -282,55 +282,63 @@ input,select,button,textarea{font-family:inherit}
 
 <!-- MODAL: Chip Count -->
 <div class="modal-bg" id="modal-chip-count">
-  <div class="modal">
+  <div class="modal" style="max-width:520px">
     <div class="modal-title">🎲 Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')">✕</button></div>
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Enter quantity of each denomination:</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
-          <div style="width:32px;height:32px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$5</div>
-          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$5 Chips — qty</div>
-          <input class="inp" type="number" id="cc-d5" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
-          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d5-val">$0</div>
+    <!-- Tabs -->
+    <div style="display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:16px">
+      <button id="cctab-starting" onclick="switchCCTab('starting')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--purple);color:#fff">📦 Starting Count</button>
+      <button id="cctab-running" onclick="switchCCTab('running')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text-muted)">🔄 Running Count</button>
+    </div>
+
+    <!-- TAB: Starting Count -->
+    <div id="cc-tab-starting">
+      <div id="cc-starting-saved" style="display:none;background:var(--green-dim);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-weight:700;color:var(--green);margin-bottom:4px">✅ Starting Count Saved</div>
+        <div id="cc-starting-saved-detail" style="font-size:12px;color:var(--text-muted)"></div>
+        <button onclick="editStartingCount()" style="margin-top:8px;padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer">Edit</button>
+      </div>
+      <div id="cc-starting-form">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count starting chips before play begins:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="sc-d5" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d5-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="sc-d25" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d25-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="sc-d100" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d100-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="sc-d500" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d500-sv">$0</div></div><div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="sc-d1000" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d1000-sv">$0</div></div></div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Starting Total</span><span style="font-weight:900;font-size:1.1rem;color:var(--gold)" id="cc-starting-total">$0</span></div>
         </div>
-        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
-          <div style="width:32px;height:32px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$25</div>
-          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$25 Chips — qty</div>
-          <input class="inp" type="number" id="cc-d25" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
-          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d25-val">$0</div>
-        </div>
-        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
-          <div style="width:32px;height:32px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">$100</div>
-          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$100 Chips — qty</div>
-          <input class="inp" type="number" id="cc-d100" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
-          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d100-val">$0</div>
-        </div>
-        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
-          <div style="width:32px;height:32px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#000;flex-shrink:0">$500</div>
-          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$500 Chips — qty</div>
-          <input class="inp" type="number" id="cc-d500" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
-          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d500-val">$0</div>
-        </div>
-        <div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;gap:10px">
-          <div style="width:32px;height:32px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div>
-          <div style="flex:1"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">$1000 Chips — qty</div>
-          <input class="inp" type="number" id="cc-d1000" placeholder="0" min="0" oninput="updateCCTotal()" style="text-align:center;padding:6px;font-size:1rem;font-weight:800"></div>
-          <div style="font-size:12px;color:var(--text-muted);min-width:50px;text-align:right" id="cc-d1000-val">$0</div>
-        </div>
+        <button class="btn btn-purple" style="width:100%" onclick="saveStartingCount()">💾 Save Starting Count</button>
       </div>
     </div>
-    <div id="cc-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Actual Count</span><span style="font-weight:800;font-size:1.1rem" id="cc-total-display">$0</span></div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Expected</span><span style="font-weight:700" id="cc-expected-display">$0</span></div>
-      <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="font-weight:700">Variance</span><span style="font-weight:900;font-size:1.1rem" id="cc-variance-display">$0</span></div>
+
+    <!-- TAB: Running Count -->
+    <div id="cc-tab-running" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Starting Float</div>
+          <div style="font-weight:800;color:var(--gold)" id="rc-starting-display">—</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Expected</div>
+          <div style="font-weight:800;color:var(--text)" id="rc-expected-display">—</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Variance</div>
+          <div style="font-weight:900" id="rc-variance-display">—</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count chips currently on the table:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="rc-d5" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d5-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="rc-d25" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d25-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="rc-d100" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d100-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="rc-d500" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d500-rv">$0</div></div><div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="rc-d1000" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d1000-rv">$0</div></div></div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Actual Count</span><span style="font-weight:900;font-size:1.1rem" id="rc-actual-total">$0</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Expected on Hand</span><span style="font-weight:700" id="rc-expected-total">$0</span></div>
+        <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="font-weight:700">Variance</span><span style="font-weight:900;font-size:1.1rem" id="rc-variance-total">—</span></div>
+      </div>
+      <div class="inp-group" style="margin-bottom:12px">
+        <div class="inp-label">Note (optional)</div>
+        <input class="inp" id="rc-note" placeholder="e.g. end of night count">
+      </div>
+      <button class="btn btn-purple" style="width:100%" onclick="saveRunningCount()">💾 Save Running Count</button>
     </div>
-    <div class="inp-group" style="margin-bottom:14px">
-      <div class="inp-label">Note (optional)</div>
-      <input class="inp" id="cc-note" placeholder="e.g. end of night count">
-    </div>
-    <button class="btn btn-purple" style="width:100%" onclick="saveChipCount()">Save Count</button>
   </div>
 </div>
+
 
 <div id="build-info"><span>main · 628eaf5</span></div>
 
@@ -1032,71 +1040,154 @@ function calcEcashByReceiver() {
 
 
 // ── CHIP COUNT ────────────────────────────────────────────────────────────────
-var CC_DENOMS = [5, 25, 100, 500, 1000]; // $1 chips excluded
+var CC_DENOMS = [5, 25, 100, 500, 1000];
+var _ccTab = 'starting';
 
-function getExpectedChips() {
-  var d = calcDashboard();
-  return d.chipsOnHand;
+function switchCCTab(tab) {
+  _ccTab = tab;
+  document.getElementById('cc-tab-starting').style.display = tab==='starting' ? 'block' : 'none';
+  document.getElementById('cc-tab-running').style.display  = tab==='running'  ? 'block' : 'none';
+  document.getElementById('cctab-starting').style.background = tab==='starting' ? 'var(--purple)' : 'transparent';
+  document.getElementById('cctab-starting').style.color      = tab==='starting' ? '#fff'           : 'var(--text-muted)';
+  document.getElementById('cctab-running').style.background  = tab==='running'  ? 'var(--purple)'  : 'transparent';
+  document.getElementById('cctab-running').style.color       = tab==='running'  ? '#fff'           : 'var(--text-muted)';
+  if (tab === 'running') updateRunningExpected();
 }
 
 function openChipCountModal() {
   console.log('[chip count modal opened] expected chips:', getExpectedChips());
-  CC_DENOMS.forEach(function(d){ setVal('cc-d'+d, ''); });
-  setVal('cc-note', '');
-  var exp = getExpectedChips();
-  setText('cc-expected-display', '$' + fmt(exp));
-  setText('cc-variance-display', '—');
-  document.getElementById('cc-variance-display').style.color = 'var(--text-muted)';
-  setText('cc-total-display', '$0');
+  // Reset inputs
+  CC_DENOMS.forEach(function(d){
+    setVal('sc-d'+d, ''); setText('sc-d'+d+'-sv', '$0');
+    setVal('rc-d'+d, ''); setText('rc-d'+d+'-rv', '$0');
+  });
+  setVal('rc-note', '');
+  // Show saved starting count if exists
+  refreshStartingSavedBanner();
+  updateRunningExpected();
+  switchCCTab('starting');
   openModal('modal-chip-count');
-  setTimeout(function(){ var el=document.getElementById('cc-d5'); if(el) el.focus(); }, 100);
+  setTimeout(function(){ var el=document.getElementById('sc-d5'); if(el) el.focus(); }, 100);
 }
 
-function updateCCTotal() {
+function calcChipsFromInputs(prefix, valSuffix) {
   var total = 0;
   CC_DENOMS.forEach(function(d){
-    var el = document.getElementById('cc-d'+d);
+    var el = document.getElementById(prefix+d);
     var qty = parseFloat(el?el.value:0)||0;
     var val = qty * d;
     total += val;
-    var valEl = document.getElementById('cc-d'+d+'-val');
-    if (valEl) valEl.textContent = val > 0 ? '$' + fmt(val) : '$0';
+    var vEl = document.getElementById(prefix+d+valSuffix);
+    if (vEl) vEl.textContent = val > 0 ? '$' + fmt(val) : '$0';
   });
-  var exp = getExpectedChips();
-  var variance = total - exp;
-  setText('cc-total-display', '$' + fmt(total));
-  setText('cc-expected-display', '$' + fmt(exp));
-  var vEl = document.getElementById('cc-variance-display');
-  if (vEl) {
-    vEl.textContent = (variance >= 0 ? '+' : '') + '$' + fmt(variance);
-    vEl.style.color = Math.abs(variance) < 1 ? 'var(--green)' : 'var(--red)';
+  return total;
+}
+
+function updateStartingTotal() {
+  var total = calcChipsFromInputs('sc-d', '-sv');
+  setText('cc-starting-total', '$' + fmt(total));
+}
+
+function saveStartingCount() {
+  var total = calcChipsFromInputs('sc-d', '-sv');
+  if (!total) { toast('Enter chip quantities first'); return; }
+  var chips = {};
+  CC_DENOMS.forEach(function(d){ chips[d] = parseFloat((document.getElementById('sc-d'+d)||{value:0}).value)||0; });
+  var entry = {
+    type: 'STARTING',
+    timestamp: new Date().toISOString(),
+    time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+    denominations: { five:chips[5], twentyFive:chips[25], hundred:chips[100], fiveHundred:chips[500], thousand:chips[1000] },
+    chips: chips,
+    actualTotal: total
+  };
+  G.startingChipCount = entry;
+  G.sessionSettings.chipFloat = total; // sync chip float to starting count
+  setVal('chip-float', total);
+  if (!G.chipCounts) G.chipCounts = [];
+  G.chipCounts.unshift(entry);
+  refreshStartingSavedBanner();
+  updateRunningExpected();
+  autoSave();
+  toast('Starting count saved ✅ Chip float set to $' + fmt(total));
+}
+
+function editStartingCount() {
+  if (!confirm('Edit starting count? This will update the chip float.')) return;
+  var savedDiv = document.getElementById('cc-starting-saved');
+  var formDiv  = document.getElementById('cc-starting-form');
+  if (savedDiv) savedDiv.style.display = 'none';
+  if (formDiv)  formDiv.style.display  = 'block';
+  if (G.startingChipCount) {
+    CC_DENOMS.forEach(function(d){
+      setVal('sc-d'+d, G.startingChipCount.chips[d]||'');
+    });
+    updateStartingTotal();
   }
 }
 
-function saveChipCount() {
-  var total = 0;
-  var chips = {};
-  CC_DENOMS.forEach(function(d){
-    var el = document.getElementById('cc-d'+d);
-    var qty = parseFloat(el?el.value:0)||0;
-    chips[d] = qty;
-    total += qty * d;
-  });
+function refreshStartingSavedBanner() {
+  var savedDiv = document.getElementById('cc-starting-saved');
+  var formDiv  = document.getElementById('cc-starting-form');
+  if (!savedDiv || !formDiv) return;
+  if (G.startingChipCount) {
+    savedDiv.style.display = 'block';
+    formDiv.style.display  = 'none';
+    var sc = G.startingChipCount;
+    var denStr = CC_DENOMS.filter(function(d){return sc.chips[d]>0;}).map(function(d){return sc.chips[d]+'×$'+d;}).join(' · ');
+    setText('cc-starting-saved-detail', '$' + fmt(sc.actualTotal) + ' · ' + denStr);
+  } else {
+    savedDiv.style.display = 'none';
+    formDiv.style.display  = 'block';
+  }
+}
+
+function getExpectedChips() {
+  var chipFloat = G.sessionSettings.chipFloat || 0;
+  var d = calcDashboard();
+  return d.chipsOnHand;
+}
+
+function updateRunningExpected() {
   var exp = getExpectedChips();
+  var starting = G.startingChipCount ? G.startingChipCount.actualTotal : (G.sessionSettings.chipFloat||0);
+  setText('rc-starting-display', '$' + fmt(starting));
+  setText('rc-expected-display', '$' + fmt(exp));
+  setText('rc-expected-total', '$' + fmt(exp));
+  updateRunningTotal();
+}
+
+function updateRunningTotal() {
+  var total = calcChipsFromInputs('rc-d', '-rv');
+  var exp   = getExpectedChips();
   var variance = total - exp;
-  var note = getVal('cc-note');
+  setText('rc-actual-total', '$' + fmt(total));
+  setText('rc-expected-total', '$' + fmt(exp));
+  var vEl = document.getElementById('rc-variance-total');
+  var vHdr = document.getElementById('rc-variance-display');
+  if (vEl) {
+    vEl.textContent = (variance>=0?'+':'') + '$' + fmt(variance);
+    vEl.style.color = Math.abs(variance)<1 ? 'var(--green)' : 'var(--red)';
+  }
+  if (vHdr) {
+    vHdr.textContent = (variance>=0?'+':'') + '$' + fmt(variance);
+    vHdr.style.color = Math.abs(variance)<1 ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+function saveRunningCount() {
+  var total = calcChipsFromInputs('rc-d', '-rv');
+  var exp   = getExpectedChips();
+  var variance = total - exp;
+  var chips = {};
+  CC_DENOMS.forEach(function(d){ chips[d] = parseFloat((document.getElementById('rc-d'+d)||{value:0}).value)||0; });
+  var note = getVal('rc-note');
   var entry = {
-    id: Date.now(),
+    type: 'RUNNING',
     timestamp: new Date().toISOString(),
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+    denominations: { five:chips[5], twentyFive:chips[25], hundred:chips[100], fiveHundred:chips[500], thousand:chips[1000] },
     chips: chips,
-    denominations: {
-      five:        chips[5]    || 0,
-      twentyFive:  chips[25]   || 0,
-      hundred:     chips[100]  || 0,
-      fiveHundred: chips[500]  || 0,
-      thousand:    chips[1000] || 0
-    },
     actualTotal: total,
     expectedTotal: exp,
     variance: variance,
@@ -1105,54 +1196,9 @@ function saveChipCount() {
   if (!G.chipCounts) G.chipCounts = [];
   G.chipCounts.unshift(entry);
   closeModal('modal-chip-count');
-  renderChipCountLog();
   autoSave();
-  var msg = Math.abs(variance) < 1 ? '✅ Chips balanced!' : ('⚠️ Variance: ' + (variance>=0?'+':'') + '$' + fmt(variance));
+  var msg = Math.abs(variance)<1 ? '✅ Chips balanced!' : ('⚠️ Variance: '+(variance>=0?'+':'')+'$'+fmt(variance));
   toast(msg);
-}
-
-function renderChipCountLog() {
-  var counts = G.chipCounts || [];
-  // Update summary stats
-  if (counts.length) {
-    var last = counts[0];
-    setText('cc-expected', '$' + fmt(last.expectedTotal));
-    setText('cc-actual', '$' + fmt(last.actualTotal));
-    var vEl = document.getElementById('cc-variance');
-    if (vEl) {
-      vEl.textContent = (last.variance >= 0 ? '+' : '') + '$' + fmt(last.variance);
-      vEl.style.color = Math.abs(last.variance) < 1 ? 'var(--green)' : 'var(--red)';
-    }
-  } else {
-    var exp = getExpectedChips();
-    setText('cc-expected', '$' + fmt(exp));
-    setText('cc-actual', '—');
-    setText('cc-variance', '—');
-  }
-  // Log list
-  var logEl = document.getElementById('chip-count-log');
-  if (!logEl) return;
-  logEl.innerHTML = counts.length
-    ? counts.map(function(c){
-        var balanced = Math.abs(c.variance) < 1;
-        var denStr = CC_DENOMS.filter(function(d){return c.chips[d]>0;}).map(function(d){return c.chips[d]+'×$'+d;}).join(' · ');
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:'+(balanced?'var(--green-dim)':'var(--red-dim)')+';border:1px solid '+(balanced?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)')+';border-radius:10px;margin-bottom:7px">'
-          +'<div><div style="font-weight:700;font-size:13px">'+c.time+(c.note?' · '+c.note:'')+'</div>'
-          +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+denStr+'</div></div>'
-          +'<div style="text-align:right">'
-          +'<div style="font-weight:800">$'+fmt(c.actualTotal)+'</div>'
-          +'<div style="font-size:12px;font-weight:700;color:'+(balanced?'var(--green)':'var(--red)')+'">'+( balanced?'✅ Balanced':(c.variance>0?'+':'')+'$'+fmt(c.variance)+' off')+'</div>'
-          +'</div>'
-          +'<button onclick="removeChipCount('+c.id+')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;margin-left:8px">✕</button>'
-          +'</div>';
-      }).join('')
-    : '';
-}
-
-function removeChipCount(id) {
-  G.chipCounts = (G.chipCounts||[]).filter(function(c){ return c.id!==id; });
-  renderChipCountLog();
-  autoSave();
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
