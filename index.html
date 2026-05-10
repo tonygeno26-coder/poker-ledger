@@ -206,7 +206,7 @@ input,select,button,textarea{font-family:inherit}
 
   <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
     <button id="add-player-btn" class="btn btn-purple" onclick="openModal('modal-add-player')">＋ Add Player</button>
-    <button id="add-staff-btn" class="btn btn-purple" style="display:none" onclick="openModal('modal-add-staff')">＋ Add Staff</button>
+    <button id="add-staff-btn" class="btn btn-purple" style="display:none" onclick="openModal('modal-add-player')">＋ Add Staff</button>
   </div>
 
   <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
@@ -247,36 +247,28 @@ input,select,button,textarea{font-family:inherit}
 <!-- MODAL: Add Player -->
 <div class="modal-bg" id="modal-add-player">
   <div class="modal">
-    <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
+    <div class="modal-title">➕ Add Person <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
     <div class="inp-group" style="margin-bottom:12px">
       <div class="inp-label">Name</div>
-      <input class="inp" id="new-player-name" placeholder="Player name" style="text-transform:uppercase">
-    </div>
-    <div class="inp-group" style="margin-bottom:16px">
-      <div class="inp-label">Notes</div>
-      <input class="inp" id="new-player-notes" placeholder="Optional notes">
-    </div>
-    <button class="btn btn-purple" style="width:100%" onclick="addPlayer()">Add Player</button>
-  </div>
-</div>
-
-<!-- MODAL: Add Staff -->
-<div class="modal-bg" id="modal-add-staff">
-  <div class="modal">
-    <div class="modal-title">Add Staff <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button></div>
-    <div class="inp-group" style="margin-bottom:12px">
-      <div class="inp-label">Name</div>
-      <input class="inp" id="new-staff-name" placeholder="Staff name" style="text-transform:uppercase">
+      <input class="inp" id="new-player-name" placeholder="Name" style="text-transform:uppercase">
     </div>
     <div class="inp-group" style="margin-bottom:12px">
       <div class="inp-label">Role</div>
-      <select class="inp" id="new-staff-role">
+      <select class="inp" id="new-player-role" onchange="updateAddPersonUI()">
+        <option value="player">Player</option>
         <option value="dealer">Dealer</option>
-        <option value="hostess">Hostess</option>
-        <option value="floor">Floor</option>
+        <option value="staff">Staff</option>
+        <option value="host">Host</option>
       </select>
     </div>
-    <button class="btn btn-purple" style="width:100%" onclick="addStaff()">Add Staff</button>
+    <div class="inp-group" style="margin-bottom:16px">
+      <div class="inp-label">Notes (optional)</div>
+      <input class="inp" id="new-player-notes" placeholder="Optional notes">
+    </div>
+    <div id="add-person-caps" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text-muted)">
+      <div id="add-person-caps-text">✅ Can buy in · ✅ Can cash out</div>
+    </div>
+    <button class="btn btn-purple" style="width:100%" onclick="addPerson()">Add</button>
   </div>
 </div>
 
@@ -719,33 +711,52 @@ function renderStaffDetail(id) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ACTIONS
 // ══════════════════════════════════════════════════════════════════════════════
-function addPlayer() {
-  var name = getVal('new-player-name').trim().toUpperCase();
-  var notes = getVal('new-player-notes').trim();
-  if (!name) { toast('Enter player name'); return; }
-  var p = { id:Date.now(), name:name, notes:notes, staffRole:'', buyIns:[], cashOuts:[], drops:[], tips:[], expenses:[] };
-  G.players.push(p);
-  setVal('new-player-name',''); setVal('new-player-notes','');
-  closeModal('modal-add-player');
-  _activePlayerId = p.id;
-  calcAll(); renderAll(); autoSave();
-  renderPlayerDetail(p.id);
-  toast(name + ' added ✅');
+function updateAddPersonUI() {
+  var role = getVal('new-player-role');
+  var isPlayer = role === 'player';
+  var capEl = document.getElementById('add-person-caps-text');
+  if (!capEl) return;
+  if (isPlayer) {
+    capEl.textContent = '✅ Can buy in · ✅ Can cash out';
+  } else {
+    capEl.textContent = '✅ Tip Turn-In · ✅ Drop Turn-In · ✅ Can receive E-Cash';
+  }
 }
 
-function addStaff() {
-  var name = getVal('new-staff-name').trim().toUpperCase();
-  var role = getVal('new-staff-role');
-  if (!name) { toast('Enter staff name'); return; }
-  var p = { id:Date.now(), name:name, staffRole:role, buyIns:[], cashOuts:[], drops:[], tips:[], expenses:[] };
-  G.players.push(p);
-  setVal('new-staff-name','');
-  closeModal('modal-add-staff');
-  _activeStaffId = p.id;
+function addPerson() {
+  var name = getVal('new-player-name').trim().toUpperCase();
+  var role = getVal('new-player-role') || 'player';
+  var notes = getVal('new-player-notes').trim();
+  if (!name) { toast('Enter name'); return; }
+  var isPlayer = role === 'player';
+  var newP = {
+    id: Date.now(),
+    name: name,
+    role: role,
+    staffRole: isPlayer ? '' : role,
+    notes: notes,
+    capabilities: {
+      canBuyIn:        isPlayer,
+      canCashOut:      true,
+      canLogTips:      !isPlayer,
+      canLogDrop:      !isPlayer,
+      canReceiveECash: true
+    },
+    buyIns: [], cashOuts: [], drops: [], tips: [], expenses: []
+  };
+  G.players.push(newP);
+  setVal('new-player-name',''); setVal('new-player-notes','');
+  setVal('new-player-role','player'); updateAddPersonUI();
+  closeModal('modal-add-player');
+  if (isPlayer) { _activePlayerId = newP.id; } else { _activeStaffId = newP.id; }
   calcAll(); renderAll(); autoSave();
-  renderStaffDetail(p.id);
-  toast(name + ' added ✅');
+  if (isPlayer) { renderPlayerDetail(newP.id); } else { renderStaffDetail(newP.id); }
+  toast(name + ' (' + role + ') added ✅');
 }
+
+// Legacy aliases kept for any old calls
+function addPlayer() { setVal('new-player-role','player'); addPerson(); }
+function addStaff()  { addPerson(); }
 
 function addBuyIn(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
