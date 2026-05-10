@@ -2,420 +2,363 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pocketbooks Poker Ledger</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pocketbooks 🃏</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#0f0f0f;--card:#1a1a1a;--card2:#222;--border:#2a2a2a;
-  --green:#00ff88;--red:#ff3d57;--gold:#f5c842;--purple:#7c3aed;
-  --white:#fff;--muted:#666;--light:#aaa;
-}
-body{font-family:-apple-system,Arial,sans-serif;background:var(--bg);color:var(--white);max-width:520px;margin:0 auto;min-height:100vh;padding:0 0 80px}
-input,select{background:var(--card2);border:1px solid var(--border);color:var(--white);padding:10px 12px;border-radius:8px;font-size:14px;width:100%;outline:none}
-input:focus,select:focus{border-color:var(--green)}
-button{cursor:pointer;border:none;border-radius:8px;font-size:13px;font-weight:700;padding:10px 16px;transition:opacity 0.15s}
-button:active{opacity:0.75}
-.btn-green{background:var(--green);color:#000}
-.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--light)}
-.btn-red{background:rgba(255,61,87,0.15);color:var(--red);border:1px solid var(--red)}
-.btn-sm{padding:7px 12px;font-size:12px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
-.section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:10px}
-.row{display:flex;gap:8px;align-items:center}
-.row-sb{display:flex;justify-content:space-between;align-items:center}
-.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
-.stat-val{font-size:1.2rem;font-weight:900;color:var(--green);margin-bottom:4px}
-.stat-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
-.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
-.player-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:border-color 0.15s}
-.player-card:hover,.player-card.active{border-color:var(--green)}
-.p-avatar{width:38px;height:38px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;margin-bottom:8px}
-.p-name{font-weight:800;font-size:13px;margin-bottom:2px}
-.p-role{font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase}
-.bal-pos{color:var(--green);font-weight:800}
-.bal-neg{color:var(--red);font-weight:800}
-.bal-zero{color:var(--muted);font-weight:700}
-.detail-panel{background:var(--card);border:1px solid var(--green);border-radius:14px;padding:16px;margin-bottom:12px;display:none}
-.detail-panel.open{display:block}
-.form-row{display:flex;gap:8px;margin-bottom:8px}
-.form-row>*{flex:1}
-.txn-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px}
-.txn-item:last-child{border-bottom:none}
-.txn-type{font-weight:800;font-size:11px;color:var(--green)}
-.txn-name{color:var(--light)}
-.txn-amt{font-weight:800;color:var(--white)}
-.owed-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
-.owed-row:last-child{border-bottom:none}
-.empty{text-align:center;padding:24px;color:var(--muted);font-size:13px}
-header{padding:16px;border-bottom:1px solid var(--border);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:1rem;font-weight:900;color:var(--green)}
-.hdr-btns{display:flex;gap:6px}
-main{padding:0 14px}
-.section{margin-bottom:20px}
-#build-info{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:rgba(10,10,14,0.9);border-top:1px solid var(--border);padding:3px 12px;text-align:right;pointer-events:none;z-index:9999}
+:root{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#16213e;--card:#1e1e35;--border:#2d2d4a;--purple:#7c3aed;--purple-light:#a855f7;--purple-dim:rgba(124,58,237,0.15);--gold:#f59e0b;--gold-dim:rgba(245,158,11,0.15);--red:#ef4444;--red-dim:rgba(239,68,68,0.15);--green:#10b981;--green-dim:rgba(16,185,129,0.15);--orange:#f97316;--orange-dim:rgba(249,115,22,0.15);--text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+input,select,button,textarea{font-family:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.header{background:linear-gradient(135deg,#1a0533 0%,#0f1a3a 100%);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.logo{display:flex;align-items:center;gap:10px}
+.logo h1{font-size:20px;font-weight:800;background:linear-gradient(135deg,#a855f7,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.5px}
+.logo span{font-size:11px;color:var(--text-muted);display:block;font-weight:400}
+.nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;padding:0 12px}
+.nav-btn{padding:12px 18px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.2s;background:none;border-top:none;border-left:none;border-right:none}
+.nav-btn:hover{color:var(--text)}
+.nav-btn.active{color:var(--purple-light);border-bottom-color:var(--purple-light)}
+.main{padding:20px;max-width:1200px;margin:0 auto}
+.page{display:none}
+.page.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr 1fr}}
+.stat-box{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.stat-box .lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+.stat-box .val{font-size:24px;font-weight:800}
+.inp{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;transition:border-color 0.2s}
+.inp:focus{outline:none;border-color:var(--purple)}
+.inp-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px}
+.inp-group{display:flex;flex-direction:column;gap:5px}
+.btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-purple:hover{background:var(--purple-light)}
+.btn-red{background:var(--red);color:#fff}
+.btn-red-dim{background:var(--red-dim);color:var(--red);border:1px solid var(--red)}
+.btn-green{background:var(--green);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+.btn-outline:hover{border-color:var(--purple-light);color:var(--purple-light)}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.btn-xs{padding:4px 10px;font-size:11px;border-radius:6px}
+.owed-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(239,68,68,0.05));border:1px solid rgba(239,68,68,0.25);border-radius:10px;margin-bottom:8px;cursor:pointer}
+.owed-row .owed-name{font-weight:700;font-size:13px;letter-spacing:0.5px}
+.owed-row .owed-amt{font-weight:800;font-size:16px;color:var(--red)}
+.green-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--green-dim);border:1px solid rgba(16,185,129,0.25);border-radius:10px;margin-bottom:8px}
+.breakdown{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+.breakdown-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px}
+.breakdown-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.breakdown-cell{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.breakdown-cell .bc-lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+.breakdown-cell .bc-val{font-size:20px;font-weight:800;color:var(--text)}
+.breakdown-cell.profit .bc-val{color:var(--green)}
+.game-numbers{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+.player-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:border-color 0.2s}
+.player-card:hover{border-color:var(--purple)}
+.player-card.active-card{border-color:var(--purple-light);background:rgba(124,58,237,0.05)}
+.player-avatar{width:44px;height:44px;background:linear-gradient(135deg,var(--purple),var(--purple-light));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;margin-bottom:8px}
+.player-balance{font-size:18px;font-weight:800}
+.player-balance.pos{color:var(--green)}
+.player-balance.neg{color:var(--red)}
+.player-balance.zero{color:var(--text-muted)}
+.player-detail{background:linear-gradient(135deg,#1a0533,#0f1a3a);border:1px solid var(--purple);border-radius:20px;padding:24px}
+.balance-bar{background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.balance-bar .bal-lbl{font-size:13px;color:var(--purple-light);font-weight:600}
+.balance-bar .bal-val{font-size:22px;font-weight:800}
+.io-section{background:rgba(255,255,255,0.03);border-radius:12px;padding:14px}
+.io-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;text-align:center}
+.io-field{margin-bottom:12px}
+.io-field label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px}
+.amount-btn{background:var(--bg3);border:1px solid var(--purple);color:var(--purple-light);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;cursor:pointer;text-align:left;transition:border-color 0.2s;font-weight:500}
+.amount-btn:focus{outline:none;border-color:var(--purple-light);color:var(--text)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--purple);color:var(--text);padding:12px 18px;border-radius:12px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast.show{opacity:1}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.badge-purple{background:var(--purple-dim);color:var(--purple-light)}
+.badge-red{background:var(--red-dim);color:var(--red)}
+.flex-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ml-auto{margin-left:auto}
+.end-game-btn{width:100%;padding:18px;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:14px;font-size:18px;font-weight:800;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:opacity 0.2s;margin-top:8px}
+.end-game-btn:hover{opacity:0.9}
+.txn-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg3);border-radius:8px;margin-bottom:6px;font-size:12px}
+.txn-type{font-weight:800;color:var(--purple-light);font-size:11px;min-width:120px}
+.txn-name{color:var(--text-muted);flex:1;padding:0 8px}
+.txn-amt{font-weight:800;color:var(--text)}
+.buyin-log-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:5px;font-size:12px}
+#build-info{position:fixed;bottom:0;right:0;background:rgba(10,10,14,0.8);padding:2px 8px;pointer-events:none;z-index:9999}
 #build-info span{font-size:9px;color:#444;font-family:monospace}
+@media print{.header,.nav,.btn,.no-print{display:none!important}body{background:#fff;color:#000}}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">🃏 Pocketbooks</div>
-  <div class="hdr-btns">
-    <button class="btn-outline btn-sm" onclick="newGame()">＋ New Game</button>
-    <button class="btn-red btn-sm" onclick="resetLocalData()" title="Clear localStorage">🗑️ Reset</button>
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <span style="font-size:26px">🃏</span>
+    <div>
+      <h1>POCKETBOOKS</h1>
+      <span id="game-label">No active game</span>
+    </div>
   </div>
-</header>
-
-<main>
-
-<!-- SESSION SETTINGS -->
-<div class="card">
-  <div class="section-title">Session Settings</div>
-  <div class="form-row">
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">BANK START ($)</div>
-      <input type="number" id="bankStart" placeholder="0" oninput="G.sessionSettings.bankStart=parseFloat(this.value)||0;render()">
-    </div>
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">CHIP FLOAT ($)</div>
-      <input type="number" id="chipFloat" placeholder="0" oninput="G.sessionSettings.chipFloat=parseFloat(this.value)||0;render()">
-    </div>
+  <div class="flex-row no-print" style="gap:8px">
+    <button class="btn btn-outline btn-sm" onclick="newGame()">＋ New Game</button>
+    <button class="btn btn-purple btn-sm" onclick="saveGame()">💾 Save</button>
+    <button class="btn btn-red-dim btn-sm" onclick="resetLocalData()" title="Clear localStorage and reload">🗑️ Reset</button>
   </div>
 </div>
 
-<!-- DASHBOARD STATS -->
-<div class="stat-grid">
-  <div class="stat-card"><div class="stat-val" id="d-cash">$0</div><div class="stat-lbl">Cash on Hand</div></div>
-  <div class="stat-card"><div class="stat-val" id="d-ecash" style="color:#00c2ff">$0</div><div class="stat-lbl">E-Cash</div></div>
-  <div class="stat-card"><div class="stat-val" id="d-chips" style="color:var(--gold)">$0</div><div class="stat-lbl">Chips on Hand</div></div>
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="showPage('dashboard')">📊 Dashboard</button>
+  <button class="nav-btn" onclick="showPage('players')">👥 Players</button>
+  <button class="nav-btn" onclick="showPage('settlement')">🤝 Settlement</button>
+  <button class="nav-btn" onclick="showPage('history')">📋 History</button>
+</nav>
+
+<div class="main">
+
+<!-- ===== DASHBOARD ===== -->
+<div id="page-dashboard" class="page active">
+  <div class="card">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
+      <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
+      <div class="inp-group"><div class="inp-label">Game Type</div><input class="inp" id="g-type" placeholder="No Limit Hold'em"></div>
+      <div class="inp-group"><div class="inp-label">Stakes</div><input class="inp" id="g-stakes" placeholder="1/2"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <div class="card-title">📝 Transaction Log</div>
+        <div id="txn-log" style="max-height:300px;overflow-y:auto">
+          <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button id="tab-owes-btn" onclick="switchOwesTab('owes')" style="flex:1;padding:14px;background:var(--red-dim);border:none;cursor:pointer;font-size:13px;font-weight:800;color:var(--red);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px">
+          🔴 Owes House <span id="owes-count" class="badge badge-red" style="display:none">0</span>
+        </button>
+        <button id="tab-owed-btn" onclick="switchOwesTab('owed')" style="flex:1;padding:14px;background:transparent;border:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:6px">
+          💸 House Owes <span id="owed-count" class="badge" style="display:none;background:var(--green);color:#000">0</span>
+        </button>
+      </div>
+      <div id="owes-panel" style="padding:12px;max-height:280px;overflow-y:auto">
+        <div id="owes-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div></div>
+      </div>
+      <div id="owed-panel" style="display:none;padding:12px;max-height:280px;overflow-y:auto">
+        <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="breakdown">
+    <div class="breakdown-title">🏦 Breakdown</div>
+    <div class="breakdown-row">
+      <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Tips</div><div class="bc-val" id="b-tips">$0</div></div>
+      <div class="breakdown-cell profit"><div class="bc-lbl">Est. Profit</div><div class="bc-val" id="b-profit">$0</div></div>
+    </div>
+  </div>
+
+  <div class="game-numbers">
+    <div class="card-title">🎰 Game Numbers</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
+      <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
+      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="G.sessionSettings.taxPct=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
+      <div class="inp-group"><div class="inp-label">Starting Bank</div><input class="inp" type="number" id="bank-start" placeholder="0" oninput="G.sessionSettings.bankStart=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
+      <div class="inp-group"><div class="inp-label">Chip Float</div><input class="inp" type="number" id="chip-float" placeholder="0" oninput="G.sessionSettings.chipFloat=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
+    </div>
+  </div>
+
+  <button class="end-game-btn" onclick="endGame()">🏁 END GAME</button>
 </div>
 
-<!-- ADD PLAYER -->
-<div class="section">
-  <div class="row-sb" style="margin-bottom:10px">
-    <div class="section-title" style="margin:0">Players</div>
-    <button class="btn-green btn-sm" onclick="toggleAddPlayer()">＋ Add Player</button>
+<!-- ===== PLAYERS ===== -->
+<div id="page-players" class="page">
+  <div style="display:flex;gap:0;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px">
+    <button id="tab-players-btn" class="btn btn-purple" style="flex:1;border-radius:8px;font-size:13px" onclick="switchPlayerTab('players')">👥 Players <span id="player-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
+    <button id="tab-staff-btn" class="btn btn-outline" style="flex:1;border-radius:8px;font-size:13px;border:none" onclick="switchPlayerTab('staff')">👔 Staff <span id="staff-count-badge" class="badge badge-purple" style="margin-left:4px">0</span></button>
   </div>
-  <div id="add-player-form" class="card" style="display:none">
-    <div class="form-row">
-      <input type="text" id="new-name" placeholder="Player name" style="text-transform:uppercase">
-      <select id="new-role">
-        <option value="player">Player</option>
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button id="add-player-btn" class="btn btn-purple" onclick="openModal('modal-add-player')">＋ Add Player</button>
+    <button id="add-staff-btn" class="btn btn-purple" style="display:none" onclick="openModal('modal-add-staff')">＋ Add Staff</button>
+  </div>
+
+  <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
+  <div id="player-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+  <div id="staff-detail-view" style="display:none;margin-bottom:20px"></div>
+  <div id="staff-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px"></div>
+</div>
+
+<!-- ===== SETTLEMENT ===== -->
+<div id="page-settlement" class="page">
+  <div class="card">
+    <div class="card-title">💰 Wallet Summary</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px" id="settle-wallets"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🔴 Players Owing House</div>
+    <div id="settle-owes"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">💚 House Owes Players</div>
+    <div id="settle-owed"></div>
+  </div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div id="page-history" class="page">
+  <div class="card">
+    <div class="card-title">📋 Saved Games <button class="btn btn-outline btn-xs ml-auto" onclick="clearHistory()">🗑️ Clear All</button></div>
+    <div id="history-list"><div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No saved games yet</div></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MODAL: Add Player -->
+<div class="modal-bg" id="modal-add-player">
+  <div class="modal">
+    <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
+    <div class="inp-group" style="margin-bottom:12px">
+      <div class="inp-label">Name</div>
+      <input class="inp" id="new-player-name" placeholder="Player name" style="text-transform:uppercase">
+    </div>
+    <div class="inp-group" style="margin-bottom:16px">
+      <div class="inp-label">Notes</div>
+      <input class="inp" id="new-player-notes" placeholder="Optional notes">
+    </div>
+    <button class="btn btn-purple" style="width:100%" onclick="addPlayer()">Add Player</button>
+  </div>
+</div>
+
+<!-- MODAL: Add Staff -->
+<div class="modal-bg" id="modal-add-staff">
+  <div class="modal">
+    <div class="modal-title">Add Staff <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button></div>
+    <div class="inp-group" style="margin-bottom:12px">
+      <div class="inp-label">Name</div>
+      <input class="inp" id="new-staff-name" placeholder="Staff name" style="text-transform:uppercase">
+    </div>
+    <div class="inp-group" style="margin-bottom:12px">
+      <div class="inp-label">Role</div>
+      <select class="inp" id="new-staff-role">
         <option value="dealer">Dealer</option>
-        <option value="staff">Staff</option>
+        <option value="hostess">Hostess</option>
+        <option value="floor">Floor</option>
       </select>
     </div>
-    <button class="btn-green" style="width:100%" onclick="addPlayer()">Add Player</button>
-  </div>
-  <div class="player-grid" id="player-grid">
-    <div class="empty">No players yet</div>
+    <button class="btn btn-purple" style="width:100%" onclick="addStaff()">Add Staff</button>
   </div>
 </div>
 
-<!-- PLAYER DETAIL -->
-<div class="detail-panel" id="detail-panel">
-  <div class="row-sb" style="margin-bottom:14px">
-    <div>
-      <div style="font-weight:900;font-size:1rem" id="dp-name">—</div>
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase" id="dp-role">—</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:2px">BALANCE</div>
-      <div style="font-size:1.2rem;font-weight:900" id="dp-balance">$0</div>
-    </div>
-  </div>
-
-  <!-- BUY-IN FORM -->
-  <div style="margin-bottom:14px">
-    <div class="section-title">Buy-In</div>
-    <div class="form-row">
-      <select id="bi-type">
-        <option value="CASH">💵 Cash</option>
-        <option value="ECASH">📱 E-Cash</option>
-        <option value="MARKER">📋 Marker</option>
-        <option value="BONUS">🎁 Bonus</option>
-      </select>
-      <input type="number" id="bi-amount" placeholder="Amount" min="0">
-    </div>
-    <button class="btn-green" style="width:100%" onclick="addBuyIn()">＋ Add Buy-In</button>
-  </div>
-
-  <!-- CASH OUT FORM -->
-  <div style="margin-bottom:14px">
-    <div class="section-title">Cash Out</div>
-    <div class="form-row">
-      <input type="number" id="co-amount" placeholder="Amount" min="0">
-      <select id="co-method">
-        <option value="CASH">💵 Cash</option>
-        <option value="ECASH">📱 E-Cash</option>
-      </select>
-    </div>
-    <button class="btn-outline" style="width:100%;color:var(--green);border-color:var(--green)" onclick="addCashOut()">💸 Cash Out</button>
-  </div>
-
-  <!-- BUY-IN HISTORY -->
-  <div id="dp-buyins" style="font-size:12px;color:var(--muted)"></div>
-</div>
-
-<!-- OWES SECTION -->
-<div class="section">
-  <div class="card">
-    <div class="section-title">Players Owing House</div>
-    <div id="owes-house"><div class="empty">No outstanding balances</div></div>
-  </div>
-  <div class="card">
-    <div class="section-title">House Owes Players</div>
-    <div id="house-owes"><div class="empty">Nothing owed to players</div></div>
-  </div>
-</div>
-
-<!-- TRANSACTION LOG -->
-<div class="section">
-  <div class="card">
-    <div class="section-title">Transaction Log</div>
-    <div id="txn-log"><div class="empty">No transactions yet</div></div>
-  </div>
-</div>
-
-</main>
-
-<div id="build-info"><span>main · 92d7242 · build</span></div>
+<div id="build-info"><span>main · 628eaf5</span></div>
 
 <script>
-// ── STATE ────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE — clean, simple, no separate profile system
+// ══════════════════════════════════════════════════════════════════════════════
 var G = {
   players: [],
   txnLog: [],
   _seq: 0,
-  sessionSettings: { bankStart: 0, chipFloat: 0 }
+  sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
+  location: '', date: '', type: '', stakes: ''
 };
 
-var activePlayerId = null;
-
-// ── PERSISTENCE ──────────────────────────────────────────────────────────────
-function save() { try { localStorage.setItem('pb-current', JSON.stringify(G)); } catch(e){} }
-function load() {
-  try {
-    var s = localStorage.getItem('pb-current');
-    if (s) {
-      var d = JSON.parse(s);
-      G = Object.assign({ players:[], txnLog:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0} }, d);
-    }
-  } catch(e) { console.warn('load error', e); }
-}
-
-// ── ACCOUNTING ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// ACCOUNTING
+// ══════════════════════════════════════════════════════════════════════════════
 function playerBalance(p) {
+  // positive = house owes player   negative = player owes house
   var totalIn  = (p.buyIns||[]).filter(function(b){return b.type!=='BONUS';}).reduce(function(s,b){return s+b.amount;},0);
   var totalOut = (p.cashOuts||[]).reduce(function(s,c){return s+c.amount;},0);
-  return totalOut - totalIn; // positive=house owes player, negative=player owes house
+  return totalOut - totalIn;
 }
 
 function calcDashboard() {
-  var bankStart  = G.sessionSettings.bankStart  || 0;
-  var chipFloat  = G.sessionSettings.chipFloat  || 0;
-  var cashIn   = 0, eCashIn  = 0, cashOut  = 0, eCashOut = 0;
-  var totalChipsDealt = 0, totalChipsReturned = 0;
+  var bankStart = G.sessionSettings.bankStart || 0;
+  var chipFloat = G.sessionSettings.chipFloat || 0;
+  var cashIn=0,eCashIn=0,cashOut=0,eCashOut=0,chipsDealt=0,chipsReturned=0,drop=0,tips=0,expenses=0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
-      if (b.type === 'CASH')  cashIn  += b.amount;
-      if (b.type === 'ECASH') eCashIn += b.amount;
-      totalChipsDealt += b.amount;
+      if (b.type==='CASH')  cashIn   += b.amount;
+      if (b.type==='ECASH') eCashIn  += b.amount;
+      chipsDealt += b.amount;
     });
     (p.cashOuts||[]).forEach(function(c) {
-      if (c.method === 'CASH')  cashOut  += c.amount;
-      if (c.method === 'ECASH') eCashOut += c.amount;
-      totalChipsReturned += c.amount;
+      if (c.method==='CASH')  cashOut  += c.amount;
+      if (c.method==='ECASH') eCashOut += c.amount;
+      chipsReturned += c.amount;
     });
+    (p.drops||[]).forEach(function(d){ drop += d.amount; });
+    (p.tips||[]).forEach(function(t){ tips += t.amount; });
+    (p.expenses||[]).forEach(function(e){ expenses += e.amount; });
   });
   return {
-    cashOnHand:  bankStart + cashIn  - cashOut,
-    eCashOnHand: eCashIn - eCashOut,
-    chipsOnHand: chipFloat - totalChipsDealt + totalChipsReturned
+    cashOnHand:   bankStart + cashIn - cashOut,
+    eCashOnHand:  eCashIn - eCashOut,
+    chipsOnHand:  chipFloat - chipsDealt + chipsReturned,
+    drop, tips, expenses,
+    profit: cashIn + eCashIn + drop - cashOut - eCashOut - expenses
   };
 }
 
-// ── TRANSACTION LOG ──────────────────────────────────────────────────────────
 function appendTxn(entry) {
-  G._seq = (G._seq || 0) + 1;
-  G.txnLog.unshift(Object.assign({
-    id: 'T' + Date.now(),
-    seq: G._seq,
-    timestamp: new Date().toISOString()
-  }, entry));
+  G._seq = (G._seq||0)+1;
+  G.txnLog.unshift(Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry));
 }
 
-function fmt(n) { return (Math.round((n||0)*100)/100).toFixed(2); }
-function setText(id, val) { var el=document.getElementById(id); if(el) el.textContent=val; }
+function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function getVal(id) { var el=document.getElementById(id); return el?el.value:''; }
+function setVal(id,v) { var el=document.getElementById(id); if(el) el.value=v??''; }
+function setText(id,v) { var el=document.getElementById(id); if(el) el.textContent=v; }
+function ls(k)   { try{return localStorage.getItem(k);}catch(e){return null;} }
+function lsSet(k,v) { try{localStorage.setItem(k,v);}catch(e){} }
+
+var _toastTimer;
 function toast(msg) {
-  var t=document.createElement('div');
-  t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid var(--green);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;z-index:99999';
-  t.textContent=msg; document.body.appendChild(t); setTimeout(function(){t.remove();},2500);
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(function(){el.classList.remove('show');},2800);
 }
 
-// ── RENDER ───────────────────────────────────────────────────────────────────
-function render() {
-  var d = calcDashboard();
-  setText('d-cash',  '$' + fmt(d.cashOnHand));
-  setText('d-ecash', '$' + fmt(d.eCashOnHand));
-  setText('d-chips', '$' + fmt(d.chipsOnHand));
-
-  // Player grid
-  var grid = document.getElementById('player-grid');
-  if (!G.players.length) {
-    grid.innerHTML = '<div class="empty">No players yet — click Add Player</div>';
-  } else {
-    grid.innerHTML = G.players.map(function(p) {
-      var bal = playerBalance(p);
-      var balClass = bal > 0 ? 'bal-pos' : bal < 0 ? 'bal-neg' : 'bal-zero';
-      var balStr = (bal >= 0 ? '+' : '') + '$' + fmt(Math.abs(bal));
-      var isActive = p.id === activePlayerId;
-      return '<div class="player-card' + (isActive?' active':'') + '" onclick="openPlayer(' + p.id + ')">' +
-        '<div class="p-avatar">' + p.name.charAt(0) + '</div>' +
-        '<div class="p-name">' + p.name + '</div>' +
-        '<div class="p-role">' + p.role + '</div>' +
-        '<div class="' + balClass + '">' + balStr + '</div>' +
-        '</div>';
-    }).join('');
-  }
-
-  // Active player detail
-  renderDetail();
-
-  // Owes sections
-  var owesHouse = G.players.filter(function(p){ return playerBalance(p) < 0; });
-  var houseOwes = G.players.filter(function(p){ return playerBalance(p) > 0; });
-  var ohEl = document.getElementById('owes-house');
-  var hoEl = document.getElementById('house-owes');
-  ohEl.innerHTML = owesHouse.length
-    ? owesHouse.map(function(p){ return '<div class="owed-row"><span style="font-weight:700">' + p.name + '</span><span style="color:var(--red);font-weight:800">$' + fmt(Math.abs(playerBalance(p))) + '</span></div>'; }).join('')
-    : '<div class="empty">No outstanding balances</div>';
-  hoEl.innerHTML = houseOwes.length
-    ? houseOwes.map(function(p){ return '<div class="owed-row"><span style="font-weight:700">' + p.name + '</span><span style="color:var(--green);font-weight:800">$' + fmt(playerBalance(p)) + '</span></div>'; }).join('')
-    : '<div class="empty">Nothing owed to players</div>';
-
-  // Transaction log
-  var txnEl = document.getElementById('txn-log');
-  txnEl.innerHTML = G.txnLog.length
-    ? G.txnLog.slice(0,50).map(function(t){
-        var ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
-        return '<div class="txn-item">' +
-          '<span class="txn-type">' + t.type + '</span>' +
-          '<span class="txn-name">' + (t.playerName||'') + '</span>' +
-          '<span class="txn-amt">$' + fmt(t.amount) + '</span>' +
-          '<span style="font-size:10px;color:var(--muted)">' + ts + '</span>' +
-          '</div>';
-      }).join('')
-    : '<div class="empty">No transactions yet</div>';
-
-  save();
+// ══════════════════════════════════════════════════════════════════════════════
+// PERSISTENCE
+// ══════════════════════════════════════════════════════════════════════════════
+var _saveTimer;
+function autoSave() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(function(){ lsSet('pb-current', JSON.stringify(G)); }, 500);
 }
-
-function renderDetail() {
-  var panel = document.getElementById('detail-panel');
-  if (!activePlayerId) { panel.classList.remove('open'); return; }
-  var p = G.players.find(function(pl){ return pl.id === activePlayerId; });
-  if (!p) { panel.classList.remove('open'); return; }
-  panel.classList.add('open');
-  setText('dp-name', p.name);
-  setText('dp-role', p.role.toUpperCase());
-  var bal = playerBalance(p);
-  var balEl = document.getElementById('dp-balance');
-  balEl.textContent = (bal >= 0 ? '+' : '') + '$' + fmt(Math.abs(bal));
-  balEl.style.color = bal > 0 ? 'var(--green)' : bal < 0 ? 'var(--red)' : 'var(--muted)';
-
-  // Buy-in history
-  var biEl = document.getElementById('dp-buyins');
-  var biHtml = '';
-  if (p.buyIns && p.buyIns.length) {
-    biHtml += '<div class="section-title" style="margin-top:12px">Buy-In History</div>';
-    biHtml += p.buyIns.map(function(b){
-      return '<div class="txn-item"><span class="txn-type">' + b.type + '</span><span class="txn-amt" style="color:var(--red)">$' + fmt(b.amount) + '</span></div>';
-    }).join('');
-  }
-  if (p.cashOuts && p.cashOuts.length) {
-    biHtml += '<div class="section-title" style="margin-top:12px">Cash Out History</div>';
-    biHtml += p.cashOuts.map(function(c){
-      return '<div class="txn-item"><span class="txn-type">CASH_OUT (' + c.method + ')</span><span class="txn-amt" style="color:var(--green)">$' + fmt(c.amount) + '</span></div>';
-    }).join('');
-  }
-  biEl.innerHTML = biHtml;
-}
-
-// ── ACTIONS ──────────────────────────────────────────────────────────────────
-function toggleAddPlayer() {
-  var f = document.getElementById('add-player-form');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
-function addPlayer() {
-  var name = document.getElementById('new-name').value.trim().toUpperCase();
-  var role = document.getElementById('new-role').value;
-  if (!name) { toast('Enter player name'); return; }
-  var p = {
-    id: Date.now(),
-    name: name,
-    role: role,
-    capabilities: { canBuyIn: true, canCashOut: true, canLogDrop: role!=='player', canLogTips: role!=='player' },
-    buyIns: [],
-    cashOuts: [],
-    drops: [],
-    tips: []
-  };
-  G.players.push(p);
-  document.getElementById('new-name').value = '';
-  document.getElementById('add-player-form').style.display = 'none';
-  activePlayerId = p.id;
-  render();
-  toast(name + ' added ✅');
-}
-
-function openPlayer(id) {
-  activePlayerId = (activePlayerId === id) ? null : id;
-  // Clear input fields when switching player
-  document.getElementById('bi-amount').value = '';
-  document.getElementById('co-amount').value = '';
-  render();
-  if (activePlayerId) document.getElementById('detail-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-
-function addBuyIn() {
-  var p = G.players.find(function(pl){ return pl.id === activePlayerId; });
-  if (!p) { toast('Open a player first'); return; }
-  var type   = document.getElementById('bi-type').value;
-  var amount = parseFloat(document.getElementById('bi-amount').value) || 0;
-  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
-  p.buyIns.push({ type: type, amount: amount, seq: (G._seq||0)+1, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type: type + '_BUYIN', amount: amount, playerId: String(p.id), playerName: p.name, method: type });
-  document.getElementById('bi-amount').value = '';
-  render();
-  toast(type + ' buy-in $' + fmt(amount) + ' added');
-}
-
-function addCashOut() {
-  var p = G.players.find(function(pl){ return pl.id === activePlayerId; });
-  if (!p) { toast('Open a player first'); return; }
-  var amount = parseFloat(document.getElementById('co-amount').value) || 0;
-  var method = document.getElementById('co-method').value;
-  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
-  p.cashOuts.push({ amount: amount, method: method, seq: (G._seq||0)+1, time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type: 'CASH_OUT', amount: amount, playerId: String(p.id), playerName: p.name, method: method });
-  document.getElementById('co-amount').value = '';
-  render();
-  toast('Cash out $' + fmt(amount) + ' (' + method + ') saved');
-}
-
-function newGame() {
-  if (!confirm('Start new game? Current session will be lost.')) return;
-  G = { players:[], txnLog:[], _seq:0, sessionSettings:{ bankStart:0, chipFloat:0 } };
-  activePlayerId = null;
-  localStorage.removeItem('pb-current');
-  document.getElementById('bankStart').value = '';
-  document.getElementById('chipFloat').value = '';
-  render();
-  toast('New game started 🃏');
+function saveGame() {
+  lsSet('pb-current', JSON.stringify(G));
+  toast('Game saved ✅');
 }
 
 function resetLocalData() {
@@ -424,21 +367,535 @@ function resetLocalData() {
               'pb-player','pb-tickets','pb-balance','pb-balance-start','pb-ledger',
               'hostActiveBets','pb-sports-token','pb-club-players'];
   var cleared = [];
-  keys.forEach(function(k){ if(localStorage.getItem(k)!==null){ localStorage.removeItem(k); cleared.push(k); } });
+  keys.forEach(function(k){ if(localStorage.getItem(k)!==null){ localStorage.removeItem(k); cleared.push(k); }});
   console.log('[reset local data] cleared keys:', cleared);
   location.reload();
 }
 
-// ── INIT ─────────────────────────────────────────────────────────────────────
-load();
-// Restore session setting inputs
-document.getElementById('bankStart').value = G.sessionSettings.bankStart || '';
-document.getElementById('chipFloat').value = G.sessionSettings.chipFloat || '';
-// Restore active player if any
-if (G.players.length) activePlayerId = G.players[G.players.length-1].id;
-render();
-</script>
+// ══════════════════════════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════════════════════════
+function calcAll() {
+  // no-op — all values computed fresh in renderAll
+}
 
-<div id="build-info"><span id="build-text">main · 92d7242 · May 10</span></div>
+function renderAll() {
+  var d = calcDashboard();
+
+  // Game numbers
+  setText('gn-cash',    '$' + fmt(d.cashOnHand));
+  setText('gn-chips',   '$' + fmt(d.chipsOnHand));
+  setText('gn-ecash',   '$' + fmt(d.eCashOnHand));
+  setText('b-drop',     '$' + fmt(d.drop));
+  setText('b-expenses', '$' + fmt(d.expenses));
+  setText('b-tips',     '$' + fmt(d.tips));
+  var profitEl = document.getElementById('b-profit');
+  if (profitEl) { profitEl.textContent = '$' + fmt(d.profit); profitEl.style.color = d.profit>=0?'var(--green)':'var(--red)'; }
+
+  // Owes/owed
+  var owingPlayers = G.players.filter(function(p){ return !p.staffRole && playerBalance(p) < 0; });
+  var owedPlayers  = G.players.filter(function(p){ return !p.staffRole && playerBalance(p) > 0; });
+  var ocEl = document.getElementById('owes-count');
+  var odEl = document.getElementById('owed-count');
+  if (ocEl) { ocEl.textContent=owingPlayers.length; ocEl.style.display=owingPlayers.length?'inline':'none'; }
+  if (odEl) { odEl.textContent=owedPlayers.length;  odEl.style.display=owedPlayers.length?'inline':'none'; }
+
+  var owesListEl = document.getElementById('owes-list');
+  var owedListEl = document.getElementById('owed-list');
+  owesListEl.innerHTML = owingPlayers.length
+    ? owingPlayers.map(function(p){ return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
+        +'<span class="owed-name">'+p.name+'</span>'
+        +'<span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span>'
+        +'</div>'; }).join('')
+    : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div>';
+
+  owedListEl.innerHTML = owedPlayers.length
+    ? owedPlayers.map(function(p){ return '<div class="green-row">'
+        +'<span style="font-weight:700;font-size:13px">'+p.name+'</span>'
+        +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(playerBalance(p))+'</span>'
+        +'</div>'; }).join('')
+    : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div>';
+
+  // Transaction log
+  var txnEl = document.getElementById('txn-log');
+  txnEl.innerHTML = G.txnLog.length
+    ? G.txnLog.slice(0,60).map(function(t){
+        var ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
+        return '<div class="txn-row"><span class="txn-type">'+t.type+'</span>'
+          +'<span class="txn-name">'+(t.playerName||'')+'</span>'
+          +'<span class="txn-amt">$'+fmt(t.amount)+'</span>'
+          +'<span style="font-size:10px;color:var(--text-muted);min-width:40px;text-align:right">'+ts+'</span>'
+          +'</div>';
+      }).join('')
+    : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div>';
+
+  // Player grid
+  renderPlayerGrid();
+  renderSettlement();
+}
+
+function renderPlayerGrid() {
+  var players = G.players.filter(function(p){ return !p.staffRole; });
+  var staff   = G.players.filter(function(p){ return !!p.staffRole; });
+  setText('player-count-badge', players.length);
+  setText('staff-count-badge', staff.length);
+
+  var pgEl = document.getElementById('player-grid');
+  pgEl.innerHTML = players.length
+    ? players.map(function(p){
+        var bal = playerBalance(p);
+        var bc = bal>0?'pos':bal<0?'neg':'zero';
+        return '<div class="player-card'+(p.id===_activePlayerId?' active-card':'')+'" onclick="renderPlayerDetail('+p.id+')">'
+          +'<div class="player-avatar">'+p.name.charAt(0)+'</div>'
+          +'<div style="font-weight:700;font-size:14px;margin-bottom:2px">'+p.name+'</div>'
+          +'<div class="player-balance '+bc+'">'+(bal>=0?'+':'')+'$'+fmt(Math.abs(bal))+'</div>'
+          +'</div>';
+      }).join('')
+    : '<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">👥</div>No players yet — click Add Player</div>';
+
+  var sgEl = document.getElementById('staff-grid');
+  sgEl.innerHTML = staff.length
+    ? staff.map(function(p){
+        var tipsTotal = (p.tips||[]).reduce(function(s,t){return s+t.amount;},0);
+        var dropTotal = (p.drops||[]).reduce(function(s,d){return s+d.amount;},0);
+        return '<div class="player-card'+(p.id===_activeStaffId?' active-card':'')+'" onclick="renderStaffDetail('+p.id+')">'
+          +'<div class="player-avatar" style="background:linear-gradient(135deg,#f59e0b,#f97316)">'+p.name.charAt(0)+'</div>'
+          +'<div style="font-weight:700;font-size:14px;margin-bottom:2px">'+p.name+'</div>'
+          +'<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">'+p.staffRole+'</div>'
+          +'<div style="font-size:12px;color:var(--gold)">Tips: $'+fmt(tipsTotal)+'</div>'
+          +'<div style="font-size:12px;color:var(--orange)">Drop: $'+fmt(dropTotal)+'</div>'
+          +'</div>';
+      }).join('')
+    : '<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--text-muted)"><div style="font-size:40px;margin-bottom:12px">👔</div>No staff yet — click Add Staff</div>';
+}
+
+function renderSettlement() {
+  var d = calcDashboard();
+  var wEl = document.getElementById('settle-wallets');
+  if (wEl) {
+    wEl.innerHTML = [
+      {label:'Cash on Hand', val:'$'+fmt(d.cashOnHand), color:'var(--green)'},
+      {label:'E-Cash on Hand', val:'$'+fmt(d.eCashOnHand), color:'var(--purple-light)'},
+      {label:'Chips on Hand', val:'$'+fmt(d.chipsOnHand), color:'var(--gold)'}
+    ].map(function(s){
+      return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">'
+        +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">'+s.label+'</div>'
+        +'<div style="font-size:1.2rem;font-weight:900;color:'+s.color+'">'+s.val+'</div>'
+        +'</div>';
+    }).join('');
+  }
+  var owes = G.players.filter(function(p){ return !p.staffRole && playerBalance(p)<0; });
+  var owed = G.players.filter(function(p){ return !p.staffRole && playerBalance(p)>0; });
+  var soEl = document.getElementById('settle-owes');
+  var sdEl = document.getElementById('settle-owed');
+  if (soEl) soEl.innerHTML = owes.length
+    ? owes.map(function(p){ return '<div class="owed-row"><span class="owed-name">'+p.name+'</span><span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span></div>'; }).join('')
+    : '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">No players owe the house</div>';
+  if (sdEl) sdEl.innerHTML = owed.length
+    ? owed.map(function(p){ return '<div class="green-row"><span style="font-weight:700">'+p.name+'</span><span style="color:var(--green);font-weight:800">$'+fmt(playerBalance(p))+'</span></div>'; }).join('')
+    : '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">Nothing owed to players</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PLAYER DETAIL
+// ══════════════════════════════════════════════════════════════════════════════
+var _activePlayerId = null;
+var _activeStaffId  = null;
+
+function renderPlayerDetail(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  _activePlayerId = id;
+  var detail = document.getElementById('player-detail-view');
+  detail.style.display = 'block';
+  var bal = playerBalance(p);
+  var balColor = bal>0?'var(--green)':bal<0?'var(--red)':'var(--text-muted)';
+
+  var buyInHistory = (p.buyIns||[]).map(function(b){
+    return '<div class="buyin-log-item"><span style="font-weight:700;font-size:11px;color:var(--purple-light)">'+b.type+'</span>'
+      +'<span style="font-size:12px;color:var(--text-muted)">'+( b.time||'')+'</span>'
+      +'<span style="font-weight:800;color:var(--red)">$'+fmt(b.amount)+'</span>'
+      +'</div>';
+  }).join('');
+  var cashOutHistory = (p.cashOuts||[]).map(function(c){
+    return '<div class="buyin-log-item" style="background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2)">'
+      +'<span style="font-weight:700;font-size:11px;color:var(--green)">CASH OUT ('+c.method+')</span>'
+      +'<span style="font-size:12px;color:var(--text-muted)">'+( c.time||'')+'</span>'
+      +'<span style="font-weight:800;color:var(--green)">$'+fmt(c.amount)+'</span>'
+      +'</div>';
+  }).join('');
+
+  detail.innerHTML =
+    '<div class="player-detail">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+        +'<div class="player-avatar" style="margin:0">'+p.name.charAt(0)+'</div>'
+        +'<div><div style="font-size:20px;font-weight:800">'+p.name+'</div>'
+        +'<div style="font-size:12px;color:var(--text-muted)">Player</div></div>'
+      +'</div>'
+      +'<button class="btn btn-outline btn-sm" onclick="_activePlayerId=null;document.getElementById(\'player-detail-view\').style.display=\'none\';renderPlayerGrid()">✕ Close</button>'
+    +'</div>'
+    +'<div class="balance-bar"><span class="bal-lbl">Balance</span>'
+      +'<span class="bal-val" style="color:'+balColor+'">'+(bal>=0?'+':'')+'$'+fmt(Math.abs(bal))+'</span></div>'
+
+    // Buy-in section
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'
+    +'<div class="io-section">'
+      +'<div class="io-title">🎰 Buy-In</div>'
+      +'<div class="io-field"><label>TYPE</label>'
+        +'<select class="inp" id="buyin-type-'+p.id+'">'
+          +'<option value="CASH">💵 Cash</option>'
+          +'<option value="ECASH">📱 E-Cash</option>'
+          +'<option value="MARKER">📋 Marker</option>'
+          +'<option value="BONUS">🎁 Bonus</option>'
+        +'</select>'
+      +'</div>'
+      +'<div class="io-field"><label>AMOUNT</label>'
+        +'<input type="number" class="amount-btn" id="buyin-amount-'+p.id+'" placeholder="0" min="0">'
+      +'</div>'
+      +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="addBuyIn('+p.id+')">＋ Add</button>'
+    +'</div>'
+    +'<div class="io-section">'
+      +'<div class="io-title">💸 Cash Out</div>'
+      +'<div class="io-field"><label>AMOUNT</label>'
+        +'<input type="number" class="amount-btn" id="cashout-amount-'+p.id+'" placeholder="0" min="0">'
+      +'</div>'
+      +'<div class="io-field"><label>METHOD</label>'
+        +'<select class="inp" id="cashout-method-'+p.id+'">'
+          +'<option value="CASH">💵 Cash</option>'
+          +'<option value="ECASH">📱 E-Cash</option>'
+        +'</select>'
+      +'</div>'
+      +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--green);border-color:var(--green)" onclick="addCashOut('+p.id+')">💸 Cash Out</button>'
+    +'</div>'
+    +'</div>'
+
+    // History
+    +(buyInHistory||cashOutHistory
+      ? '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">History</div>'
+        + buyInHistory + cashOutHistory
+      : '')
+
+    +'<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">'
+      +'<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red)" onclick="removePlayer('+p.id+')">Remove Player</button>'
+    +'</div>'
+    +'</div>';
+
+  renderPlayerGrid();
+}
+
+function renderStaffDetail(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  _activeStaffId = id;
+  var detail = document.getElementById('staff-detail-view');
+  detail.style.display = 'block';
+  var tipsTotal = (p.tips||[]).reduce(function(s,t){return s+t.amount;},0);
+  var dropTotal = (p.drops||[]).reduce(function(s,d){return s+d.amount;},0);
+
+  detail.innerHTML =
+    '<div class="player-detail" style="border-color:var(--gold)">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+        +'<div class="player-avatar" style="margin:0;background:linear-gradient(135deg,#f59e0b,#f97316)">'+p.name.charAt(0)+'</div>'
+        +'<div><div style="font-size:20px;font-weight:800">'+p.name+'</div>'
+        +'<div style="font-size:12px;color:var(--text-muted);text-transform:uppercase">'+p.staffRole+'</div></div>'
+      +'</div>'
+      +'<button class="btn btn-outline btn-sm" onclick="_activeStaffId=null;document.getElementById(\'staff-detail-view\').style.display=\'none\';renderPlayerGrid()">✕ Close</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+      +'<div class="stat-box"><div class="lbl">Tips Earned</div><div class="val" style="color:var(--gold)">$'+fmt(tipsTotal)+'</div></div>'
+      +'<div class="stat-box"><div class="lbl">Drop Collected</div><div class="val" style="color:var(--orange)">$'+fmt(dropTotal)+'</div></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+    +'<div class="io-section"><div class="io-title">💰 Log Tips</div>'
+      +'<div class="io-field"><label>AMOUNT</label><input type="number" class="amount-btn" id="tips-amount-'+p.id+'" placeholder="0" min="0"></div>'
+      +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="addTips('+p.id+')">Add Tips</button>'
+    +'</div>'
+    +'<div class="io-section"><div class="io-title">🎰 Log Drop</div>'
+      +'<div class="io-field"><label>AMOUNT</label><input type="number" class="amount-btn" id="drop-amount-'+p.id+'" placeholder="0" min="0"></div>'
+      +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--orange);border-color:var(--orange)" onclick="addDrop('+p.id+')">Add Drop</button>'
+    +'</div>'
+    +'</div>'
+    +'<div style="border-top:1px solid var(--border);padding-top:14px">'
+      +'<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red)" onclick="removePlayer('+p.id+')">Remove Staff</button>'
+    +'</div>'
+    +'</div>';
+
+  renderPlayerGrid();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+function addPlayer() {
+  var name = getVal('new-player-name').trim().toUpperCase();
+  var notes = getVal('new-player-notes').trim();
+  if (!name) { toast('Enter player name'); return; }
+  var p = { id:Date.now(), name:name, notes:notes, staffRole:'', buyIns:[], cashOuts:[], drops:[], tips:[], expenses:[] };
+  G.players.push(p);
+  setVal('new-player-name',''); setVal('new-player-notes','');
+  closeModal('modal-add-player');
+  _activePlayerId = p.id;
+  calcAll(); renderAll(); autoSave();
+  renderPlayerDetail(p.id);
+  toast(name + ' added ✅');
+}
+
+function addStaff() {
+  var name = getVal('new-staff-name').trim().toUpperCase();
+  var role = getVal('new-staff-role');
+  if (!name) { toast('Enter staff name'); return; }
+  var p = { id:Date.now(), name:name, staffRole:role, buyIns:[], cashOuts:[], drops:[], tips:[], expenses:[] };
+  G.players.push(p);
+  setVal('new-staff-name','');
+  closeModal('modal-add-staff');
+  _activeStaffId = p.id;
+  calcAll(); renderAll(); autoSave();
+  renderStaffDetail(p.id);
+  toast(name + ' added ✅');
+}
+
+function addBuyIn(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) { toast('Player not found'); return; }
+  var inputId = 'buyin-amount-' + id;
+  var el = document.getElementById(inputId);
+  var raw = el ? el.value : '';
+  var amount = Number(String(raw).replace(/,/g,'')) || 0;
+  var buyTypeEl = document.getElementById('buyin-type-' + id);
+  var buyType = buyTypeEl ? buyTypeEl.value : 'CASH';
+
+  console.table({ '[addBuyIn]':'', id:id, inputId:inputId, inputFound:!!el, raw:raw, amount:amount, buyType:buyType, playerFound:!!p });
+
+  if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
+
+  if (!p.buyIns) p.buyIns = [];
+  p.buyIns.push({ type:buyType, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:p.name, method:buyType });
+
+  if (el) el.value = '';
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast(buyType + ' buy-in $' + fmt(amount) + ' added ✅');
+}
+
+function addCashOut(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var el = document.getElementById('cashout-amount-' + id);
+  var mEl = document.getElementById('cashout-method-' + id);
+  var amount = el ? (Number(el.value)||0) : 0;
+  var method = mEl ? mEl.value : 'CASH';
+  if (!amount || amount <= 0) { toast('Enter cash out amount'); return; }
+  if (!p.cashOuts) p.cashOuts = [];
+  p.cashOuts.push({ method:method, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  appendTxn({ type:'CASH_OUT', amount:amount, playerId:String(p.id), playerName:p.name, method:method });
+  if (el) el.value = '';
+  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  toast('Cash out $' + fmt(amount) + ' (' + method + ') saved ✅');
+}
+
+function addTips(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var el = document.getElementById('tips-amount-' + id);
+  var amount = el ? (Number(el.value)||0) : 0;
+  if (!amount || amount <= 0) { toast('Enter tips amount'); return; }
+  if (!p.tips) p.tips = [];
+  p.tips.push({ amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  appendTxn({ type:'TIPS', amount:amount, playerId:String(p.id), playerName:p.name });
+  if (el) el.value = '';
+  calcAll(); renderAll(); renderStaffDetail(id); autoSave();
+  toast('Tips $' + fmt(amount) + ' logged ✅');
+}
+
+function addDrop(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var el = document.getElementById('drop-amount-' + id);
+  var amount = el ? (Number(el.value)||0) : 0;
+  if (!amount || amount <= 0) { toast('Enter drop amount'); return; }
+  if (!p.drops) p.drops = [];
+  p.drops.push({ amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  appendTxn({ type:'DROP', amount:amount, playerId:String(p.id), playerName:p.name });
+  if (el) el.value = '';
+  calcAll(); renderAll(); renderStaffDetail(id); autoSave();
+  toast('Drop $' + fmt(amount) + ' logged ✅');
+}
+
+function removePlayer(id) {
+  if (!confirm('Remove this player from the session?')) return;
+  G.players = G.players.filter(function(p){ return p.id !== id; });
+  if (_activePlayerId === id) { _activePlayerId=null; document.getElementById('player-detail-view').style.display='none'; }
+  if (_activeStaffId  === id) { _activeStaffId=null;  document.getElementById('staff-detail-view').style.display='none'; }
+  calcAll(); renderAll(); autoSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  var pg = document.getElementById('page-'+name);
+  if (pg) pg.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(function(b){
+    if (b.textContent.toLowerCase().indexOf(name.substring(0,4)) !== -1) b.classList.add('active');
+  });
+  if (name === 'settlement') renderSettlement();
+  if (name === 'history')    renderHistory();
+}
+
+var _currentPlayerTab = 'players';
+function switchPlayerTab(tab) {
+  _currentPlayerTab = tab;
+  var isP = tab === 'players';
+  document.getElementById('player-grid').style.display = isP ? 'grid' : 'none';
+  document.getElementById('staff-grid').style.display  = isP ? 'none' : 'grid';
+  document.getElementById('player-detail-view').style.display = 'none';
+  document.getElementById('staff-detail-view').style.display  = 'none';
+  document.getElementById('add-player-btn').style.display = isP ? '' : 'none';
+  document.getElementById('add-staff-btn').style.display  = isP ? 'none' : '';
+  document.getElementById('tab-players-btn').className = isP ? 'btn btn-purple' : 'btn btn-outline';
+  document.getElementById('tab-players-btn').style.borderRadius = '8px';
+  document.getElementById('tab-players-btn').style.fontSize = '13px';
+  document.getElementById('tab-staff-btn').className  = isP ? 'btn btn-outline' : 'btn btn-purple';
+  document.getElementById('tab-staff-btn').style.borderRadius = '8px';
+  document.getElementById('tab-staff-btn').style.fontSize = '13px';
+}
+
+var _owesTab = 'owes';
+function switchOwesTab(tab) {
+  _owesTab = tab;
+  document.getElementById('owes-panel').style.display = tab==='owes' ? 'block' : 'none';
+  document.getElementById('owed-panel').style.display = tab==='owed' ? 'block' : 'none';
+  document.getElementById('tab-owes-btn').style.background = tab==='owes'?'var(--red-dim)':'transparent';
+  document.getElementById('tab-owed-btn').style.background = tab==='owed'?'var(--green-dim)':'transparent';
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(function(m){
+  m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GAME MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+function updateGameLabel() {
+  G.location = getVal('g-location');
+  G.date     = getVal('g-date');
+  G.type     = getVal('g-type');
+  G.stakes   = getVal('g-stakes');
+  var parts = [];
+  if (G.location) parts.push(G.location);
+  if (G.stakes)   parts.push(G.stakes);
+  if (G.date)     parts.push(G.date);
+  setText('game-label', parts.join(' · ') || 'No active game');
+  autoSave();
+}
+
+function newGame() {
+  if (!confirm('Start new game? Current session will be lost unless you save first.')) return;
+  localStorage.removeItem('pb-current');
+  G = { players:[], txnLog:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', type:'', stakes:'' };
+  _activePlayerId = null; _activeStaffId = null;
+  setVal('g-location',''); setVal('g-date',new Date().toISOString().split('T')[0]);
+  setVal('g-type',''); setVal('g-stakes','');
+  setVal('bank-start',''); setVal('chip-float',''); setVal('tax-pct','0');
+  document.getElementById('player-detail-view').style.display='none';
+  document.getElementById('staff-detail-view').style.display='none';
+  calcAll(); renderAll();
+  toast('New game started! 🃏');
+}
+
+function endGame() {
+  if (!confirm('End game and save to history?')) return;
+  var history = JSON.parse(ls('pb-history')||'[]');
+  history.unshift({ id:Date.now(), date:new Date().toISOString(), G:JSON.parse(JSON.stringify(G)) });
+  if (history.length > 50) history = history.slice(0,50);
+  lsSet('pb-history', JSON.stringify(history));
+  toast('Game saved to history ✅');
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Clear all saved games?')) return;
+  localStorage.removeItem('pb-history');
+  renderHistory();
+  toast('History cleared');
+}
+
+function renderHistory() {
+  var history = JSON.parse(ls('pb-history')||'[]');
+  var el = document.getElementById('history-list');
+  el.innerHTML = history.length
+    ? history.map(function(h){
+        var d = new Date(h.date);
+        var label = [h.G.location,h.G.stakes,h.G.date].filter(Boolean).join(' · ') || d.toLocaleDateString();
+        var playerCount = (h.G.players||[]).length;
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer" onclick="loadGame('+h.id+')">'
+          +'<div><div style="font-weight:700;font-size:14px">'+label+'</div>'
+          +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+playerCount+' players · '+d.toLocaleString()+'</div></div>'
+          +'<div style="display:flex;gap:8px">'
+          +'<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();loadGame('+h.id+')">Load</button>'
+          +'<button class="btn btn-xs" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="event.stopPropagation();deleteGame('+h.id+')">🗑️</button>'
+          +'</div></div>';
+      }).join('')
+    : '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No saved games yet</div>';
+}
+
+function loadGame(id) {
+  var history = JSON.parse(ls('pb-history')||'[]');
+  var h = history.find(function(x){ return x.id===id; });
+  if (!h) return;
+  if (!confirm('Load this game? Current session will be replaced.')) return;
+  G = h.G;
+  restoreInputs();
+  _activePlayerId = null; _activeStaffId = null;
+  calcAll(); renderAll();
+  showPage('dashboard');
+  toast('Game loaded ✅');
+}
+
+function deleteGame(id) {
+  var history = JSON.parse(ls('pb-history')||'[]');
+  history = history.filter(function(h){ return h.id!==id; });
+  lsSet('pb-history', JSON.stringify(history));
+  renderHistory();
+}
+
+function restoreInputs() {
+  setVal('g-location', G.location||'');
+  setVal('g-date', G.date||new Date().toISOString().split('T')[0]);
+  setVal('g-type', G.type||'');
+  setVal('g-stakes', G.stakes||'');
+  setVal('bank-start', G.sessionSettings.bankStart||'');
+  setVal('chip-float', G.sessionSettings.chipFloat||'');
+  setVal('tax-pct', G.sessionSettings.taxPct||0);
+  updateGameLabel();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════════════
+function init() {
+  setVal('g-date', new Date().toISOString().split('T')[0]);
+  var saved = ls('pb-current');
+  if (saved) {
+    try {
+      var d = JSON.parse(saved);
+      G = Object.assign({ players:[], txnLog:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', type:'', stakes:'' }, d);
+      restoreInputs();
+    } catch(e) { console.warn('init restore error:', e); }
+  }
+  calcAll();
+  renderAll();
+  renderHistory();
+}
+
+console.log('[app] localStorage key: pb-current | resetLocalData() to clear | G to inspect state');
+init();
+</script>
 </body>
 </html>
