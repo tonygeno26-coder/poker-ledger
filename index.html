@@ -317,8 +317,25 @@ input,select,button,textarea{font-family:inherit}
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count chips currently on the table:</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="rc-d5" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d5-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="rc-d25" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d25-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="rc-d100" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d100-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="rc-d500" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d500-rv">$0</div></div><div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="rc-d1000" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d1000-rv">$0</div></div></div>
+      <!-- Dealer / Table Banks -->
+      <div style="background:var(--bg3);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin:12px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px">🏦 Dealer / Table Banks</span>
+          <button onclick="addDealerBank()" style="padding:4px 10px;background:var(--gold-dim);border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:var(--gold);font-size:11px;font-weight:700;cursor:pointer">＋ Add Bank</button>
+        </div>
+        <div id="dealer-banks-list">
+          <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:6px">No banks added</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text-muted)">Total Banks</span>
+          <span style="font-weight:800;color:var(--gold)" id="rc-banks-total">$0</span>
+        </div>
+      </div>
+
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Actual Count</span><span style="font-weight:900;font-size:1.1rem" id="rc-actual-total">$0</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Chip Count (denoms)</span><span style="font-weight:700" id="rc-denom-subtotal">$0</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Dealer / Table Banks</span><span style="font-weight:700;color:var(--gold)" id="rc-banks-subtotal">$0</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)"><span style="font-weight:800">Actual Running Count</span><span style="font-weight:900;font-size:1.1rem" id="rc-actual-total">$0</span></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--text-muted)">Expected on Hand</span><span style="font-weight:700" id="rc-expected-total">$0</span></div>
         <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="font-weight:700">Variance</span><span style="font-weight:900;font-size:1.1rem" id="rc-variance-total">—</span></div>
       </div>
@@ -1006,6 +1023,7 @@ function init() {
   renderAll();
   renderHistory();
   renderChipCountLog();
+  renderDealerBanks();
 }
 
 
@@ -1062,7 +1080,7 @@ function switchCCTab(tab) {
   document.getElementById('cctab-starting').style.color      = tab==='starting' ? '#fff'           : 'var(--text-muted)';
   document.getElementById('cctab-running').style.background  = tab==='running'  ? 'var(--purple)'  : 'transparent';
   document.getElementById('cctab-running').style.color       = tab==='running'  ? '#fff'           : 'var(--text-muted)';
-  if (tab === 'running') updateRunningExpected();
+  if (tab === 'running') { updateRunningExpected(); renderDealerBanks(); }
 }
 
 function openChipCountModal() {
@@ -1187,9 +1205,11 @@ function updateRunningTotal() {
 }
 
 function saveRunningCount() {
-  var total = calcChipsFromInputs('rc-d', '-rv');
-  var exp   = getExpectedChips();
-  var variance = total - exp;
+  var denomTotal = calcChipsFromInputs('rc-d', '-rv');
+  var bankTotal  = getBankTotal();
+  var total      = denomTotal + bankTotal;
+  var exp        = getExpectedChips();
+  var variance   = total - exp;
   var chips = {};
   CC_DENOMS.forEach(function(d){ chips[d] = parseFloat((document.getElementById('rc-d'+d)||{value:0}).value)||0; });
   var note = getVal('rc-note');
@@ -1199,6 +1219,9 @@ function saveRunningCount() {
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     denominations: { five:chips[5], twentyFive:chips[25], hundred:chips[100], fiveHundred:chips[500], thousand:chips[1000] },
     chips: chips,
+    banks: JSON.parse(JSON.stringify(G.dealerBanks || [])),
+    denominationTotal: denomTotal,
+    bankTotal: bankTotal,
     actualTotal: total,
     expectedTotal: exp,
     variance: variance,
