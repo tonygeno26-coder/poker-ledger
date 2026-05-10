@@ -181,7 +181,9 @@ input,select,button,textarea{font-family:inherit}
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
       <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
       <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
-      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div></div>
+      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div>
+        <div id="ecash-receivers-detail" style="margin-top:8px;font-size:11px;text-align:left"></div>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="G.sessionSettings.taxPct=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
@@ -386,6 +388,15 @@ function renderAll() {
   setText('gn-cash',    '$' + fmt(d.cashOnHand));
   setText('gn-chips',   '$' + fmt(d.chipsOnHand));
   setText('gn-ecash',   '$' + fmt(d.eCashOnHand));
+  // E-Cash breakdown by receiver
+  var ecashMap = calcEcashByReceiver();
+  var ecashDetail = document.getElementById('ecash-receivers-detail');
+  if (ecashDetail) {
+    var keys = Object.keys(ecashMap);
+    ecashDetail.innerHTML = keys.length
+      ? keys.map(function(k){ return '<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-muted)"><span>'+ecashMap[k].name+'</span><span style="color:var(--purple-light);font-weight:700">$'+fmt(ecashMap[k].balance)+'</span></div>'; }).join('')
+      : '';
+  }
   setText('b-drop',     '$' + fmt(d.drop));
   setText('b-expenses', '$' + fmt(d.expenses));
   setText('b-tips',     '$' + fmt(d.tips));
@@ -543,11 +554,17 @@ function renderPlayerDetail(id) {
     +'<div class="io-section">'
       +'<div class="io-title">🎰 Buy-In</div>'
       +'<div class="io-field"><label>TYPE</label>'
-        +'<select class="inp" id="buyin-type-'+p.id+'">'
+        +'<select class="inp" id="buyin-type-'+p.id+'" onchange="toggleEcashReceiver('+p.id+',this.value)">'
           +'<option value="CASH">💵 Cash</option>'
           +'<option value="ECASH">📱 E-Cash</option>'
           +'<option value="MARKER">📋 Marker</option>'
           +'<option value="BONUS">🎁 Bonus</option>'
+        +'</select>'
+      +'</div>'
+      +'<div class="io-field" id="ecash-receiver-row-'+p.id+'" style="display:none"><label>📱 E-Cash Received By</label>'
+        +'<select class="inp" id="ecash-receiver-'+p.id+'">'
+          +'<option value="">— Select receiver —</option>'
+          + getEcashReceiverOptions()
         +'</select>'
       +'</div>'
       +'<div class="io-field"><label>AMOUNT</label>'
@@ -670,13 +687,24 @@ function addBuyIn(id) {
 
   if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
 
+  // E-Cash requires a receiver
+  var receivedById = '', receivedByName = '';
+  if (buyType === 'ECASH') {
+    var recEl = document.getElementById('ecash-receiver-' + id);
+    receivedById = recEl ? recEl.value : '';
+    if (!receivedById) { toast('Select who received the E-Cash'); return; }
+    var recOpt = recEl && recEl.options[recEl.selectedIndex];
+    receivedByName = recOpt ? recOpt.text : receivedById;
+  }
+
   if (!p.buyIns) p.buyIns = [];
-  p.buyIns.push({ type:buyType, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:p.name, method:buyType });
+  p.buyIns.push({ type:buyType, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), receivedById:receivedById, receivedByName:receivedByName });
+  appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:p.name, method:buyType, receivedById:receivedById, receivedByName:receivedByName });
 
   if (el) el.value = '';
   calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
-  toast(buyType + ' buy-in $' + fmt(amount) + ' added ✅');
+  var recLabel = receivedByName ? ' → ' + receivedByName : '';
+  toast(buyType + ' buy-in $' + fmt(amount) + recLabel + ' added ✅');
 }
 
 function addCashOut(id) {
@@ -893,6 +921,47 @@ function init() {
   renderAll();
   renderHistory();
 }
+
+
+// ── E-CASH HELPERS ────────────────────────────────────────────────────────────
+function getEcashReceiverOptions() {
+  var receivers = [{ id:'house', name:'House / Bookkeeper' }];
+  // Add staff/dealers as receivers
+  G.players.filter(function(p){ return !!p.staffRole; }).forEach(function(p){
+    receivers.push({ id:String(p.id), name:p.name + ' (' + p.staffRole + ')' });
+  });
+  return receivers.map(function(r){
+    return '<option value="'+r.id+'">'+r.name+'</option>';
+  }).join('');
+}
+
+function toggleEcashReceiver(playerId, buyType) {
+  var row = document.getElementById('ecash-receiver-row-' + playerId);
+  if (!row) return;
+  row.style.display = buyType === 'ECASH' ? 'block' : 'none';
+  // Refresh receiver options (staff may have been added after form rendered)
+  var sel = document.getElementById('ecash-receiver-' + playerId);
+  if (sel && buyType === 'ECASH') {
+    sel.innerHTML = '<option value="">— Select receiver —</option>' + getEcashReceiverOptions();
+  }
+}
+
+// E-Cash on Hand per receiver: sum all ECASH buy-ins by receivedById, minus ECASH cash-outs
+function calcEcashByReceiver() {
+  var map = {}; // receiverId → { name, balance }
+  G.txnLog.forEach(function(t) {
+    if (t.type === 'BUY_IN_ECASH' && t.receivedById) {
+      if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0 };
+      map[t.receivedById].balance += (t.amount || 0);
+    }
+    if (t.type === 'CASH_OUT' && t.method === 'ECASH' && t.receivedById) {
+      if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0 };
+      map[t.receivedById].balance -= (t.amount || 0);
+    }
+  });
+  return map;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 console.log('[app] localStorage key: pb-current | resetLocalData() to clear | G to inspect state');
 init();
