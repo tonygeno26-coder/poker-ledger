@@ -378,6 +378,62 @@ function playerBalance(p) {
   // Negative means player has outstanding markers
   // Positive means house owes player chips
   return totalOut - totalIn;
+
+function staffTipBalance(p) {
+  // Gross tips turned in minus tax already paid
+  var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
+  var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
+  return grossTips - taxPaid;
+}
+
+function calcStaffTaxPreview(p, pct) {
+  var grossTips = staffTipBalance(p); // untaxed portion remaining
+  var taxAmount = Math.round(grossTips * pct / 100 * 100) / 100;
+  var netAmount = Math.round((grossTips - taxAmount) * 100) / 100;
+  return { grossTips: grossTips, taxAmount: taxAmount, netAmount: netAmount };
+}
+
+function applyStaffTax(staffId) {
+  var p = G.players.find(function(pl){ return pl.id === staffId; });
+  if (!p) return;
+  var pctEl = document.getElementById('staff-tax-pct-' + staffId);
+  var pct = parseFloat(pctEl ? pctEl.value : 0) || 0;
+  if (!pct || pct < 0 || pct > 100) { toast('Set a valid tax % (1-100)'); return; }
+  var preview = calcStaffTaxPreview(p, pct);
+  if (preview.grossTips <= 0) { toast('No tip balance to tax'); return; }
+  if (!confirm('Apply ' + pct + '% tax on $' + fmt(preview.grossTips) + ' tips?\nTax: $' + fmt(preview.taxAmount) + '  Staff net: $' + fmt(preview.netAmount))) return;
+  var entry = {
+    id: Date.now(),
+    staffId: String(p.id),
+    staffName: p.name,
+    grossTips: preview.grossTips,
+    taxPercent: pct,
+    taxAmount: preview.taxAmount,
+    netAmount: preview.netAmount,
+    timestamp: new Date().toISOString()
+  };
+  if (!p.staffTaxLog) p.staffTaxLog = [];
+  p.staffTaxLog.push(entry);
+  appendTxn({ type: 'STAFF_TAX', amount: preview.taxAmount,
+    staffId: String(p.id), staffName: p.name,
+    grossTips: preview.grossTips, taxPercent: pct,
+    taxAmount: preview.taxAmount, netAmount: preview.netAmount });
+  calcAll(); renderAll(); renderStaffDetail(staffId); autoSave();
+  toast('Staff tax applied: $' + fmt(preview.taxAmount) + ' to house ✅');
+}
+
+function updateStaffTaxPreview(staffId) {
+  var p = G.players.find(function(pl){ return pl.id === staffId; });
+  if (!p) return;
+  var pctEl = document.getElementById('staff-tax-pct-' + staffId);
+  var pct = parseFloat(pctEl ? pctEl.value : 0) || 0;
+  var preview = calcStaffTaxPreview(p, pct);
+  setText('staff-tax-gross-' + staffId,   '$' + fmt(preview.grossTips));
+  setText('staff-tax-amount-' + staffId,  '$' + fmt(preview.taxAmount));
+  setText('staff-tax-net-' + staffId,     '$' + fmt(preview.netAmount));
+  setText('staff-tax-pct-lbl-' + staffId, pct + '%');
+}
+
 }
 
 function calcDashboard() {
@@ -404,7 +460,13 @@ function calcDashboard() {
     eCashOnHand:  eCashIn - eCashOut,
     chipsOnHand:  chipFloat - chipsDealt + chipsReturned,
     drop, tips, expenses,
-    profit: drop - expenses  // profit = house take (drop) minus house expenses only
+    profit: (function(){
+      var staffTax = 0;
+      G.players.forEach(function(q){
+        (q.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount; });
+      });
+      return drop - expenses + staffTax; // profit = drop + staff tax - expenses
+    })()
   };
 }
 
