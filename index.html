@@ -194,20 +194,6 @@ input,select,button,textarea{font-family:inherit}
     </div>
   </div>
 
-  <!-- CHIP COUNT -->
-  <div class="breakdown" style="margin-bottom:16px">
-    <div class="breakdown-title" style="display:flex;align-items:center;justify-content:space-between">
-      <span>🎲 Chip Count</span>
-      <button class="btn btn-outline btn-xs" onclick="openChipCountModal()">Count Now</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
-      <div class="stat-box"><div class="lbl">Expected on Hand</div><div class="val" id="cc-expected" style="color:var(--gold)">$0</div></div>
-      <div class="stat-box"><div class="lbl">Last Count</div><div class="val" id="cc-actual" style="color:var(--text-muted)">—</div></div>
-      <div class="stat-box"><div class="lbl">Variance</div><div class="val" id="cc-variance" style="color:var(--text-muted)">—</div></div>
-    </div>
-    <div id="chip-count-log" style="max-height:180px;overflow-y:auto"></div>
-  </div>
-
   <button class="end-game-btn" onclick="endGame()">🏁 END GAME</button>
 </div>
 
