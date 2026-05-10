@@ -3115,7 +3115,7 @@ function calcAll() {
     taxWithheld_houseTipsTax:    houseTipsTax,
     totalCashIn_formula:         totalCashIn,
     totalCashOut_formula:        totalCashOut,
-    dealerDrop:                  _totalDropPhysical,
+    dealerDrop:                  (typeof _totalDropPhysical !== 'undefined' ? _totalDropPhysical : totalDropAllDealers),
     expenses:                    _expenses,
     finalCashOnHandDisplayed:    cashOnHand,
     formula:                     'bankStart('+bankStart+')+totalCashIn('+totalCashIn+')-totalCashOut('+totalCashOut+')='+cashOnHand
