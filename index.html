@@ -297,8 +297,15 @@ var G = {
 // ══════════════════════════════════════════════════════════════════════════════
 function playerBalance(p) {
   // positive = house owes player   negative = player owes house
-  var totalIn  = (p.buyIns||[]).filter(function(b){return b.type!=='BONUS';}).reduce(function(s,b){return s+b.amount;},0);
+  // ECASH buy-ins: player paid electronically — does NOT create player debt to house
+  // MARKER buy-ins: player owes house (no actual payment made)
+  // CASH buy-ins: player paid cash — does NOT create player debt
+  // Only MARKER creates a negative balance (owes house)
+  var totalIn  = (p.buyIns||[]).filter(function(b){ return b.type==='MARKER'; }).reduce(function(s,b){return s+b.amount;},0);
   var totalOut = (p.cashOuts||[]).reduce(function(s,c){return s+c.amount;},0);
+  // totalOut - totalIn: cashOut from chips minus markers outstanding = player balance
+  // Negative means player has outstanding markers
+  // Positive means house owes player chips
   return totalOut - totalIn;
 }
 
@@ -499,9 +506,11 @@ function renderSettlement() {
   var owed = G.players.filter(function(p){ return !p.staffRole && playerBalance(p)>0; });
   var soEl = document.getElementById('settle-owes');
   var sdEl = document.getElementById('settle-owed');
-  if (soEl) soEl.innerHTML = owes.length
-    ? owes.map(function(p){ return '<div class="owed-row"><span class="owed-name">'+p.name+'</span><span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span></div>'; }).join('')
-    : '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">No players owe the house</div>';
+  var ecashMapS = calcEcashByReceiver();
+  var ecashOwersS = Object.keys(ecashMapS).filter(function(k){ return ecashMapS[k].owes>0; });
+  var settleOwesRows = owes.map(function(p){ return '<div class="owed-row"><span class="owed-name">'+p.name+'</span><span style="font-size:10px;color:var(--text-muted);margin:0 8px">MARKER</span><span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span></div>'; }).join('');
+  settleOwesRows += ecashOwersS.map(function(k){ var r=ecashMapS[k]; return '<div class="owed-row" style="border-color:rgba(168,85,247,0.3)"><span class="owed-name">'+r.name+'</span><span style="font-size:10px;color:var(--purple-light);margin:0 8px">E-CASH</span><span style="font-weight:800;font-size:16px;color:var(--purple-light)">$'+fmt(r.owes)+'</span></div>'; }).join('');
+  if (soEl) soEl.innerHTML = settleOwesRows || '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">No one owes the house</div>';
   if (sdEl) sdEl.innerHTML = owed.length
     ? owed.map(function(p){ return '<div class="green-row"><span style="font-weight:700">'+p.name+'</span><span style="color:var(--green);font-weight:800">$'+fmt(playerBalance(p))+'</span></div>'; }).join('')
     : '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">Nothing owed to players</div>';
