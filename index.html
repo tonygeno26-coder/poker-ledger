@@ -377,7 +377,10 @@ function playerBalance(p) {
   // totalOut - totalIn: cashOut from chips minus markers outstanding = player balance
   // Negative means player has outstanding markers
   // Positive means house owes player chips
-  return totalOut - totalIn;
+  var result = totalOut - totalIn;
+  console.table({ '[profile balance render]':'', player:p.name, playerBalanceResult:result, totalIn:totalIn, totalOut:totalOut, buyInCount:(p.buyIns||[]).length, markerBuyIns:(p.buyIns||[]).filter(function(b){return b.type==='MARKER';}).length });
+  return result;
+}
 
 function staffTipBalance(p) {
   // Gross tips turned in minus tax already paid
@@ -665,6 +668,8 @@ function renderPlayerDetail(id) {
   var detail = document.getElementById('player-detail-view');
   detail.style.display = 'block';
   var bal = playerBalance(p);
+  var cardBal = playerBalance(p); // same function, verify consistency
+  console.table({ '[profile balance render]':'', player:p.name, id:p.id, profileBalance:bal, cardBalance:cardBal, match:bal===cardBal });
   var balColor = bal>0?'var(--green)':bal<0?'var(--red)':'var(--text-muted)';
 
   var buyInHistory = (p.buyIns||[]).map(function(b){
