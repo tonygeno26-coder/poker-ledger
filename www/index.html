@@ -405,7 +405,7 @@ select.inp{appearance:none;-webkit-appearance:none}
     <div class="breakdown-row">
       <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
       <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
-      <div class="breakdown-cell"><div class="bc-lbl">Tips</div><div class="bc-val" id="b-tips">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Staff Tax</div><div class="bc-val" id="b-staff-tax" style="color:var(--green)">$0</div></div>
       <div class="breakdown-cell profit"><div class="bc-lbl">Est. Profit</div><div class="bc-val" id="b-profit">$0</div></div>
     </div>
   </div>
@@ -796,7 +796,7 @@ function updateStaffTaxPreview(staffId) {
 function calcDashboard() {
   var bankStart = G.sessionSettings.bankStart || 0;
   var chipFloat = G.sessionSettings.chipFloat || 0;
-  var cashIn=0,eCashIn=0,cashOut=0,eCashOut=0,chipsDealt=0,chipsReturned=0,drop=0,tips=0,expenses=0,bonusTotal=0;
+  var cashIn=0,eCashIn=0,cashOut=0,eCashOut=0,chipsDealt=0,chipsReturned=0,drop=0,tips=0,expenses=0,bonusTotal=0,staffTax=0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
       if (b.type==='CASH')  cashIn   += b.amount;
@@ -811,6 +811,10 @@ function calcDashboard() {
     });
     (p.drops||[]).forEach(function(d){ drop += d.amount; });
     (p.tips||[]).forEach(function(t){ tips += t.amount; });
+    // House cut of tips — only staff tax contributes to profit (not gross tips)
+    if (p.staffRole) {
+      (p.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount || 0; });
+    }
   });
   (G.expenses||[]).forEach(function(e){ expenses += e.amount; }); // all expenses reduce profit — reimbursements are still house money out
   expenses += bonusTotal; // BONUS buy-ins are complimentary chips — a house cost like any other expense
@@ -818,14 +822,11 @@ function calcDashboard() {
     cashOnHand:   bankStart + cashIn - cashOut,
     eCashOnHand:  eCashIn - eCashOut,
     chipsOnHand:  chipFloat - chipsDealt + chipsReturned,
-    drop, tips, expenses,
-    profit: (function(){
-      var staffTax = 0;
-      G.players.forEach(function(q){
-        (q.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount; });
-      });
-      return drop - expenses + staffTax; // profit = drop + staff tax - expenses
-    })()
+    drop: drop,
+    tips: tips,
+    expenses: expenses,
+    staffTax: staffTax,
+    profit: drop - expenses + staffTax // profit = drop + staff tax - expenses
   };
 }
 
@@ -1077,7 +1078,11 @@ function renderAll() {
   }
   setText('b-drop',     '$' + fmt(d.drop));
   setText('b-expenses', '$' + fmt(d.expenses));
-  setText('b-tips',     '$' + fmt(d.tips));
+  var staffTaxEl = document.getElementById('b-staff-tax');
+  if (staffTaxEl) {
+    staffTaxEl.textContent = '$' + fmt(d.staffTax || 0);
+    staffTaxEl.style.color = 'var(--green)';
+  }
   var profitEl = document.getElementById('b-profit');
   if (profitEl) { profitEl.textContent = '$' + fmt(d.profit); profitEl.style.color = d.profit>=0?'var(--green)':'var(--red)'; }
   renderExpenseList();
