@@ -1,0 +1,31 @@
+{
+  "name": "pocketbooks-poker",
+  "version": "1.0.0",
+  "description": "Pocketbooks Poker — private game ledger",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cap:copy-web": "mkdir -p www && cp index.html www/index.html",
+    "cap:sync": "npm run cap:copy-web && npx cap sync",
+    "cap:open:ios": "npm run cap:sync && npx cap open ios"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonygeno26-coder/poker-ledger.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tonygeno26-coder/poker-ledger/issues"
+  },
+  "homepage": "https://github.com/tonygeno26-coder/poker-ledger#readme",
+  "private": true,
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

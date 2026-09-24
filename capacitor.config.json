@@ -1,0 +1,10 @@
+{
+  "appId": "com.desertspore.pocketbookspoker",
+  "appName": "Pocketbooks Poker",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "ios": {
+    "contentInset": "always",
+    "scrollEnabled": true
+  }
+}
