@@ -365,11 +365,9 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- ===== DASHBOARD ===== -->
 <div id="page-dashboard" class="page active">
   <div class="card">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
       <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
-      <div class="inp-group"><div class="inp-label">Game Type</div><input class="inp" id="g-type" placeholder="No Limit Hold'em"></div>
-      <div class="inp-group"><div class="inp-label">Stakes</div><input class="inp" id="g-stakes" placeholder="1/2"></div>
     </div>
   </div>
 
@@ -706,7 +704,7 @@ var G = {
   expenses: [],
   _seq: 0,
   sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
-  location: '', date: '', type: '', stakes: ''
+  location: '', date: ''
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2802,11 +2800,8 @@ function viewMarkerSignature(playerId, buyInIndex) {
 function updateGameLabel() {
   G.location = getVal('g-location');
   G.date     = getVal('g-date');
-  G.type     = getVal('g-type');
-  G.stakes   = getVal('g-stakes');
   var parts = [];
   if (G.location) parts.push(G.location);
-  if (G.stakes)   parts.push(G.stakes);
   if (G.date)     parts.push(G.date);
   setText('game-label', parts.join(' · ') || 'No active game');
   autoSave();
@@ -2815,10 +2810,9 @@ function updateGameLabel() {
 function newGame(btn) {
   confirmAction(btn, 'Click again to start a new game (unsaved data will be lost)', function(){
     localStorage.removeItem('pb-current');
-    G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', type:'', stakes:'' };
+    G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' };
     _activePlayerId = null; _activeStaffId = null;
     setVal('g-location',''); setVal('g-date',new Date().toISOString().split('T')[0]);
-    setVal('g-type',''); setVal('g-stakes','');
     setVal('bank-start',''); setVal('chip-float',''); setVal('tax-pct','0');
     document.getElementById('player-detail-view').style.display='none';
     document.getElementById('staff-detail-view').style.display='none';
@@ -2852,7 +2846,7 @@ function renderHistory() {
   el.innerHTML = history.length
     ? history.map(function(h){
         var d = new Date(h.date);
-        var label = [h.G.location,h.G.stakes,h.G.date].filter(Boolean).join(' · ') || d.toLocaleDateString();
+        var label = [h.G.location,h.G.date].filter(Boolean).join(' · ') || d.toLocaleDateString();
         var playerCount = (h.G.players||[]).length;
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer" onclick="loadGame(this,'+h.id+')">'
           +'<div><div style="font-weight:700;font-size:14px">'+label+'</div>'
@@ -2871,6 +2865,8 @@ function loadGame(btn, id) {
   if (!h) return;
   confirmAction(btn, 'Click again to load this game (current session will be replaced)', function(){
     G = h.G;
+    delete G.type;
+    delete G.stakes;
     restoreInputs();
     _activePlayerId = null; _activeStaffId = null;
     calcAll(); renderAll();
@@ -2889,8 +2885,6 @@ function deleteGame(id) {
 function restoreInputs() {
   setVal('g-location', G.location||'');
   setVal('g-date', G.date||new Date().toISOString().split('T')[0]);
-  setVal('g-type', G.type||'');
-  setVal('g-stakes', G.stakes||'');
   setVal('bank-start', G.sessionSettings.bankStart||'');
   setVal('chip-float', G.sessionSettings.chipFloat||'');
   setVal('tax-pct', G.sessionSettings.taxPct||0);
@@ -2906,7 +2900,10 @@ function init() {
   if (saved) {
     try {
       var d = JSON.parse(saved);
-      G = Object.assign({ players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', type:'', stakes:'' }, d);
+      G = Object.assign({ players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' }, d);
+      // Drop legacy game type / stakes if present in old saves
+      delete G.type;
+      delete G.stakes;
       restoreInputs();
     } catch(e) { console.warn('init restore error:', e); }
   }
