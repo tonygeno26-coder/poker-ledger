@@ -730,15 +730,22 @@ function playerBalance(p) {
   return result;
 }
 
+function staffPayoutsTotal(p) {
+  return (p.staffPayouts || []).reduce(function(s, x) { return s + (x.amount || 0); }, 0);
+}
+
 function staffTipBalance(p) {
-  // Gross tips turned in minus tax already paid
+  // Gross tips − tax withheld − payouts already made = net unpaid to staff
   var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
-  return grossTips - taxPaid;
+  var paidOut    = staffPayoutsTotal(p);
+  return grossTips - taxPaid - paidOut;
 }
 
 function calcStaffTaxPreview(p, pct) {
-  var grossTips = staffTipBalance(p); // untaxed portion remaining
+  // Tax applies to tip balance before payouts (untaxed tips remaining)
+  var grossTips = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0)
+    - (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var taxAmount = Math.round(grossTips * pct / 100 * 100) / 100;
   var netAmount = Math.round((grossTips - taxAmount) * 100) / 100;
   return { grossTips: grossTips, taxAmount: taxAmount, netAmount: netAmount };
@@ -1119,6 +1126,7 @@ function renderAll() {
     HOUSE_EXPENSE:       { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
     PLAYER_EXPENSE:      { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
     STAFF_TAX:           { label:'TAX',       color:'var(--red)',         bg:'var(--red-dim)' },
+    STAFF_PAYOUT:        { label:'STAFF OUT', color:'var(--gold)',        bg:'var(--gold-dim)' },
     SETTLEMENT_PAYMENT:  { label:'SETTLED',   color:'var(--green)',       bg:'var(--green-dim)' },
     VOID_CASH_BUYIN:     { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_ECASH_BUYIN:    { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
@@ -1128,7 +1136,7 @@ function renderAll() {
     VOID_EXPENSE:        { label:'VOID EXP',  color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
   var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1 };
-  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, PLAYER_EXPENSE:1 };
+  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1 };
 
   var txnEl = document.getElementById('txn-log');
   txnEl.innerHTML = G.txnLog.length
@@ -1207,8 +1215,10 @@ function rosterPlayerStatusBadge(p) {
 
 function rosterStaffStatusBadge(p) {
   var unpaid = staffTipBalance(p);
-  if (unpaid > SETTLE_EPSILON) return '<span class="badge badge-red">Unpaid</span>';
-  return '<span class="badge badge-green">Paid</span>';
+  var paidOut = staffPayoutsTotal(p);
+  if (unpaid <= SETTLE_EPSILON) return '<span class="badge badge-green">Paid</span>';
+  if (paidOut > SETTLE_EPSILON) return '<span class="badge badge-yellow">Partial</span>';
+  return '<span class="badge badge-red">Unpaid</span>';
 }
 
 function rosterBalAmt(bal) {
@@ -1314,7 +1324,7 @@ function rosterStaffDropAction(id) {
 }
 
 function rosterStaffPayOutAction(id) {
-  expandRosterTo(id, 'rx-staff-tax-pct-' + id);
+  expandRosterTo(id, 'rx-staff-payout-amount-' + id);
 }
 
 function rosterBuyInTypeBadge(type) {
@@ -1344,6 +1354,18 @@ function rosterSetCashOutMethod(id, method) {
   var hid = document.getElementById('rx-cashout-method-' + id);
   if (hid) hid.value = method;
   var wrap = document.getElementById('rx-cashout-method-pills-' + id);
+  if (wrap) {
+    var pills = wrap.querySelectorAll('.roster-pill');
+    for (var i = 0; i < pills.length; i++) {
+      pills[i].classList.toggle('active', pills[i].getAttribute('data-method') === method);
+    }
+  }
+}
+
+function rosterSetStaffPayoutMethod(id, method) {
+  var hid = document.getElementById('rx-staff-payout-method-' + id);
+  if (hid) hid.value = method;
+  var wrap = document.getElementById('rx-staff-payout-method-pills-' + id);
   if (wrap) {
     var pills = wrap.querySelectorAll('.roster-pill');
     for (var i = 0; i < pills.length; i++) {
@@ -1549,6 +1571,39 @@ function rosterApplyStaffTax(btn, staffId) {
   });
 }
 
+function rosterAddStaffPayout(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var el = document.getElementById('rx-staff-payout-amount-' + id);
+  var mEl = document.getElementById('rx-staff-payout-method-' + id);
+  var amount = el ? (Number(el.value) || 0) : 0;
+  var method = mEl ? mEl.value : 'CASH';
+  if (!amount || amount <= 0) { toast('Enter payout amount'); return; }
+  var remaining = staffTipBalance(p);
+  if (remaining <= SETTLE_EPSILON) { toast('Staff already paid in full'); return; }
+  if (amount > remaining + SETTLE_EPSILON) {
+    toast('Amount exceeds unpaid balance ($' + fmt(remaining) + ')');
+    return;
+  }
+  if (!p.staffPayouts) p.staffPayouts = [];
+  p.staffPayouts.push({
+    amount: amount,
+    method: method,
+    timestamp: new Date().toISOString(),
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  });
+  appendTxn({
+    type: 'STAFF_PAYOUT',
+    amount: amount,
+    method: method,
+    playerId: String(p.id),
+    playerName: p.name
+  });
+  rosterKeepExpanded(id);
+  calcAll(); renderAll(); autoSave();
+  toast('Staff paid $' + fmt(amount) + ' ✅');
+}
+
 function rosterTurnInSectionHtml(p, markerTotal) {
   markerTotal = Number(markerTotal) || 0;
   if (rosterChipTurnInLogged(p)) {
@@ -1691,7 +1746,9 @@ function rosterStaffExpandedHtml(p) {
 
   var tips = tipsTotal(p);
   var taxWithheld = (p.staffTaxLog || []).reduce(function(s, t){ return s + (t.taxAmount || 0); }, 0);
+  var alreadyPaid = staffPayoutsTotal(p);
   var unpaid = staffTipBalance(p);
+  var taxBase = tips - taxWithheld;
 
   var tipsForm = '<div class="roster-form-block">'
     + '<div class="roster-form-label">Log Tips</div>'
@@ -1716,20 +1773,37 @@ function rosterStaffExpandedHtml(p) {
       + '<span id="rx-staff-tax-pct-lbl-' + p.id + '" style="font-weight:900;color:var(--gold);min-width:36px;text-align:right">30%</span>'
     + '</div>'
     + '<div class="roster-tax-grid">'
-      + '<div class="roster-tax-box"><div class="lbl">Gross Tips</div><div class="val" id="rx-staff-tax-gross-' + p.id + '">$' + fmt(unpaid) + '</div></div>'
+      + '<div class="roster-tax-box"><div class="lbl">Gross Tips</div><div class="val" id="rx-staff-tax-gross-' + p.id + '">$' + fmt(taxBase) + '</div></div>'
       + '<div class="roster-tax-box"><div class="lbl">House Tax</div><div class="val" style="color:var(--red)" id="rx-staff-tax-amount-' + p.id + '">$0</div></div>'
-      + '<div class="roster-tax-box"><div class="lbl">Staff Net</div><div class="val" style="color:var(--green)" id="rx-staff-tax-net-' + p.id + '">$' + fmt(unpaid) + '</div></div>'
+      + '<div class="roster-tax-box"><div class="lbl">Staff Net</div><div class="val" style="color:var(--green)" id="rx-staff-tax-net-' + p.id + '">$' + fmt(taxBase) + '</div></div>'
     + '</div>'
     + '<button class="btn btn-xs" style="width:100%;margin-top:8px;background:var(--gold);color:#000;font-weight:800" onclick="rosterApplyStaffTax(this,' + p.id + ')">Apply Tax</button>'
   + '</div>';
 
   var summary = '<div class="roster-form-block">'
     + '<div class="roster-form-label">Balance Summary</div>'
-    + '<div class="roster-expand-summary" style="margin:0">'
+    + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">'
       + 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
       + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
-      + ' · Net unpaid: <strong>$' + fmt(unpaid) + '</strong>'
+      + (alreadyPaid > 0
+        ? ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
+        : '')
+      + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>'
     + '</div>'
+  + '</div>';
+
+  var payoutPrefill = Math.max(0, unpaid);
+  var payoutForm = '<div class="roster-form-block" id="rx-staff-payout-block-' + p.id + '">'
+    + '<div class="roster-form-label">Pay Out Staff</div>'
+    + '<input type="hidden" id="rx-staff-payout-method-' + p.id + '" value="CASH">'
+    + '<div class="roster-pill-row" id="rx-staff-payout-method-pills-' + p.id + '">'
+      + '<button type="button" class="roster-pill roster-pill-gold active" data-method="CASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+      + '<button type="button" class="roster-pill roster-pill-gold" data-method="ECASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+    + '</div>'
+    + '<div class="roster-inline-row" style="margin-bottom:10px">'
+      + '<input type="number" class="inp" id="rx-staff-payout-amount-' + p.id + '" value="' + payoutPrefill + '" min="0" inputmode="decimal" placeholder="Amount" style="flex:1">'
+    + '</div>'
+    + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
   + '</div>';
 
   return '<tr class="roster-expand-row roster-expand-staff"><td colspan="6"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
@@ -1739,6 +1813,7 @@ function rosterStaffExpandedHtml(p) {
     + dropForm
     + taxForm
     + summary
+    + payoutForm
     + '</div></td></tr>';
 }
 
