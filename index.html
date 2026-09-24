@@ -1086,10 +1086,16 @@ function renderAll() {
   var owesListEl = document.getElementById('owes-list');
   var owedListEl = document.getElementById('owed-list');
   owesListEl.innerHTML = owingPlayers.length
-    ? owingPlayers.map(function(p){ return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
-        +'<span class="owed-name">'+p.name+'</span>'
-        +'<span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span>'
-        +'</div>'; }).join('')
+    ? owingPlayers.map(function(p){
+        var markerAmt = playerMarkerTotal(p);
+        var markerLbl = markerAmt > 0
+          ? '<span style="color:var(--red);font-size:11px;font-weight:700;margin-left:6px">📋 $'+fmt(markerAmt)+' marker</span>'
+          : '';
+        return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
+          +'<span class="owed-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'+p.name+markerLbl+'</span>'
+          +'<span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span>'
+          +'</div>';
+      }).join('')
     : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div>';
 
   owedListEl.innerHTML = owedPlayers.length
@@ -1272,6 +1278,11 @@ function rosterChipTurnInLogged(p) {
   return !!(p && Number(p.chipTurnIn) > 0);
 }
 
+/** Marker chips outstanding and no turn-in yet — payout/cash-out must wait. */
+function markerBlocksPayout(p) {
+  return !!(p && playerMarkerTotal(p) > 0 && !rosterChipTurnInLogged(p));
+}
+
 function rosterKeepExpanded(id) {
   _expandedRosterId = Number(id) || id;
 }
@@ -1430,6 +1441,10 @@ function rosterResetTurnIn(id) {
 function rosterAddCashOut(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  if (markerBlocksPayout(p)) {
+    toast('Turn in chips first — $' + fmt(playerMarkerTotal(p)) + ' marker outstanding');
+    return;
+  }
   var el = document.getElementById('rx-cashout-amount-' + id);
   var mEl = document.getElementById('rx-cashout-method-' + id);
   var amount = el ? (Number(el.value) || 0) : 0;
@@ -1568,8 +1583,15 @@ function rosterTurnInSectionHtml(p, markerTotal) {
     calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:var(--green)">$0</span></div>';
   }
 
+  var markerWarn = markerTotal > 0
+    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">⚠️ Turn in chips first — $' + fmt(markerTotal) + ' marker outstanding</div>'
+      + '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red)">⚠️ Player must turn in chips before payout — chips cover the marker first</div>'
+      + '<button type="button" class="btn btn-outline roster-turnin-btn" disabled style="width:100%;margin-bottom:12px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed" title="Turn in chips first">Pay Out</button>'
+    : '';
+
   return '<div class="roster-turnin-block" id="rx-turnin-block-' + p.id + '">'
     + '<div class="roster-turnin-label">Chips Turned In</div>'
+    + markerWarn
     + '<div class="roster-turnin-input-row">'
       + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
       + '<button type="button" class="btn btn-purple roster-turnin-btn" onclick="rosterLogTurnIn(' + p.id + ')">Log Turn-In</button>'
@@ -1763,9 +1785,12 @@ function rosterPlayerRow(p) {
   var active = p.id === _activePlayerId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
+  var markerWarnIco = markerBlocksPayout(p)
+    ? ' <span title="Turn in chips first — marker outstanding" style="color:var(--red);font-weight:800">⚠️</span>'
+    : '';
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
     + '<td><span class="roster-avatar" style="background:var(--red)">' + p.name.charAt(0) + '</span></td>'
-    + '<td><div class="roster-name">' + p.name + '</div></td>'
+    + '<td><div class="roster-name">' + p.name + markerWarnIco + '</div></td>'
     + '<td><span class="roster-amt">$' + fmt(buyInsTotal(p)) + '</span></td>'
     + '<td>' + rosterBalAmt(bal) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
@@ -1994,6 +2019,10 @@ function renderPlayerDetail(id) {
       +'</div>'
     : '<div class="io-section">'
         +'<div class="io-title">🎰 Chip Turn-In</div>'
+        +(markerTotal > 0
+          ? '<div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:10px;line-height:1.4">⚠️ Turn in chips first — $'+fmt(markerTotal)+' marker outstanding</div>'
+            +'<button class="btn btn-outline btn-sm" disabled style="width:100%;margin-bottom:10px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed">💸 Pay Out</button>'
+          : '')
         +'<div class="io-field"><label>CHIPS COUNTED</label>'
           +'<input type="number" class="amount-btn" id="turnin-amount-'+p.id+'" placeholder="0" min="0" oninput="updateTurnInPreview('+p.id+')">'
         +'</div>'
@@ -2092,6 +2121,10 @@ function renderStaffDetail(id) {
         +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--green);border-color:var(--green)" onclick="addCashOut('+p.id+')">💸 Pay Out</button>'
       +'</div>'
     : '<div class="io-section"><div class="io-title">🎰 Chip Turn-In</div>'
+        +(markerTotal > 0
+          ? '<div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:10px;line-height:1.4">⚠️ Turn in chips first — $'+fmt(markerTotal)+' marker outstanding</div>'
+            +'<button class="btn btn-outline btn-sm" disabled style="width:100%;margin-bottom:10px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed">💸 Pay Out</button>'
+          : '')
         +'<div class="io-field"><label>CHIPS COUNTED</label>'
           +'<input type="number" class="amount-btn" id="turnin-amount-'+p.id+'" placeholder="0" min="0" oninput="updateTurnInPreview('+p.id+')">'
         +'</div>'
@@ -2296,6 +2329,10 @@ function addBuyIn(id) {
 function addCashOut(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  if (markerBlocksPayout(p)) {
+    toast('Turn in chips first — $' + fmt(playerMarkerTotal(p)) + ' marker outstanding');
+    return;
+  }
   var el = document.getElementById('cashout-amount-' + id);
   var mEl = document.getElementById('cashout-method-' + id);
   var amount = el ? (Number(el.value)||0) : 0;
