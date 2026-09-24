@@ -1846,9 +1846,9 @@ function rosterStaffExpandedHtml(p) {
       + '<span id="rx-staff-tax-pct-lbl-' + p.id + '" style="font-weight:900;color:var(--gold);min-width:36px;text-align:right">30%</span>'
     + '</div>'
     + '<div class="roster-tax-grid">'
-      + '<div class="roster-tax-box"><div class="lbl">Gross Tips</div><div class="val" id="rx-staff-tax-gross-' + p.id + '">$' + fmt(tips) + '</div></div>'
-      + '<div class="roster-tax-box"><div class="lbl">House Tax</div><div class="val" style="color:var(--red)" id="rx-staff-tax-amount-' + p.id + '">$0</div></div>'
-      + '<div class="roster-tax-box"><div class="lbl">Staff Net</div><div class="val" style="color:var(--green)" id="rx-staff-tax-net-' + p.id + '">$' + fmt(tips) + '</div></div>'
+      + '<div class="roster-tax-box"><div class="lbl">Gross Tips</div><div class="val" id="rx-staff-tax-gross-' + p.id + '">$' + fmt(taxPreview0.grossTips) + '</div></div>'
+      + '<div class="roster-tax-box"><div class="lbl">House Tax</div><div class="val" style="color:var(--red)" id="rx-staff-tax-amount-' + p.id + '">$' + fmt(taxPreview0.taxAmount) + '</div></div>'
+      + '<div class="roster-tax-box"><div class="lbl">Staff Net</div><div class="val" style="color:var(--green)" id="rx-staff-tax-net-' + p.id + '">$' + fmt(taxPreview0.netAmount) + '</div></div>'
     + '</div>'
     + '<button class="btn btn-xs" style="width:100%;margin-top:8px;background:var(--gold);color:#000;font-weight:800" onclick="rosterApplyStaffTax(this,' + p.id + ')">Apply Tax</button>'
   + '</div>';
