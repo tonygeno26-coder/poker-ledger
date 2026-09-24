@@ -1136,6 +1136,9 @@ function renderAll() {
         var ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
         var meta = TXN_TYPE_MAP[t.type] || { label:t.type, color:'var(--text-muted)', bg:'var(--bg3)' };
         var name = t.playerName || 'HOUSE';
+        if (t.type === 'STAFF_PAYOUT' && String(t.method || '').toUpperCase() === 'ECASH' && t.receivedBy && t.receivedBy !== t.playerName) {
+          name = (t.playerName || 'Staff') + ' → ' + t.receivedBy;
+        }
         var amtColor;
         if (t.type === 'SETTLEMENT_PAYMENT') {
           amtColor = t.direction === 'HOUSE_TO_PLAYER' ? 'var(--red)' : 'var(--green)';
@@ -1364,6 +1367,16 @@ function rosterSetStaffPayoutMethod(id, method) {
       pills[i].classList.toggle('active', pills[i].getAttribute('data-method') === method);
     }
   }
+  var row = document.getElementById('rx-staff-payout-receiver-row-' + id);
+  if (row) row.style.display = method === 'ECASH' ? 'block' : 'none';
+}
+
+function getStaffPayoutReceiverOptions(selectedId) {
+  var sid = String(selectedId || '');
+  return G.players.filter(function(p){ return !!p.staffRole; }).map(function(p){
+    var sel = String(p.id) === sid ? ' selected' : '';
+    return '<option value="' + p.id + '"' + sel + '>' + p.name + '</option>';
+  }).join('');
 }
 
 function rosterUpdateTurnInPreview(id) {
@@ -1577,10 +1590,21 @@ function rosterAddStaffPayout(id) {
     toast('Amount exceeds unpaid balance ($' + fmt(remaining) + ')');
     return;
   }
+  var receivedBy = '';
+  var receivedById = '';
+  if (method === 'ECASH') {
+    var recEl = document.getElementById('rx-staff-payout-receiver-' + id);
+    receivedById = recEl ? String(recEl.value || '') : '';
+    if (!receivedById) { toast('Select who received the eCash'); return; }
+    var recOpt = recEl && recEl.options[recEl.selectedIndex];
+    receivedBy = recOpt ? recOpt.text : receivedById;
+  }
   if (!p.staffPayouts) p.staffPayouts = [];
   p.staffPayouts.push({
     amount: amount,
     method: method,
+    receivedBy: receivedBy || null,
+    receivedById: receivedById || null,
     timestamp: new Date().toISOString(),
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   });
@@ -1588,6 +1612,8 @@ function rosterAddStaffPayout(id) {
     type: 'STAFF_PAYOUT',
     amount: amount,
     method: method,
+    receivedBy: receivedBy || null,
+    receivedById: receivedById || null,
     playerId: String(p.id),
     playerName: p.name
   });
@@ -1873,6 +1899,12 @@ function rosterStaffExpandedHtml(p) {
     + '<div class="roster-pill-row" id="rx-staff-payout-method-pills-' + p.id + '">'
       + '<button type="button" class="roster-pill roster-pill-gold active" data-method="CASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
       + '<button type="button" class="roster-pill roster-pill-gold" data-method="ECASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+    + '</div>'
+    + '<div id="rx-staff-payout-receiver-row-' + p.id + '" style="display:none;margin-bottom:10px">'
+      + '<div class="roster-form-label">Received By</div>'
+      + '<select class="inp" id="rx-staff-payout-receiver-' + p.id + '" style="width:100%">'
+        + getStaffPayoutReceiverOptions(p.id)
+      + '</select>'
     + '</div>'
     + '<div class="roster-inline-row" style="margin-bottom:10px">'
       + '<input type="number" class="inp" id="rx-staff-payout-amount-' + p.id + '" value="' + payoutPrefill + '" min="0" inputmode="decimal" placeholder="Amount" style="flex:1">'
@@ -2981,7 +3013,7 @@ function toggleEcashReceiver(playerId, buyType) {
   }
 }
 
-// E-Cash on Hand per receiver: sum ECASH buy-ins by receivedById, minus ECASH cash-outs and settlement payments
+// E-Cash on Hand per receiver: sum ECASH buy-ins by receivedById, minus ECASH cash-outs, staff eCash payouts, and settlement payments
 function calcEcashByReceiver() {
   var map = {};
   G.txnLog.forEach(function(t) {
@@ -2992,6 +3024,14 @@ function calcEcashByReceiver() {
     if (t.type === 'CASH_OUT' && t.method === 'ECASH' && t.receivedById) {
       if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0, owes: 0 };
       map[t.receivedById].balance -= (t.amount || 0);
+    }
+    if (t.type === 'STAFF_PAYOUT' && String(t.method || '').toUpperCase() === 'ECASH') {
+      var rid = t.receivedById || (t.receivedBy ? t.receivedBy : null);
+      var rname = t.receivedBy || t.receivedByName || rid;
+      if (rid) {
+        if (!map[rid]) map[rid] = { name: rname, balance: 0, owes: 0 };
+        map[rid].balance -= (t.amount || 0);
+      }
     }
     if (t.type === 'SETTLEMENT_PAYMENT' && t.settlementKind === 'ECASH' && t.playerId) {
       if (!map[t.playerId]) map[t.playerId] = { name: t.playerName || t.playerId, balance: 0, owes: 0 };
