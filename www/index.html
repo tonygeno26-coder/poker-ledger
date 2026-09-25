@@ -720,12 +720,12 @@ function staffPayoutsTotal(p) {
 }
 
 function staffTipBalance(p) {
-  // Gross tips − tax − staff expenses (house already paid on their behalf) − payouts
+  // Gross tips − tax − payouts + reimbursements (house owes staff those expenses back)
   var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var expenses   = staffExpensesTotal(p);
   var paidOut    = staffPayoutsTotal(p);
-  return grossTips - taxPaid - expenses - paidOut;
+  return grossTips - taxPaid - paidOut + expenses;
 }
 
 function calcStaffTaxPreview(p, pct) {
@@ -1886,7 +1886,7 @@ function rosterStaffExpandedHtml(p) {
     + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">'
       + 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
       + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
-      + ' · Expenses: <strong style="color:var(--text)">$' + fmt(expTotal) + '</strong>'
+      + ' · Reimbursements: <strong style="color:var(--green)">+$' + fmt(expTotal) + '</strong>'
       + ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
       + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>'
     + '</div>'
