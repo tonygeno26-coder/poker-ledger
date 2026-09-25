@@ -363,14 +363,9 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- ===== DASHBOARD ===== -->
 <div id="page-dashboard" class="page active">
   <div class="card">
-    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
       <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
-    </div>
-    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-      <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="G.sessionSettings.taxPct=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
-      <div class="inp-group"><div class="inp-label">Starting Bank</div><input class="inp" type="number" id="bank-start" placeholder="0" oninput="G.sessionSettings.bankStart=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
-      <div class="inp-group"><div class="inp-label">Chip Float</div><input class="inp" type="number" id="chip-float" placeholder="0" oninput="G.sessionSettings.chipFloat=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
     </div>
   </div>
 
@@ -2916,7 +2911,7 @@ function newGame(btn) {
     G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' };
     _activePlayerId = null; _activeStaffId = null;
     setVal('g-location',''); setVal('g-date',new Date().toISOString().split('T')[0]);
-    setVal('bank-start',''); setVal('chip-float',''); setVal('tax-pct','0');
+    G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
     document.getElementById('player-detail-view').style.display='none';
     document.getElementById('staff-detail-view').style.display='none';
     calcAll(); renderAll();
@@ -2988,9 +2983,7 @@ function deleteGame(id) {
 function restoreInputs() {
   setVal('g-location', G.location||'');
   setVal('g-date', G.date||new Date().toISOString().split('T')[0]);
-  setVal('bank-start', G.sessionSettings.bankStart||'');
-  setVal('chip-float', G.sessionSettings.chipFloat||'');
-  setVal('tax-pct', G.sessionSettings.taxPct||0);
+  if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
   updateGameLabel();
 }
 
