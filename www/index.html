@@ -715,6 +715,17 @@ function playerBalance(p) {
   return result;
 }
 
+/** Display-only: chipTurnIn − markers while awaiting Pay Out (does not change playerBalance). */
+function playerProjectedBalance(p) {
+  return (Number(p.chipTurnIn) || 0) - playerMarkerTotal(p);
+}
+
+/** Finalized playerBalance, or projected net when turn-in is logged and payout is pending. */
+function playerDisplayBalance(p) {
+  if (rosterChipTurnInLogged(p)) return playerProjectedBalance(p);
+  return playerBalance(p);
+}
+
 function staffPayoutsTotal(p) {
   return (p.staffPayouts || []).reduce(function(s, x) { return s + (x.amount || 0); }, 0);
 }
@@ -1076,9 +1087,9 @@ function renderAll() {
   if (profitEl) { profitEl.textContent = '$' + fmt(d.profit); profitEl.style.color = d.profit>=0?'var(--green)':'var(--red)'; }
   renderExpenseList();
 
-  // Owes/owed
-  var owingPlayers = G.players.filter(function(p){ return !p.staffRole && playerBalance(p) < 0; });
-  var owedPlayers  = G.players.filter(function(p){ return !p.staffRole && playerBalance(p) > 0; });
+  // Owes/owed — use display balance so pending turn-in projected nets update the lists
+  var owingPlayers = G.players.filter(function(p){ return !p.staffRole && playerDisplayBalance(p) < -SETTLE_EPSILON; });
+  var owedPlayers  = G.players.filter(function(p){ return !p.staffRole && playerDisplayBalance(p) > SETTLE_EPSILON; });
   var ocEl = document.getElementById('owes-count');
   var odEl = document.getElementById('owed-count');
   if (ocEl) { ocEl.textContent=owingPlayers.length; ocEl.style.display=owingPlayers.length?'inline':'none'; }
@@ -1088,22 +1099,31 @@ function renderAll() {
   var owedListEl = document.getElementById('owed-list');
   owesListEl.innerHTML = owingPlayers.length
     ? owingPlayers.map(function(p){
+        var bal = playerDisplayBalance(p);
+        var pending = rosterChipTurnInLogged(p);
         var markerAmt = playerMarkerTotal(p);
         var markerLbl = markerAmt > 0
           ? '<span style="color:var(--red);font-size:11px;font-weight:700;margin-left:6px">📋 $'+fmt(markerAmt)+' marker</span>'
           : '';
+        var pendingLbl = pending
+          ? '<span style="color:var(--gold);font-size:10px;font-weight:700;margin-left:6px">pending</span>'
+          : '';
         return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
-          +'<span class="owed-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'+p.name+markerLbl+'</span>'
-          +'<span class="owed-amt">$'+fmt(Math.abs(playerBalance(p)))+'</span>'
+          +'<span class="owed-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'+p.name+markerLbl+pendingLbl+'</span>'
+          +'<span class="owed-amt"'+(pending?' style="color:var(--gold)"':'')+'>'+(pending?'~':'')+'$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
       }).join('')
     : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div>';
 
   owedListEl.innerHTML = owedPlayers.length
-    ? owedPlayers.map(function(p){ return '<div class="green-row">'
-        +'<span style="font-weight:700;font-size:13px">'+p.name+'</span>'
-        +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(playerBalance(p))+'</span>'
-        +'</div>'; }).join('')
+    ? owedPlayers.map(function(p){
+        var bal = playerDisplayBalance(p);
+        var pending = rosterChipTurnInLogged(p);
+        return '<div class="green-row">'
+          +'<span style="font-weight:700;font-size:13px">'+p.name+(pending?' <span style="color:var(--gold);font-size:10px">pending</span>':'')+'</span>'
+          +'<span style="font-weight:800;font-size:16px;color:'+(pending?'var(--gold)':'var(--green)')+'">'+(pending?'~':'')+'$'+fmt(Math.abs(bal))+'</span>'
+          +'</div>';
+      }).join('')
     : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div>';
 
   // Transaction log
@@ -1201,11 +1221,14 @@ function tipsTotal(p) {
 }
 
 function rosterPlayerStatusBadge(p) {
-  var bal = playerBalance(p);
+  var pending = rosterChipTurnInLogged(p);
+  var bal = pending ? playerProjectedBalance(p) : playerBalance(p);
+  if (!pending) {
+    var info = calcSettlementInfo(bal, p.id, 'BALANCE');
+    if (info.status === 'SETTLED') return '<span class="badge badge-green">Settled</span>';
+    if (info.status === 'PARTIAL') return '<span class="badge badge-yellow">Partial</span>';
+  }
   if (Math.abs(bal) <= SETTLE_EPSILON) return '<span class="badge badge-gray">Even</span>';
-  var info = calcSettlementInfo(bal, p.id, 'BALANCE');
-  if (info.status === 'SETTLED') return '<span class="badge badge-green">Settled</span>';
-  if (info.status === 'PARTIAL') return '<span class="badge badge-yellow">Partial</span>';
   if (bal < 0) return '<span class="badge badge-red">Owes</span>';
   return '<span class="badge badge-green">Owed</span>';
 }
@@ -1221,6 +1244,16 @@ function rosterStaffStatusBadge(p) {
 function rosterBalAmt(bal) {
   var cls = bal > 0 ? 'pos' : bal < 0 ? 'neg' : 'zero';
   return '<span class="roster-amt ' + cls + '">' + (bal >= 0 ? '+' : '-') + '$' + fmt(Math.abs(bal)) + '</span>';
+}
+
+/** Roster header balance: gold ~pending after turn-in, else finalized playerBalance. */
+function rosterPlayerBalCell(p) {
+  if (rosterChipTurnInLogged(p)) {
+    var bal = playerProjectedBalance(p);
+    var sign = bal >= 0 ? '+' : '-';
+    return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~' + sign + '$' + fmt(Math.abs(bal)) + '</span>';
+  }
+  return rosterBalAmt(playerBalance(p));
 }
 
 var _expandedRosterId = null;
@@ -1963,7 +1996,6 @@ function voidRosterCashOut(btn, playerId, index) {
 }
 
 function rosterPlayerRow(p) {
-  var bal = playerBalance(p);
   var active = p.id === _activePlayerId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
@@ -1974,7 +2006,7 @@ function rosterPlayerRow(p) {
     + '<td><span class="roster-avatar" style="background:var(--red)">' + p.name.charAt(0) + '</span></td>'
     + '<td><div class="roster-name">' + p.name + markerWarnIco + '</div></td>'
     + '<td><span class="roster-amt">$' + fmt(buyInsTotal(p)) + '</span></td>'
-    + '<td>' + rosterBalAmt(bal) + '</td>'
+    + '<td>' + rosterPlayerBalCell(p) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
     + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
       + '<button class="btn btn-outline btn-xs" onclick="rosterBuyInAction(' + p.id + ')">Buy In</button>'
