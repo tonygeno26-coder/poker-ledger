@@ -3130,8 +3130,7 @@ function saveStartingCount() {
     actualTotal: total
   };
   G.startingChipCount = entry;
-  G.sessionSettings.chipFloat = total; // sync chip float to starting count
-  setVal('chip-float', total);
+  G.sessionSettings.chipFloat = total; // sync chip float to starting count (no dashboard UI)
   if (!G.chipCounts) G.chipCounts = [];
   G.chipCounts.unshift(entry);
   refreshStartingSavedBanner();
