@@ -1091,17 +1091,9 @@ function renderAll() {
   owesListEl.innerHTML = owingPlayers.length
     ? owingPlayers.map(function(p){
         var bal = playerDisplayBalance(p);
-        var pending = rosterChipTurnInLogged(p);
-        var markerAmt = playerMarkerTotal(p);
-        var markerLbl = markerAmt > 0
-          ? '<span style="color:var(--red);font-size:11px;font-weight:700;margin-left:6px">📋 $'+fmt(markerAmt)+' marker</span>'
-          : '';
-        var pendingLbl = pending
-          ? '<span style="color:var(--gold);font-size:10px;font-weight:700;margin-left:6px">pending</span>'
-          : '';
         return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
-          +'<span class="owed-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'+p.name+markerLbl+pendingLbl+'</span>'
-          +'<span class="owed-amt"'+(pending?' style="color:var(--gold)"':'')+'>'+(pending?'~':'')+'$'+fmt(Math.abs(bal))+'</span>'
+          +'<span class="owed-name">'+p.name+'</span>'
+          +'<span class="owed-amt">$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
       }).join('')
     : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div>';
@@ -1109,10 +1101,9 @@ function renderAll() {
   owedListEl.innerHTML = owedPlayers.length
     ? owedPlayers.map(function(p){
         var bal = playerDisplayBalance(p);
-        var pending = rosterChipTurnInLogged(p);
         return '<div class="green-row">'
-          +'<span style="font-weight:700;font-size:13px">'+p.name+(pending?' <span style="color:var(--gold);font-size:10px">pending</span>':'')+'</span>'
-          +'<span style="font-weight:800;font-size:16px;color:'+(pending?'var(--gold)':'var(--green)')+'">'+(pending?'~':'')+'$'+fmt(Math.abs(bal))+'</span>'
+          +'<span style="font-weight:700;font-size:13px">'+p.name+'</span>'
+          +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
       }).join('')
     : '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div>';
