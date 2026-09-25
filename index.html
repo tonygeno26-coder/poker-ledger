@@ -720,11 +720,12 @@ function staffPayoutsTotal(p) {
 }
 
 function staffTipBalance(p) {
-  // Gross tips − tax withheld − payouts already made = net unpaid to staff
+  // Gross tips − tax − staff expenses (house already paid on their behalf) − payouts
   var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
+  var expenses   = staffExpensesTotal(p);
   var paidOut    = staffPayoutsTotal(p);
-  return grossTips - taxPaid - paidOut;
+  return grossTips - taxPaid - expenses - paidOut;
 }
 
 function calcStaffTaxPreview(p, pct) {
@@ -800,7 +801,8 @@ function calcDashboard() {
       (p.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount || 0; });
     }
   });
-  (G.expenses||[]).forEach(function(e){ expenses += e.amount; }); // all expenses reduce profit — reimbursements are still house money out
+  // Expenses: house card → G.expenses; staff row → p.expenses only (HOUSE_EXPENSE txn is log-only, not in G.expenses)
+  (G.expenses||[]).forEach(function(e){ expenses += e.amount; });
   G.players.forEach(function(p){
     (p.expenses||[]).forEach(function(e){ expenses += e.amount || 0; });
   });
@@ -1884,10 +1886,8 @@ function rosterStaffExpandedHtml(p) {
     + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">'
       + 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
       + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
-      + ' · Expenses logged: <strong style="color:var(--text)">$' + fmt(expTotal) + '</strong>'
-      + (alreadyPaid > 0
-        ? ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
-        : '')
+      + ' · Expenses: <strong style="color:var(--text)">$' + fmt(expTotal) + '</strong>'
+      + ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
       + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>'
     + '</div>'
   + '</div>';
