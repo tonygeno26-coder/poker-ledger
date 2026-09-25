@@ -1233,16 +1233,27 @@ function rosterStaffStatusBadge(p) {
 }
 
 function rosterBalAmt(bal) {
-  var cls = bal > 0 ? 'pos' : bal < 0 ? 'neg' : 'zero';
-  return '<span class="roster-amt ' + cls + '">' + (bal >= 0 ? '+' : '-') + '$' + fmt(Math.abs(bal)) + '</span>';
+  // One number: owes = red absolute $, owed = green $, even = gray $0
+  if (Math.abs(bal) <= SETTLE_EPSILON) {
+    return '<span class="roster-amt zero">$0</span>';
+  }
+  if (bal < 0) {
+    return '<span class="roster-amt neg">$' + fmt(Math.abs(bal)) + '</span>';
+  }
+  return '<span class="roster-amt pos">$' + fmt(bal) + '</span>';
 }
 
 /** Roster header balance: gold ~pending after turn-in, else finalized playerBalance. */
 function rosterPlayerBalCell(p) {
   if (rosterChipTurnInLogged(p)) {
     var bal = playerProjectedBalance(p);
-    var sign = bal >= 0 ? '+' : '-';
-    return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~' + sign + '$' + fmt(Math.abs(bal)) + '</span>';
+    if (Math.abs(bal) <= SETTLE_EPSILON) {
+      return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$0</span>';
+    }
+    if (bal < 0) {
+      return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$' + fmt(Math.abs(bal)) + '</span>';
+    }
+    return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$' + fmt(bal) + '</span>';
   }
   return rosterBalAmt(playerBalance(p));
 }
@@ -1730,6 +1741,14 @@ function rosterPlayerExpandedHtml(p) {
   }
 
   var summary = '';
+  var dispBal = playerDisplayBalance(p);
+  var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
+    : (dispBal < 0 ? 'var(--red)' : (rosterChipTurnInLogged(p) ? 'var(--gold)' : 'var(--green)'));
+  var balPrefix = rosterChipTurnInLogged(p) ? '~' : '';
+  var balAbs = '$' + fmt(Math.abs(dispBal));
+  summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balPrefix + balAbs + '</strong>'
+    + (rosterChipTurnInLogged(p) ? ' <span style="color:var(--gold);font-size:11px">(pending payout)</span>' : '')
+    + '</div>';
   if (rosterChipTurnInLogged(p)) {
     summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(p.chipTurnIn) + '</strong></div>';
   }
@@ -1765,7 +1784,7 @@ function rosterPlayerExpandedHtml(p) {
 
   var turnInSection = rosterTurnInSectionHtml(p, markerTotal);
 
-  return '<tr class="roster-expand-row roster-expand-player"><td colspan="6"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return '<tr class="roster-expand-row roster-expand-player"><td colspan="5"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
     + '<div class="roster-form-label" style="margin-bottom:4px">History</div>'
     + lines + summary
     + buyInForm
@@ -1936,7 +1955,7 @@ function rosterStaffExpandedHtml(p) {
     + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
   + '</div>';
 
-  return '<tr class="roster-expand-row roster-expand-staff"><td colspan="6"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return '<tr class="roster-expand-row roster-expand-staff"><td colspan="5"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
     + '<div class="roster-form-label" style="margin-bottom:4px">Tips History</div>'
     + lines
     + expensesSection
@@ -1996,7 +2015,6 @@ function rosterPlayerRow(p) {
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
     + '<td><span class="roster-avatar" style="background:var(--red)">' + p.name.charAt(0) + '</span></td>'
     + '<td><div class="roster-name">' + p.name + markerWarnIco + '</div></td>'
-    + '<td><span class="roster-amt">$' + fmt(buyInsTotal(p)) + '</span></td>'
     + '<td>' + rosterPlayerBalCell(p) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
     + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
@@ -2010,7 +2028,6 @@ function rosterPlayerRow(p) {
 }
 
 function rosterStaffRow(p) {
-  var tips = tipsTotal(p);
   var bal = staffTipBalance(p);
   var active = p.id === _activeStaffId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
@@ -2018,7 +2035,6 @@ function rosterStaffRow(p) {
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
     + '<td><span class="roster-avatar" style="background:var(--gold)">' + p.name.charAt(0) + '</span></td>'
     + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role">' + p.staffRole + '</div></td>'
-    + '<td><span class="roster-amt" style="color:var(--gold)">$' + fmt(tips) + '</span></td>'
     + '<td>' + rosterBalAmt(bal) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
     + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
@@ -2049,33 +2065,33 @@ function renderPlayerGrid() {
   if (!el) return;
 
   var html = '<table class="roster-table"><thead><tr>'
-    + '<th></th><th>Name</th><th>Buy-ins / Tips</th><th>Balance</th><th>Status</th><th>Actions</th>'
+    + '<th></th><th>Name</th><th>Balance</th><th>Status</th><th>Actions</th>'
     + '</tr></thead><tbody>';
 
   if (showPlayers) {
-    html += '<tr class="roster-section"><td colspan="6">👥 Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="5">👥 Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
     if (players.length) {
       html += players.map(rosterPlayerRow).join('');
     } else {
-      html += '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
+      html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
         + (search ? 'No players match your search' : 'No players yet — use Quick Add above')
         + '</td></tr>';
     }
   }
 
   if (showStaff) {
-    html += '<tr class="roster-section"><td colspan="6">👔 Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="5">👔 Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
     if (staff.length) {
       html += staff.map(rosterStaffRow).join('');
     } else {
-      html += '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
+      html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
         + (search ? 'No staff match your search' : 'No staff yet — use Quick Add above')
         + '</td></tr>';
     }
   }
 
   if (!showPlayers && !showStaff) {
-    html += '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Select a role filter</td></tr>';
+    html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Select a role filter</td></tr>';
   }
 
   html += '</tbody></table>';
