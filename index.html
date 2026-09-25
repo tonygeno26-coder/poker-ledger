@@ -1904,7 +1904,7 @@ function rosterPlayerExpandedHtml(p) {
 
   var turnInSection = rosterTurnInSectionHtml(p, markerTotal);
 
-  return '<tr class="roster-expand-row roster-expand-player"><td colspan="5"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return '<tr class="roster-expand-row roster-expand-player"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
     + '<div class="roster-form-label" style="margin-bottom:4px">History</div>'
     + lines + summary
     + buyInForm
@@ -2165,7 +2165,7 @@ function rosterStaffExpandedHtml(p) {
     + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
   + '</div>';
 
-  return '<tr class="roster-expand-row roster-expand-staff"><td colspan="5"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return '<tr class="roster-expand-row roster-expand-staff"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
     + rolePaySection
     + '<div class="roster-form-label" style="margin-bottom:4px">Tips History</div>'
     + lines
@@ -2231,11 +2231,6 @@ function rosterPlayerRow(p) {
     + '<td><div class="roster-name">' + p.name + markerWarnIco + '</div></td>'
     + '<td>' + rosterPlayerBalCell(p) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
-    + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
-      + '<button class="btn btn-outline btn-xs" onclick="rosterBuyInAction(' + p.id + ')">Buy In</button>'
-      + '<button class="btn btn-outline btn-xs" onclick="rosterTurnInAction(' + p.id + ')">Turn In</button>'
-      + '<button class="btn btn-outline btn-xs" onclick="rosterSettleAction(' + p.id + ')">Settle</button>'
-    + '</span></td>'
     + '</tr>';
   if (expanded) html += rosterPlayerExpandedHtml(p);
   return html;
@@ -2247,19 +2242,11 @@ function rosterStaffRow(p) {
   var active = p.id === _activeStaffId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
-  var dropBtn = staffIsDealer(p)
-    ? '<button class="btn btn-outline btn-xs" onclick="rosterStaffDropAction(' + p.id + ')">Drop</button>'
-    : '';
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
     + '<td><span class="roster-avatar" style="background:' + staffRoleColor(roleKey) + '">' + p.name.charAt(0) + '</span></td>'
     + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role" style="color:' + staffRoleColor(roleKey) + '">' + staffRoleLabel(roleKey) + '</div></td>'
     + '<td>' + rosterBalAmt(bal) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
-    + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
-      + '<button class="btn btn-outline btn-xs" onclick="rosterStaffTipsAction(' + p.id + ')">Tips</button>'
-      + dropBtn
-      + '<button class="btn btn-outline btn-xs" onclick="rosterStaffPayOutAction(' + p.id + ')">Pay Out</button>'
-    + '</span></td>'
     + '</tr>';
   if (expanded) html += rosterStaffExpandedHtml(p);
   return html;
@@ -2283,33 +2270,33 @@ function renderPlayerGrid() {
   if (!el) return;
 
   var html = '<table class="roster-table"><thead><tr>'
-    + '<th></th><th>Name</th><th>Balance</th><th>Status</th><th>Actions</th>'
+    + '<th></th><th>Name</th><th>Balance</th><th>Status</th>'
     + '</tr></thead><tbody>';
 
   if (showPlayers) {
-    html += '<tr class="roster-section"><td colspan="5">👥 Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="4">👥 Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
     if (players.length) {
       html += players.map(rosterPlayerRow).join('');
     } else {
-      html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
+      html += '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
         + (search ? 'No players match your search' : 'No players yet — use Quick Add above')
         + '</td></tr>';
     }
   }
 
   if (showStaff) {
-    html += '<tr class="roster-section"><td colspan="5">👔 Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="4">👔 Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
     if (staff.length) {
       html += staff.map(rosterStaffRow).join('');
     } else {
-      html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
+      html += '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
         + (search ? 'No staff match your search' : 'No staff yet — use Quick Add above')
         + '</td></tr>';
     }
   }
 
   if (!showPlayers && !showStaff) {
-    html += '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Select a role filter</td></tr>';
+    html += '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Select a role filter</td></tr>';
   }
 
   html += '</tbody></table>';
