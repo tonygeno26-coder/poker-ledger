@@ -416,7 +416,11 @@ select.inp{appearance:none;-webkit-appearance:none}
       <div class="inp-group"><div class="inp-label">Description</div><input class="inp" id="exp-desc" placeholder="e.g. Cards, food, tip out"></div>
       <div class="inp-group"><div class="inp-label">Amount</div><input class="inp" type="number" id="exp-amount" placeholder="0" min="0"></div>
     </div>
-    <button class="btn btn-purple" style="width:100%;margin-bottom:14px" onclick="addHouseExpense()">＋ Add</button>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <button class="btn btn-purple" style="flex:1" onclick="addHouseExpense()">＋ Add</button>
+      <button type="button" class="btn btn-outline btn-sm" id="house-receipt-btn" onclick="pickExpenseReceipt('house')" style="flex-shrink:0;white-space:nowrap">📷 Receipt</button>
+      <span id="house-receipt-status" style="font-size:11px;color:var(--green);display:none">📷 Ready</span>
+    </div>
     <div id="expense-list" class="scroll-y" style="max-height:min(240px,35vh);overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div></div>
   </div>
 
@@ -454,8 +458,11 @@ select.inp{appearance:none;-webkit-appearance:none}
       <select class="inp" id="quick-add-role" style="flex:1;min-width:120px">
         <option value="player">🎰 Player</option>
         <option value="dealer">🃏 Dealer</option>
-        <option value="staff">👔 Staff</option>
+        <option value="hostess">💃 Hostess</option>
         <option value="host">🏠 Host</option>
+        <option value="chef">👨‍🍳 Chef</option>
+        <option value="books">📒 Books</option>
+        <option value="misc">👔 Misc Staff</option>
       </select>
       <button class="btn btn-purple" style="flex-shrink:0" onclick="quickAddPerson()">＋ Add</button>
     </div>
@@ -520,15 +527,30 @@ select.inp{appearance:none;-webkit-appearance:none}
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Dealer</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Drop · Tax</div>
       </div>
-      <div id="role-card-staff" onclick="selectRole('staff')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">👔</div>
-        <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Staff</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Reimbursements</div>
+      <div id="role-card-hostess" onclick="selectRole('hostess')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;margin-bottom:4px">💃</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Hostess</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
       </div>
       <div id="role-card-host" onclick="selectRole('host')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
         <div style="font-size:22px;margin-bottom:4px">🏠</div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Host</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Full access</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
+      </div>
+      <div id="role-card-chef" onclick="selectRole('chef')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;margin-bottom:4px">👨‍🍳</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Chef</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Base pay · Tips</div>
+      </div>
+      <div id="role-card-books" onclick="selectRole('books')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;margin-bottom:4px">📒</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Books</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Hourly · Tips</div>
+      </div>
+      <div id="role-card-misc" onclick="selectRole('misc')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s;grid-column:1/-1">
+        <div style="font-size:22px;margin-bottom:4px">👔</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Misc Staff</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
       </div>
     </div>
     <div class="inp-group" style="margin-bottom:16px">
@@ -539,6 +561,17 @@ select.inp{appearance:none;-webkit-appearance:none}
       <div id="add-person-caps-text">✅ Can buy in · ✅ Can cash out</div>
     </div>
     <button class="btn btn-purple" style="width:100%" onclick="addPerson()">Add</button>
+  </div>
+</div>
+
+<!-- Hidden camera/file input for expense receipts -->
+<input type="file" id="expense-receipt-input" accept="image/*" capture="environment" style="display:none" onchange="onExpenseReceiptSelected(event)">
+
+<!-- MODAL: Receipt photo viewer -->
+<div class="modal-bg" id="modal-receipt-viewer" onclick="if(event.target===this)closeModal('modal-receipt-viewer')" style="background:rgba(0,0,0,0.92);z-index:9999">
+  <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">
+    <button type="button" onclick="closeModal('modal-receipt-viewer')" style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;z-index:2;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;width:40px;height:40px;border-radius:20px;font-size:20px;cursor:pointer;line-height:1">×</button>
+    <img id="receipt-viewer-img" src="" alt="Receipt" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
   </div>
 </div>
 
@@ -714,13 +747,100 @@ function staffPayoutsTotal(p) {
   return (p.staffPayouts || []).reduce(function(s, x) { return s + (x.amount || 0); }, 0);
 }
 
+/** Canonical staff roles (staffRole values). */
+var STAFF_ROLE_KEYS = ['dealer', 'hostess', 'host', 'chef', 'books', 'misc'];
+var STAFF_ROLE_LABELS = {
+  dealer: 'Dealer',
+  hostess: 'Hostess',
+  host: 'Host',
+  chef: 'Chef',
+  books: 'Books',
+  misc: 'Misc Staff'
+};
+var STAFF_ROLE_COLORS = {
+  dealer: '#f59f00',
+  hostess: '#e64980',
+  host: '#e8590c',
+  chef: '#2f9e44',
+  books: '#1971c2',
+  misc: '#868e96'
+};
+/** Map legacy role strings onto the current set. */
+var STAFF_ROLE_MIGRATE = {
+  dealer: 'dealer',
+  hostess: 'hostess',
+  host: 'host',
+  chef: 'chef',
+  books: 'books',
+  bookkeeper: 'books',
+  book: 'books',
+  misc: 'misc',
+  staff: 'misc',
+  'misc staff': 'misc',
+  miscellaneous: 'misc'
+};
+
+function normalizeStaffRole(role) {
+  if (!role) return '';
+  var key = String(role).trim().toLowerCase();
+  if (STAFF_ROLE_MIGRATE[key]) return STAFF_ROLE_MIGRATE[key];
+  if (STAFF_ROLE_KEYS.indexOf(key) !== -1) return key;
+  return 'misc';
+}
+
+function staffRoleLabel(role) {
+  var key = normalizeStaffRole(role);
+  return STAFF_ROLE_LABELS[key] || 'Misc Staff';
+}
+
+function staffRoleColor(role) {
+  var key = normalizeStaffRole(role);
+  return STAFF_ROLE_COLORS[key] || STAFF_ROLE_COLORS.misc;
+}
+
+function staffIsDealer(p) {
+  return !!(p && normalizeStaffRole(p.staffRole) === 'dealer');
+}
+
+function staffBasePay(p) {
+  return Number(p && p.basePay) || 0;
+}
+
+function staffHourlyPay(p) {
+  var rate = Number(p && p.hourlyRate) || 0;
+  var hours = Number(p && p.hoursWorked) || 0;
+  return Math.round(rate * hours * 100) / 100;
+}
+
 function staffTipBalance(p) {
-  // Gross tips − tax − payouts + reimbursements (house owes staff those expenses back)
+  // tips − tax + reimbursements(p.expenses) − payouts  (+ role-specific base/hourly; tax on tips only)
   var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
-  var expenses   = staffExpensesTotal(p);
+  var reimbursements = staffExpensesTotal(p);
   var paidOut    = staffPayoutsTotal(p);
-  return grossTips - taxPaid - paidOut + expenses;
+  var role = normalizeStaffRole(p.staffRole);
+  var base = 0;
+  if (role === 'chef') base = staffBasePay(p);
+  else if (role === 'books') base = staffHourlyPay(p);
+  return base + grossTips - taxPaid + reimbursements - paidOut;
+}
+
+function migrateStaffRoles() {
+  (G.players || []).forEach(function(p) {
+    if (!p || !p.staffRole) return;
+    var next = normalizeStaffRole(p.staffRole);
+    p.staffRole = next;
+    if (p.role && p.role !== 'player') p.role = next;
+    if (next === 'chef' && p.basePay == null) p.basePay = 0;
+    if (next === 'books') {
+      if (p.hourlyRate == null) p.hourlyRate = 0;
+      if (p.hoursWorked == null) p.hoursWorked = 0;
+    }
+    if (p.capabilities) {
+      p.capabilities.canLogDrop = next === 'dealer';
+      p.capabilities.canBuyIn = false;
+    }
+  });
 }
 
 function calcStaffTaxPreview(p, pct) {
@@ -1267,7 +1387,12 @@ function openStaffFromRoster(id) {
   _activePlayerId = null;
   var pv = document.getElementById('player-detail-view');
   if (pv) pv.style.display = 'none';
-  renderStaffDetail(id);
+  var sv = document.getElementById('staff-detail-view');
+  if (sv) { sv.style.display = 'none'; sv.innerHTML = ''; }
+  _activeStaffId = id;
+  showPage('players');
+  filterRosterByRole('staff');
+  expandRosterTo(id);
 }
 
 function toggleRosterExpand(id, evt) {
@@ -1811,6 +1936,8 @@ function rosterAddStaffExpense(id) {
     amount: amount,
     timestamp: new Date().toISOString()
   };
+  var photo = takePendingReceipt('staff:' + id);
+  if (photo) entry.receiptPhoto = photo;
   p.expenses.push(entry);
   appendTxn({
     type: 'HOUSE_EXPENSE',
@@ -1818,13 +1945,15 @@ function rosterAddStaffExpense(id) {
     description: description,
     desc: description,
     playerId: String(p.id),
-    playerName: p.name
+    playerName: p.name,
+    hasReceipt: !!photo
   });
   if (descEl) descEl.value = '';
   if (amtEl) amtEl.value = '';
+  clearReceiptStatus('staff:' + id);
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
-  toast('Expense $' + fmt(amount) + ' logged for ' + p.name + ' ✅');
+  toast('Expense $' + fmt(amount) + ' logged for ' + p.name + (photo ? ' 📷' : '') + ' ✅');
 }
 
 function rosterVoidStaffExpense(btn, staffId, expenseId) {
@@ -1849,7 +1978,46 @@ function rosterVoidStaffExpense(btn, staffId, expenseId) {
   });
 }
 
+function rosterSetBasePay(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var el = document.getElementById('rx-base-pay-' + id);
+  var amount = el ? (parseFloat(el.value) || 0) : 0;
+  if (amount < 0) { toast('Enter a valid base pay'); return; }
+  p.basePay = amount;
+  rosterKeepExpanded(id);
+  calcAll(); renderAll(); autoSave();
+  toast('Base pay set to $' + fmt(amount) + ' ✅');
+}
+
+function rosterUpdateHourlyPreview(id) {
+  var rateEl = document.getElementById('rx-hourly-rate-' + id);
+  var hrsEl = document.getElementById('rx-hours-worked-' + id);
+  var out = document.getElementById('rx-hourly-calc-' + id);
+  if (!out) return;
+  var rate = rateEl ? (parseFloat(rateEl.value) || 0) : 0;
+  var hours = hrsEl ? (parseFloat(hrsEl.value) || 0) : 0;
+  var pay = Math.round(rate * hours * 100) / 100;
+  out.innerHTML = '$' + fmt(rate) + '/hr × ' + hours + ' hrs = <strong style="color:var(--green)">$' + fmt(pay) + '</strong>';
+}
+
+function rosterSetHourlyPay(id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  var rateEl = document.getElementById('rx-hourly-rate-' + id);
+  var hrsEl = document.getElementById('rx-hours-worked-' + id);
+  var rate = rateEl ? (parseFloat(rateEl.value) || 0) : 0;
+  var hours = hrsEl ? (parseFloat(hrsEl.value) || 0) : 0;
+  if (rate < 0 || hours < 0) { toast('Enter valid rate and hours'); return; }
+  p.hourlyRate = rate;
+  p.hoursWorked = hours;
+  rosterKeepExpanded(id);
+  calcAll(); renderAll(); autoSave();
+  toast('Hourly pay set: $' + fmt(staffHourlyPay(p)) + ' ✅');
+}
+
 function rosterStaffExpandedHtml(p) {
+  var roleKey = normalizeStaffRole(p.staffRole);
   var lines = '';
   (p.tips || []).forEach(function(t){
     lines += '<div class="roster-expand-line">'
@@ -1867,11 +2035,42 @@ function rosterStaffExpandedHtml(p) {
   var unpaid = staffTipBalance(p);
   var expTotal = staffExpensesTotal(p);
   var taxPreview0 = calcStaffTaxPreview(p, 30);
+  var basePayAmt = staffBasePay(p);
+  var hourlyAmt = staffHourlyPay(p);
+
+  var rolePaySection = '';
+  if (roleKey === 'chef') {
+    rolePaySection = '<div class="roster-form-block" id="rx-base-pay-block-' + p.id + '">'
+      + '<div class="roster-form-label">Base Pay</div>'
+      + '<div class="roster-expand-summary" style="margin:0 0 8px">Current: <strong style="color:var(--green)">$' + fmt(basePayAmt) + '</strong> <span style="color:var(--text-muted)">(not taxed)</span></div>'
+      + '<div class="roster-inline-row">'
+        + '<input type="number" class="inp" id="rx-base-pay-' + p.id + '" placeholder="Base pay amount" min="0" value="' + (basePayAmt || '') + '">'
+        + '<button class="btn btn-purple btn-xs" onclick="rosterSetBasePay(' + p.id + ')">Set Base Pay</button>'
+      + '</div>'
+    + '</div>';
+  } else if (roleKey === 'books') {
+    var rate = Number(p.hourlyRate) || 0;
+    var hours = Number(p.hoursWorked) || 0;
+    rolePaySection = '<div class="roster-form-block" id="rx-hourly-block-' + p.id + '">'
+      + '<div class="roster-form-label">Hourly Pay</div>'
+      + '<div class="roster-expand-summary" style="margin:0 0 8px">Current: <strong style="color:var(--green)">$' + fmt(hourlyAmt) + '</strong> <span style="color:var(--text-muted)">(not taxed)</span></div>'
+      + '<div class="roster-inline-row" style="margin-bottom:8px">'
+        + '<input type="number" class="inp" id="rx-hourly-rate-' + p.id + '" placeholder="$/hr" min="0" value="' + (rate || '') + '" oninput="rosterUpdateHourlyPreview(' + p.id + ')" style="flex:1">'
+        + '<input type="number" class="inp" id="rx-hours-worked-' + p.id + '" placeholder="Hours" min="0" step="0.25" value="' + (hours || '') + '" oninput="rosterUpdateHourlyPreview(' + p.id + ')" style="flex:1">'
+      + '</div>'
+      + '<div id="rx-hourly-calc-' + p.id + '" class="roster-expand-meta" style="margin-bottom:8px">$' + fmt(rate) + '/hr × ' + hours + ' hrs = <strong style="color:var(--green)">$' + fmt(hourlyAmt) + '</strong></div>'
+      + '<button class="btn btn-purple btn-xs" style="width:100%" onclick="rosterSetHourlyPay(' + p.id + ')">Set Hours</button>'
+    + '</div>';
+  }
 
   var expLines = '';
   (p.expenses || []).forEach(function(e){
+    var receiptBtn = e.receiptPhoto
+      ? '<button type="button" title="View receipt" onclick="event.stopPropagation();viewExpenseReceiptPhoto(this)" data-photo-id="staff:' + p.id + ':' + e.id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px">📷</button>'
+      : '';
     expLines += '<div class="roster-expand-line">'
       + '<span style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (e.description || e.desc || '') + '</span>'
+      + receiptBtn
       + '<span style="font-weight:800">$' + fmt(e.amount) + '</span>'
       + '<button class="roster-del-btn" title="Void expense" onclick="event.stopPropagation();rosterVoidStaffExpense(this,' + p.id + ',\'' + e.id + '\')">✕</button>'
       + '</div>';
@@ -1880,13 +2079,20 @@ function rosterStaffExpandedHtml(p) {
     expLines = '<div class="roster-expand-meta" style="padding:2px 0 8px">No expenses logged</div>';
   }
 
+  var pendingStaff = getPendingReceipt('staff:' + p.id);
+  var receiptStatus = pendingStaff
+    ? '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--green)">📷 Ready</span>'
+    : '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--text-muted);display:none">📷 Ready</span>';
+
   var expensesSection = '<div class="roster-form-block" id="rx-exp-block-' + p.id + '">'
     + '<div class="roster-form-label">Expenses</div>'
     + expLines
-    + '<div class="roster-inline-row" style="margin-top:8px">'
+    + '<div class="roster-inline-row" style="margin-top:8px;flex-wrap:wrap">'
       + '<input class="inp" id="rx-exp-desc-' + p.id + '" placeholder="Description" style="flex:2;min-width:100px">'
       + '<input type="number" class="inp" id="rx-exp-amount-' + p.id + '" placeholder="Amt" min="0" style="flex:1;min-width:70px">'
+      + '<button type="button" class="btn btn-outline btn-xs" onclick="pickExpenseReceipt(\'staff:' + p.id + '\')">📷 Receipt</button>'
       + '<button type="button" class="btn btn-purple btn-xs" onclick="rosterAddStaffExpense(' + p.id + ')">＋ Add Expense</button>'
+      + receiptStatus
     + '</div>'
   + '</div>';
 
@@ -1898,16 +2104,18 @@ function rosterStaffExpandedHtml(p) {
     + '</div>'
   + '</div>';
 
-  var dropForm = '<div class="roster-form-block">'
-    + '<div class="roster-form-label">Log Drop</div>'
-    + '<div class="roster-inline-row">'
-      + '<input type="number" class="inp" id="rx-drop-amount-' + p.id + '" placeholder="Drop amount" min="0">'
-      + '<button class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="rosterAddDrop(' + p.id + ')">Log Drop</button>'
-    + '</div>'
-  + '</div>';
+  var dropForm = staffIsDealer(p)
+    ? ('<div class="roster-form-block">'
+      + '<div class="roster-form-label">Log Drop</div>'
+      + '<div class="roster-inline-row">'
+        + '<input type="number" class="inp" id="rx-drop-amount-' + p.id + '" placeholder="Drop amount" min="0">'
+        + '<button class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="rosterAddDrop(' + p.id + ')">Log Drop</button>'
+      + '</div>'
+    + '</div>')
+    : '';
 
   var taxForm = '<div class="roster-form-block">'
-    + '<div class="roster-form-label">Staff Tax</div>'
+    + '<div class="roster-form-label">Staff Tax <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(tips only)</span></div>'
     + '<div class="roster-inline-row" style="margin-bottom:8px">'
       + '<input type="range" id="rx-staff-tax-pct-' + p.id + '" min="0" max="100" value="30" oninput="rosterUpdateStaffTaxPreview(' + p.id + ')" style="flex:1;accent-color:var(--gold)">'
       + '<span id="rx-staff-tax-pct-lbl-' + p.id + '" style="font-weight:900;color:var(--gold);min-width:36px;text-align:right">30%</span>'
@@ -1920,15 +2128,21 @@ function rosterStaffExpandedHtml(p) {
     + '<button class="btn btn-xs" style="width:100%;margin-top:8px;background:var(--gold);color:#000;font-weight:800" onclick="rosterApplyStaffTax(this,' + p.id + ')">Apply Tax</button>'
   + '</div>';
 
+  var summaryBits = '';
+  if (roleKey === 'chef') {
+    summaryBits += 'Base pay: <strong style="color:var(--green)">$' + fmt(basePayAmt) + '</strong> · ';
+  } else if (roleKey === 'books') {
+    summaryBits += 'Hourly: <strong style="color:var(--green)">$' + fmt(hourlyAmt) + '</strong> · ';
+  }
+  summaryBits += 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
+    + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
+    + ' · Reimbursements: <strong style="color:var(--green)">+$' + fmt(expTotal) + '</strong>'
+    + ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
+    + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>';
+
   var summary = '<div class="roster-form-block">'
     + '<div class="roster-form-label">Balance Summary</div>'
-    + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">'
-      + 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
-      + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
-      + ' · Reimbursements: <strong style="color:var(--green)">+$' + fmt(expTotal) + '</strong>'
-      + ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
-      + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>'
-    + '</div>'
+    + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">' + summaryBits + '</div>'
   + '</div>';
 
   var payoutPrefill = Math.max(0, unpaid);
@@ -1952,14 +2166,18 @@ function rosterStaffExpandedHtml(p) {
   + '</div>';
 
   return '<tr class="roster-expand-row roster-expand-staff"><td colspan="5"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+    + rolePaySection
     + '<div class="roster-form-label" style="margin-bottom:4px">Tips History</div>'
     + lines
-    + expensesSection
     + tipsForm
     + dropForm
+    + expensesSection
     + taxForm
     + summary
     + payoutForm
+    + '<div class="roster-expand-actions" style="margin-top:10px">'
+      + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Staff</button>'
+    + '</div>'
     + '</div></td></tr>';
 }
 
@@ -2025,17 +2243,21 @@ function rosterPlayerRow(p) {
 
 function rosterStaffRow(p) {
   var bal = staffTipBalance(p);
+  var roleKey = normalizeStaffRole(p.staffRole);
   var active = p.id === _activeStaffId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
+  var dropBtn = staffIsDealer(p)
+    ? '<button class="btn btn-outline btn-xs" onclick="rosterStaffDropAction(' + p.id + ')">Drop</button>'
+    : '';
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
-    + '<td><span class="roster-avatar" style="background:var(--gold)">' + p.name.charAt(0) + '</span></td>'
-    + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role">' + p.staffRole + '</div></td>'
+    + '<td><span class="roster-avatar" style="background:' + staffRoleColor(roleKey) + '">' + p.name.charAt(0) + '</span></td>'
+    + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role" style="color:' + staffRoleColor(roleKey) + '">' + staffRoleLabel(roleKey) + '</div></td>'
     + '<td>' + rosterBalAmt(bal) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
     + '<td><span class="roster-actions" onclick="event.stopPropagation()">'
       + '<button class="btn btn-outline btn-xs" onclick="rosterStaffTipsAction(' + p.id + ')">Tips</button>'
-      + '<button class="btn btn-outline btn-xs" onclick="rosterStaffDropAction(' + p.id + ')">Drop</button>'
+      + dropBtn
       + '<button class="btn btn-outline btn-xs" onclick="rosterStaffPayOutAction(' + p.id + ')">Pay Out</button>'
     + '</span></td>'
     + '</tr>';
@@ -2196,142 +2418,18 @@ function renderPlayerDetail(id) {
 }
 
 function renderStaffDetail(id) {
+  // Staff use inline roster expand only — no playing / buy-in card.
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
   _activeStaffId = id;
+  _activePlayerId = null;
   var detail = document.getElementById('staff-detail-view');
-  detail.style.display = 'block';
-  var tipsTotal = (p.tips||[]).reduce(function(s,t){return s+t.amount;},0);
-  var dropTotal = (p.drops||[]).reduce(function(s,d){return s+d.amount;},0);
-
-  var bal = playerBalance(p);
-  var balColor = bal>0?'var(--green)':bal<0?'var(--red)':'var(--text-muted)';
-  var reimbHistory = playerReimbursements(p).map(function(e){
-    return '<div class="buyin-log-item" style="background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.2)">'
-      +'<span style="font-weight:700;font-size:11px;color:var(--purple-light)">🧾 Reimbursement</span>'
-      +'<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e.desc+'</span>'
-      +'<span style="font-weight:800;color:var(--purple-light)">$'+fmt(e.amount)+'</span>'
-      +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">✕</button>'
-      +'</div>';
-  }).join('');
-  var markerTotal = playerMarkerTotal(p);
-  var netPayout = Math.max(0, (p.chipTurnIn||0) - markerTotal);
-  var turnInSection = (p.chipTurnIn > 0)
-    ? '<div class="io-section"><div class="io-title" style="display:flex;justify-content:space-between;align-items:center">💸 Payout <a onclick="resetTurnIn('+p.id+')" style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);cursor:pointer;text-decoration:underline">Re-count</a></div>'
-        +'<div style="font-size:11px;color:var(--text-muted);background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.7">'
-          +'Chips In: <strong style="color:var(--text)">$'+fmt(p.chipTurnIn)+'</strong><br>'
-          +'Marker: <strong style="color:var(--red)">-$'+fmt(markerTotal)+'</strong><br>'
-          +'Net Payout: <strong style="color:var(--green)">$'+fmt(netPayout)+'</strong>'
-        +'</div>'
-        +'<div class="io-field"><label>AMOUNT</label>'
-          +'<input type="number" class="amount-btn" id="cashout-amount-'+p.id+'" value="'+netPayout+'" min="0">'
-        +'</div>'
-        +'<div class="io-field"><label>METHOD</label>'
-          +'<select class="inp" id="cashout-method-'+p.id+'"><option value="CASH">💵 Cash</option><option value="ECASH">📱 E-Cash</option></select>'
-        +'</div>'
-        +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--green);border-color:var(--green)" onclick="addCashOut('+p.id+')">💸 Pay Out</button>'
-      +'</div>'
-    : '<div class="io-section"><div class="io-title">🎰 Chip Turn-In</div>'
-        +(markerTotal > 0
-          ? '<div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:10px;line-height:1.4">⚠️ Turn in chips first — $'+fmt(markerTotal)+' marker outstanding</div>'
-            +'<button class="btn btn-outline btn-sm" disabled style="width:100%;margin-bottom:10px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed">💸 Pay Out</button>'
-          : '')
-        +'<div class="io-field"><label>CHIPS COUNTED</label>'
-          +'<input type="number" class="amount-btn" id="turnin-amount-'+p.id+'" placeholder="0" min="0" oninput="updateTurnInPreview('+p.id+')">'
-        +'</div>'
-        +'<div id="turnin-preview-'+p.id+'" style="font-size:11px;margin-bottom:8px;min-height:14px"></div>'
-        +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="logTurnIn('+p.id+')">📋 Log Turn-In</button>'
-      +'</div>';
-
-  detail.innerHTML =
-    '<div class="player-detail" style="border-color:var(--gold)">'
-    // Header
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-      +'<div style="display:flex;align-items:center;gap:12px">'
-        +'<div class="player-avatar" style="margin:0;background:var(--gold)">'+p.name.charAt(0)+'</div>'
-        +'<div><div style="font-size:20px;font-weight:800">'+p.name+'</div>'
-        +'<div style="font-size:12px;color:var(--gold);text-transform:uppercase;font-weight:700">'+p.staffRole+'</div></div>'
-      +'</div>'
-      +'<button class="btn btn-outline btn-sm" onclick="_activeStaffId=null;document.getElementById(\'staff-detail-view\').style.display=\'none\';renderPlayerGrid()">✕ Close</button>'
-    +'</div>'
-    // Stats row
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">'
-      +'<div class="stat-box"><div class="lbl">Playing Balance</div><div class="val" style="color:'+balColor+'">'+(bal>=0?'+':'')+'$'+fmt(Math.abs(bal))+'</div></div>'
-      +'<div class="stat-box"><div class="lbl">Tips Earned</div><div class="val" style="color:var(--gold)">$'+fmt(tipsTotal)+'</div></div>'
-      +'<div class="stat-box"><div class="lbl">Drop Collected</div><div class="val" style="color:var(--orange)">$'+fmt(dropTotal)+'</div></div>'
-    +'</div>'
-    // Balance bar
-    +'<div class="balance-bar" style="margin-bottom:16px"><span class="bal-lbl">Playing Balance</span><span class="bal-val" style="color:'+balColor+'">'+(bal>=0?'+':'')+'$'+fmt(Math.abs(bal))+'</span></div>'
-    // PLAYING section
-    +'<div style="font-size:11px;font-weight:800;color:var(--purple-light);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">🎰 Playing</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'
-      +'<div class="io-section"><div class="io-title">Buy-In</div>'
-        +'<div class="io-field"><label>TYPE</label>'
-          +'<select class="inp" id="buyin-type-'+p.id+'" onchange="toggleEcashReceiver('+p.id+',this.value)">'
-            +'<option value="CASH">💵 Cash</option>'
-            +'<option value="ECASH">📱 E-Cash</option>'
-            +'<option value="MARKER">📋 Marker</option>'
-            +'<option value="BONUS">🎁 Bonus</option>'
-          +'</select>'
-        +'</div>'
-        +'<div class="io-field" id="ecash-receiver-row-'+p.id+'" style="display:none"><label>📱 E-Cash Received By</label>'
-          +'<select class="inp" id="ecash-receiver-'+p.id+'"><option value="">— Select receiver —</option>'+getEcashReceiverOptions()+'</select>'
-        +'</div>'
-        +'<div class="io-field"><label>AMOUNT</label>'
-          +'<input type="number" class="amount-btn" id="buyin-amount-'+p.id+'" placeholder="0" min="0">'
-        +'</div>'
-        +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="addBuyIn('+p.id+')">＋ Add</button>'
-      +'</div>'
-      + turnInSection
-    +'</div>'
-    // STAFF section
-    +'<div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">👔 Staff</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
-      +'<div class="io-section"><div class="io-title">💰 Log Tips</div>'
-        +'<div class="io-field"><label>AMOUNT</label><input type="number" class="amount-btn" id="tips-amount-'+p.id+'" placeholder="0" min="0"></div>'
-        +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="addTips('+p.id+')">Add Tips</button>'
-      +'</div>'
-      +'<div class="io-section"><div class="io-title">🎰 Log Drop</div>'
-        +'<div class="io-field"><label>AMOUNT</label><input type="number" class="amount-btn" id="drop-amount-'+p.id+'" placeholder="0" min="0"></div>'
-        +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--orange);border-color:var(--orange)" onclick="addDrop('+p.id+')">Add Drop</button>'
-      +'</div>'
-    +'</div>'
-    // Staff Tax — always visible for staff roles
-    +'<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:14px;margin-bottom:12px">'
-      +'<div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px">💰 Staff Tax</div>'
-      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
-        +'<span style="font-size:12px;color:var(--text-muted);white-space:nowrap">Tax %</span>'
-        +'<input type="range" id="staff-tax-pct-'+p.id+'" min="0" max="100" value="30" oninput="updateStaffTaxPreview('+p.id+')" style="flex:1;accent-color:var(--gold)">'
-        +'<span id="staff-tax-pct-lbl-'+p.id+'" style="font-weight:900;color:var(--gold);min-width:36px;text-align:right">30%</span>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'
-        +'<div style="text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px">'
-          +'<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">Gross Tips</div>'
-          +'<div style="font-weight:800" id="staff-tax-gross-'+p.id+'">$'+fmt(staffTipBalance(p))+'</div>'
-        +'</div>'
-        +'<div style="text-align:center;background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px">'
-          +'<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">House Tax</div>'
-          +'<div style="font-weight:800;color:var(--red)" id="staff-tax-amount-'+p.id+'">$0</div>'
-        +'</div>'
-        +'<div style="text-align:center;background:var(--green-dim);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:8px">'
-          +'<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">Staff Net</div>'
-          +'<div style="font-weight:800;color:var(--green)" id="staff-tax-net-'+p.id+'">$'+fmt(staffTipBalance(p))+'</div>'
-        +'</div>'
-      +'</div>'
-      +'<button class="btn btn-sm" style="width:100%;background:var(--gold);color:#000;font-weight:800" onclick="applyStaffTax(this,'+p.id+')">Apply Staff Tax</button>'
-    +'</div>'
-    // Buy-in history
-    + ((p.buyIns&&p.buyIns.length) ? '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Buy-In History</div>'
-      + p.buyIns.map(function(b){ return '<div class="buyin-log-item"><span style="font-weight:700;font-size:11px;color:var(--purple-light)">'+b.type+'</span><span style="font-size:12px;color:var(--text-muted)">'+(b.time||'')+'</span><span style="font-weight:800;color:var(--red)">$'+fmt(b.amount)+'</span></div>'; }).join('') : '')
-    // Reimbursement history
-    + (reimbHistory ? '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px">Reimbursements</div>' + reimbHistory : '')
-    +'<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">'
-      +'<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red)" onclick="removePlayer(this,'+p.id+')">Remove Staff</button>'
-    +'</div>'
-    +'</div>';
-
-  renderPlayerGrid();
-  setTimeout(function(){ updateStaffTaxPreview(_activeStaffId); }, 0);
+  if (detail) { detail.style.display = 'none'; detail.innerHTML = ''; }
+  var pv = document.getElementById('player-detail-view');
+  if (pv) { pv.style.display = 'none'; pv.innerHTML = ''; }
+  showPage('players');
+  filterRosterByRole('staff');
+  expandRosterTo(id);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2339,25 +2437,38 @@ function renderStaffDetail(id) {
 // ══════════════════════════════════════════════════════════════════════════════
 function selectRole(role) {
   setVal('new-player-role', role);
-  var colors = { player:'var(--red)', dealer:'var(--gold)', staff:'var(--text-muted)', host:'var(--gold)' };
-  ['player','dealer','staff','host'].forEach(function(r) {
-    var card = document.getElementById('role-card-'+r);
+  var colors = {
+    player: 'var(--red)',
+    dealer: '#f59f00',
+    hostess: '#e64980',
+    host: '#e8590c',
+    chef: '#2f9e44',
+    books: '#1971c2',
+    misc: '#868e96'
+  };
+  var keys = ['player'].concat(STAFF_ROLE_KEYS);
+  keys.forEach(function(r) {
+    var card = document.getElementById('role-card-' + r);
     if (!card) return;
+    var title = card.querySelector('div:nth-child(2)');
     if (r === role) {
-      card.style.background = 'rgba(224,49,49,0.18)';
+      card.style.background = r === 'player' ? 'rgba(224,49,49,0.18)' : 'var(--bg3)';
       card.style.borderColor = colors[r] || 'var(--red)';
-      card.querySelector('div:nth-child(2)').style.color = colors[r] || 'var(--red)';
+      if (title) title.style.color = colors[r] || 'var(--red)';
     } else {
-      card.style.background = 'var(--surface2)';
+      card.style.background = 'var(--bg3)';
       card.style.borderColor = 'var(--border)';
-      card.querySelector('div:nth-child(2)').style.color = 'var(--text-muted)';
+      if (title) title.style.color = 'var(--text-muted)';
     }
   });
   var caps = {
-    player: '✅ Can buy in · ✅ Can cash out',
-    dealer: '✅ Tips · ✅ Drop turn-in · ✅ Tax withholding · ✅ Receive eCash',
-    staff:  '✅ Tips · ✅ Reimbursements · ✅ Receive eCash',
-    host:   '✅ Full access · ✅ Bookkeeper view'
+    player:  '✅ Can buy in · ✅ Can cash out',
+    dealer:  '✅ Tips · ✅ Drop · ✅ Tax · ✅ Expenses',
+    hostess: '✅ Tips · ✅ Tax · ✅ Expenses',
+    host:    '✅ Tips · ✅ Tax · ✅ Expenses',
+    chef:    '✅ Base pay · ✅ Tips · ✅ Tax · ✅ Expenses',
+    books:   '✅ Hourly pay · ✅ Tips · ✅ Tax · ✅ Expenses',
+    misc:    '✅ Tips · ✅ Tax · ✅ Expenses'
   };
   var capEl = document.getElementById('add-person-caps-text');
   if (capEl) capEl.textContent = caps[role] || caps.player;
@@ -2370,21 +2481,24 @@ function addPerson() {
   var notes = getVal('new-player-notes').trim();
   if (!name) { toast('Enter name'); return; }
   var isPlayer = role === 'player';
+  var staffRole = isPlayer ? '' : normalizeStaffRole(role);
   var newP = {
     id: Date.now(),
     name: name,
-    role: role,
-    staffRole: isPlayer ? '' : role,
+    role: isPlayer ? 'player' : staffRole,
+    staffRole: staffRole,
     notes: notes,
     capabilities: {
       canBuyIn:        isPlayer,
-      canCashOut:      true,
+      canCashOut:      isPlayer,
       canLogTips:      !isPlayer,
-      canLogDrop:      !isPlayer,
+      canLogDrop:      staffRole === 'dealer',
       canReceiveECash: true
     },
     buyIns: [], cashOuts: [], drops: [], tips: [], expenses: []
   };
+  if (staffRole === 'chef') newP.basePay = 0;
+  if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
   G.players.push(newP);
   setVal('new-player-name',''); setVal('new-player-notes','');
   selectRole('player');
@@ -2392,7 +2506,7 @@ function addPerson() {
   if (isPlayer) { _activePlayerId = newP.id; } else { _activeStaffId = newP.id; }
   calcAll(); renderAll(); autoSave();
   if (isPlayer) { renderPlayerDetail(newP.id); } else { renderStaffDetail(newP.id); }
-  toast(name + ' (' + role + ') added ✅');
+  toast(name + ' (' + (isPlayer ? 'Player' : staffRoleLabel(staffRole)) + ') added ✅');
 }
 
 // Legacy aliases kept for any old calls
@@ -2529,6 +2643,124 @@ function addDrop(id) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// EXPENSE RECEIPT PHOTOS — optional camera capture, compressed JPEG base64
+// ══════════════════════════════════════════════════════════════════════════════
+var _pendingReceiptPhotos = {}; // key → dataURL
+var _receiptPickKey = null;
+
+function getPendingReceipt(key) {
+  return _pendingReceiptPhotos[key] || null;
+}
+
+function takePendingReceipt(key) {
+  var photo = _pendingReceiptPhotos[key] || null;
+  if (photo) delete _pendingReceiptPhotos[key];
+  return photo;
+}
+
+function clearReceiptStatus(key) {
+  delete _pendingReceiptPhotos[key];
+  if (key === 'house') {
+    var st = document.getElementById('house-receipt-status');
+    if (st) st.style.display = 'none';
+    var btn = document.getElementById('house-receipt-btn');
+    if (btn) btn.style.borderColor = '';
+  } else if (String(key).indexOf('staff:') === 0) {
+    var sid = String(key).slice(6);
+    var sst = document.getElementById('rx-exp-receipt-status-' + sid);
+    if (sst) sst.style.display = 'none';
+  }
+}
+
+function pickExpenseReceipt(key) {
+  _receiptPickKey = key;
+  var input = document.getElementById('expense-receipt-input');
+  if (!input) { toast('Camera not available'); return; }
+  input.value = '';
+  input.click();
+}
+
+function onExpenseReceiptSelected(evt) {
+  var file = evt && evt.target && evt.target.files && evt.target.files[0];
+  var key = _receiptPickKey;
+  _receiptPickKey = null;
+  if (!file || !key) return;
+  compressReceiptImage(file, function(dataUrl) {
+    if (!dataUrl) { toast('Could not process photo'); return; }
+    _pendingReceiptPhotos[key] = dataUrl;
+    if (key === 'house') {
+      var st = document.getElementById('house-receipt-status');
+      if (st) st.style.display = 'inline';
+      var btn = document.getElementById('house-receipt-btn');
+      if (btn) btn.style.borderColor = 'var(--green)';
+    } else if (String(key).indexOf('staff:') === 0) {
+      var sid = String(key).slice(6);
+      var sst = document.getElementById('rx-exp-receipt-status-' + sid);
+      if (sst) { sst.style.display = 'inline'; sst.textContent = '📷 Ready'; }
+    }
+    toast('Receipt attached 📷');
+  });
+}
+
+function compressReceiptImage(file, cb) {
+  var reader = new FileReader();
+  reader.onerror = function() { cb(null); };
+  reader.onload = function(ev) {
+    var img = new Image();
+    img.onerror = function() { cb(null); };
+    img.onload = function() {
+      try {
+        var maxW = 800;
+        var w = img.width || 800;
+        var h = img.height || 600;
+        if (w > maxW) {
+          h = Math.round(h * maxW / w);
+          w = maxW;
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        cb(canvas.toDataURL('image/jpeg', 0.7));
+      } catch (err) {
+        console.warn('compressReceiptImage', err);
+        cb(null);
+      }
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function lookupExpenseReceipt(photoKey) {
+  // photoKey: "house:E123" or "staff:playerId:E123"
+  if (!photoKey) return null;
+  var parts = String(photoKey).split(':');
+  if (parts[0] === 'house' && parts[1]) {
+    var he = (G.expenses || []).find(function(e){ return String(e.id) === String(parts[1]); });
+    return he && he.receiptPhoto ? he.receiptPhoto : null;
+  }
+  if (parts[0] === 'staff' && parts[1] && parts[2]) {
+    var p = G.players.find(function(pl){ return String(pl.id) === String(parts[1]); });
+    if (!p || !p.expenses) return null;
+    var se = p.expenses.find(function(e){ return String(e.id) === String(parts[2]); });
+    return se && se.receiptPhoto ? se.receiptPhoto : null;
+  }
+  return null;
+}
+
+function viewExpenseReceiptPhoto(btnOrKey) {
+  var key = typeof btnOrKey === 'string' ? btnOrKey
+    : (btnOrKey && btnOrKey.getAttribute ? btnOrKey.getAttribute('data-photo-id') : null);
+  var src = lookupExpenseReceipt(key);
+  if (!src) { toast('No receipt photo'); return; }
+  var img = document.getElementById('receipt-viewer-img');
+  if (img) img.src = src;
+  openModal('modal-receipt-viewer');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // EXPENSES — house (dashboard) + staff row reimbursements
 // ══════════════════════════════════════════════════════════════════════════════
 function addHouseExpense() {
@@ -2549,6 +2781,8 @@ function addHouseExpense() {
     playerId: null,
     playerName: 'House'
   };
+  var photo = takePendingReceipt('house');
+  if (photo) entry.receiptPhoto = photo;
   G.expenses.push(entry);
   appendTxn({
     type: 'HOUSE_EXPENSE',
@@ -2556,12 +2790,14 @@ function addHouseExpense() {
     desc: desc,
     description: desc,
     playerId: null,
-    playerName: 'House'
+    playerName: 'House',
+    hasReceipt: !!photo
   });
   if (descEl) descEl.value = '';
   if (amtEl)  amtEl.value = '';
+  clearReceiptStatus('house');
   calcAll(); renderAll(); autoSave();
-  toast('House expense $' + fmt(amount) + ' logged ✅');
+  toast('House expense $' + fmt(amount) + ' logged' + (photo ? ' 📷' : '') + ' ✅');
 }
 
 function removeExpense(btn, id) {
@@ -2584,9 +2820,13 @@ function renderExpenseList() {
   var list = (G.expenses || []).filter(function(e){ return e.type === 'HOUSE' || !e.playerId; });
   el.innerHTML = list.length
     ? list.slice().reverse().map(function(e){
+        var receiptBtn = e.receiptPhoto
+          ? '<button type="button" title="View receipt" onclick="viewExpenseReceiptPhoto(\'house:' + e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">📷</button>'
+          : '';
         return '<div class="buyin-log-item" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2)">'
           +'<span style="font-weight:700;font-size:11px;color:var(--red);min-width:70px">🏠 HOUSE</span>'
           +'<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.desc||e.description||'')+'</span>'
+          + receiptBtn
           +'<span style="font-weight:800;color:var(--text);margin-right:8px">$'+fmt(e.amount)+'</span>'
           +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">✕</button>'
           +'</div>';
@@ -2909,8 +3149,11 @@ function init() {
       // Drop legacy game type / stakes if present in old saves
       delete G.type;
       delete G.stakes;
+      migrateStaffRoles();
       restoreInputs();
     } catch(e) { console.warn('init restore error:', e); }
+  } else {
+    migrateStaffRoles();
   }
   calcAll();
   renderAll();
@@ -2925,7 +3168,7 @@ function getEcashReceiverOptions() {
   var receivers = [{ id:'house', name:'House / Bookkeeper' }];
   // Add staff/dealers as receivers
   G.players.filter(function(p){ return !!p.staffRole; }).forEach(function(p){
-    receivers.push({ id:String(p.id), name:p.name + ' (' + p.staffRole + ')' });
+    receivers.push({ id:String(p.id), name:p.name + ' (' + staffRoleLabel(p.staffRole) + ')' });
   });
   return receivers.map(function(r){
     return '<option value="'+r.id+'">'+r.name+'</option>';
