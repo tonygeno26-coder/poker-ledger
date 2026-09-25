@@ -1091,7 +1091,7 @@ function renderAll() {
   owesListEl.innerHTML = owingPlayers.length
     ? owingPlayers.map(function(p){
         var bal = playerDisplayBalance(p);
-        return '<div class="owed-row" onclick="showPage(\'players\');renderPlayerDetail('+p.id+')">'
+        return '<div class="owed-row" onclick="showPage(\'players\');expandRosterTo('+p.id+')">'
           +'<span class="owed-name">'+p.name+'</span>'
           +'<span class="owed-amt">$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
@@ -1256,7 +1256,11 @@ function openPlayerFromRoster(id) {
   _activeStaffId = null;
   var sv = document.getElementById('staff-detail-view');
   if (sv) sv.style.display = 'none';
-  renderPlayerDetail(id);
+  var pv = document.getElementById('player-detail-view');
+  if (pv) pv.style.display = 'none';
+  _activePlayerId = id;
+  showPage('players');
+  expandRosterTo(id);
 }
 
 function openStaffFromRoster(id) {
@@ -1782,6 +1786,7 @@ function rosterPlayerExpandedHtml(p) {
     + turnInSection
     + '<div class="roster-expand-actions">'
       + '<button class="btn btn-outline btn-xs" onclick="rosterSettleAction(' + p.id + ')">Settle</button>'
+      + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Player</button>'
     + '</div>'
     + '</div></td></tr>';
 }
@@ -2176,124 +2181,18 @@ var _activePlayerId = null;
 var _activeStaffId  = null;
 
 function renderPlayerDetail(id) {
+  // Legacy detail card removed — always use the inline roster expanded row.
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
   _activePlayerId = id;
+  _activeStaffId = null;
   var detail = document.getElementById('player-detail-view');
-  detail.style.display = 'block';
-  var bal = playerBalance(p);
-  var cardBal = playerBalance(p); // same function, verify consistency
-  console.table({ '[profile balance render]':'', player:p.name, id:p.id, profileBalance:bal, cardBalance:cardBal, match:bal===cardBal });
-  var balColor = bal>0?'var(--green)':bal<0?'var(--red)':'var(--text-muted)';
-  var bonusTotal = playerBonusTotal(p);
-
-  var buyInHistory = (p.buyIns||[]).map(function(b){
-    return '<div class="buyin-log-item"><span style="font-weight:700;font-size:11px;color:var(--purple-light)">'+b.type+'</span>'
-      +'<span style="font-size:12px;color:var(--text-muted)">'+( b.time||'')+'</span>'
-      +'<span style="font-weight:800;color:var(--red)">$'+fmt(b.amount)+'</span>'
-      +'</div>';
-  }).join('');
-  var cashOutHistory = (p.cashOuts||[]).map(function(c){
-    return '<div class="buyin-log-item" style="background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2)">'
-      +'<span style="font-weight:700;font-size:11px;color:var(--green)">CASH OUT ('+c.method+')</span>'
-      +'<span style="font-size:12px;color:var(--text-muted)">'+( c.time||'')+'</span>'
-      +'<span style="font-weight:800;color:var(--green)">$'+fmt(c.amount)+'</span>'
-      +'</div>';
-  }).join('');
-  var reimbHistory = playerReimbursements(p).map(function(e){
-    return '<div class="buyin-log-item" style="background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.2)">'
-      +'<span style="font-weight:700;font-size:11px;color:var(--purple-light)">🧾 Reimbursement</span>'
-      +'<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e.desc+'</span>'
-      +'<span style="font-weight:800;color:var(--purple-light)">$'+fmt(e.amount)+'</span>'
-      +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">✕</button>'
-      +'</div>';
-  }).join('');
-  var markerTotal = playerMarkerTotal(p);
-  var netPayout = Math.max(0, (p.chipTurnIn||0) - markerTotal);
-  var turnInSection = (p.chipTurnIn > 0)
-    ? '<div class="io-section">'
-        +'<div class="io-title" style="display:flex;justify-content:space-between;align-items:center">💸 Payout <a onclick="resetTurnIn('+p.id+')" style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);cursor:pointer;text-decoration:underline">Re-count</a></div>'
-        +'<div style="font-size:11px;color:var(--text-muted);background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.7">'
-          +'Chips In: <strong style="color:var(--text)">$'+fmt(p.chipTurnIn)+'</strong><br>'
-          +'Marker: <strong style="color:var(--red)">-$'+fmt(markerTotal)+'</strong><br>'
-          +'Net Payout: <strong style="color:var(--green)">$'+fmt(netPayout)+'</strong>'
-        +'</div>'
-        +'<div class="io-field"><label>AMOUNT</label>'
-          +'<input type="number" class="amount-btn" id="cashout-amount-'+p.id+'" value="'+netPayout+'" min="0">'
-        +'</div>'
-        +'<div class="io-field"><label>METHOD</label>'
-          +'<select class="inp" id="cashout-method-'+p.id+'">'
-            +'<option value="CASH">💵 Cash</option>'
-            +'<option value="ECASH">📱 E-Cash</option>'
-          +'</select>'
-        +'</div>'
-        +'<button class="btn btn-outline btn-sm" style="width:100%;color:var(--green);border-color:var(--green)" onclick="addCashOut('+p.id+')">💸 Pay Out</button>'
-      +'</div>'
-    : '<div class="io-section">'
-        +'<div class="io-title">🎰 Chip Turn-In</div>'
-        +(markerTotal > 0
-          ? '<div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:10px;line-height:1.4">⚠️ Turn in chips first — $'+fmt(markerTotal)+' marker outstanding</div>'
-            +'<button class="btn btn-outline btn-sm" disabled style="width:100%;margin-bottom:10px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed">💸 Pay Out</button>'
-          : '')
-        +'<div class="io-field"><label>CHIPS COUNTED</label>'
-          +'<input type="number" class="amount-btn" id="turnin-amount-'+p.id+'" placeholder="0" min="0" oninput="updateTurnInPreview('+p.id+')">'
-        +'</div>'
-        +'<div id="turnin-preview-'+p.id+'" style="font-size:11px;margin-bottom:8px;min-height:14px"></div>'
-        +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="logTurnIn('+p.id+')">📋 Log Turn-In</button>'
-      +'</div>';
-
-  detail.innerHTML =
-    '<div class="player-detail">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-      +'<div style="display:flex;align-items:center;gap:12px">'
-        +'<div class="player-avatar" style="margin:0">'+p.name.charAt(0)+'</div>'
-        +'<div><div style="font-size:20px;font-weight:800">'+p.name+'</div>'
-        +'<div style="font-size:12px;color:var(--text-muted)">Player</div></div>'
-        + (bonusTotal>0 ? '<span class="badge" style="background:var(--gold-dim);color:var(--gold)">🎁 $'+fmt(bonusTotal)+'</span>' : '')
-      +'</div>'
-      +'<button class="btn btn-outline btn-sm" onclick="_activePlayerId=null;document.getElementById(\'player-detail-view\').style.display=\'none\';renderPlayerGrid()">✕ Close</button>'
-    +'</div>'
-    +'<div class="balance-bar"><span class="bal-lbl">Balance</span>'
-      +'<span class="bal-val" style="color:'+balColor+'">'+(bal>=0?'+':'')+'$'+fmt(Math.abs(bal))+'</span></div>'
-
-    // Buy-in section
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'
-    +'<div class="io-section">'
-      +'<div class="io-title">🎰 Buy-In</div>'
-      +'<div class="io-field"><label>TYPE</label>'
-        +'<select class="inp" id="buyin-type-'+p.id+'" onchange="toggleEcashReceiver('+p.id+',this.value)">'
-          +'<option value="CASH">💵 Cash</option>'
-          +'<option value="ECASH">📱 E-Cash</option>'
-          +'<option value="MARKER">📋 Marker</option>'
-          +'<option value="BONUS">🎁 Bonus</option>'
-        +'</select>'
-      +'</div>'
-      +'<div class="io-field" id="ecash-receiver-row-'+p.id+'" style="display:none"><label>📱 E-Cash Received By</label>'
-        +'<select class="inp" id="ecash-receiver-'+p.id+'">'
-          +'<option value="">— Select receiver —</option>'
-          + getEcashReceiverOptions()
-        +'</select>'
-      +'</div>'
-      +'<div class="io-field"><label>AMOUNT</label>'
-        +'<input type="number" class="amount-btn" id="buyin-amount-'+p.id+'" placeholder="0" min="0">'
-      +'</div>'
-      +'<button class="btn btn-purple btn-sm" style="width:100%" onclick="addBuyIn('+p.id+')">＋ Add</button>'
-    +'</div>'
-    + turnInSection
-    +'</div>'
-
-    // History
-    +(buyInHistory||cashOutHistory||reimbHistory
-      ? '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">History</div>'
-        + buyInHistory + cashOutHistory + reimbHistory
-      : '')
-
-    +'<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">'
-      +'<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red)" onclick="removePlayer(this,'+p.id+')">Remove Player</button>'
-    +'</div>'
-    +'</div>';
-
-  renderPlayerGrid();
+  if (detail) { detail.style.display = 'none'; detail.innerHTML = ''; }
+  var sv = document.getElementById('staff-detail-view');
+  if (sv) sv.style.display = 'none';
+  showPage('players');
+  filterRosterByRole('players');
+  expandRosterTo(id);
 }
 
 function renderStaffDetail(id) {
@@ -2530,7 +2429,9 @@ function addBuyIn(id) {
   appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:p.name, method:buyType, receivedById:receivedById, receivedByName:receivedByName });
 
   if (el) el.value = '';
-  calcAll(); renderAll(); renderPlayerDetail(id); autoSave();
+  calcAll(); renderAll();
+  if (p.staffRole) renderStaffDetail(id); else renderPlayerDetail(id);
+  autoSave();
   var recLabel = receivedByName ? ' → ' + receivedByName : '';
   toast(buyType + ' buy-in $' + fmt(amount) + recLabel + ' added ✅');
   if (buyType === 'MARKER') {
@@ -2710,6 +2611,7 @@ function removePlayer(btn, id) {
     G.players = G.players.filter(function(p){ return p.id !== id; });
     if (_activePlayerId === id) { _activePlayerId=null; document.getElementById('player-detail-view').style.display='none'; }
     if (_activeStaffId  === id) { _activeStaffId=null;  document.getElementById('staff-detail-view').style.display='none'; }
+    if (_expandedRosterId === id) { _expandedRosterId = null; _rosterFocusField = null; }
     calcAll(); renderAll(); autoSave();
   });
 }
