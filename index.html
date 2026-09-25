@@ -94,7 +94,6 @@ input,select,button,textarea{font-family:inherit}
 #page-dashboard.active{overflow:visible}
 #page-dashboard .card,
 #page-dashboard .breakdown,
-#page-dashboard .game-numbers,
 #page-dashboard #card-expenses,
 #page-dashboard #card-chip-count{overflow:visible;visibility:visible}
 .scroll-y{overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -176,7 +175,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;
 }
 .breakdown-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
-.breakdown-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.breakdown-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .breakdown-cell{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
 .breakdown-cell .bc-lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:700}
 .breakdown-cell .bc-val{font-size:20px;font-weight:800;color:var(--text)}
@@ -365,9 +364,14 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- ===== DASHBOARD ===== -->
 <div id="page-dashboard" class="page active">
   <div class="card">
-    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
       <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
+    </div>
+    <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="G.sessionSettings.taxPct=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
+      <div class="inp-group"><div class="inp-label">Starting Bank</div><input class="inp" type="number" id="bank-start" placeholder="0" oninput="G.sessionSettings.bankStart=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
+      <div class="inp-group"><div class="inp-label">Chip Float</div><input class="inp" type="number" id="chip-float" placeholder="0" oninput="G.sessionSettings.chipFloat=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
     </div>
   </div>
 
@@ -405,6 +409,10 @@ select.inp{appearance:none;-webkit-appearance:none}
       <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
       <div class="breakdown-cell"><div class="bc-lbl">Staff Tax</div><div class="bc-val" id="b-staff-tax" style="color:var(--green)">$0</div></div>
       <div class="breakdown-cell profit"><div class="bc-lbl">Est. Profit</div><div class="bc-val" id="b-profit">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Cash On Hand</div><div class="bc-val" id="b-coh">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">E-Cash On Hand</div><div class="bc-val" id="b-ecoh">$0</div>
+        <div id="ecash-receivers-detail" style="margin-top:8px;font-size:11px;text-align:left"></div>
+      </div>
     </div>
   </div>
 
@@ -429,24 +437,6 @@ select.inp{appearance:none;-webkit-appearance:none}
     </div>
     <div id="chip-count-log" class="scroll-y" style="max-height:min(200px,30vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
       <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No chip counts logged</div>
-    </div>
-  </div>
-
-  <div class="game-numbers">
-    <div class="card-title" style="justify-content:space-between">🎰 Game Numbers
-      <button type="button" class="btn btn-outline btn-sm dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()">🎲 Count Chips</button>
-    </div>
-    <div class="dash-stack-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-      <div class="stat-box"><div class="lbl">Cash On Hand</div><div class="val" id="gn-cash">$0</div></div>
-      <div class="stat-box"><div class="lbl">Chips On Hand</div><div class="val" id="gn-chips">$0</div></div>
-      <div class="stat-box"><div class="lbl">E-Cash On Hand</div><div class="val" id="gn-ecash" style="color:var(--purple-light)">$0</div>
-        <div id="ecash-receivers-detail" style="margin-top:8px;font-size:11px;text-align:left"></div>
-      </div>
-    </div>
-    <div class="dash-stack-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-      <div class="inp-group"><div class="inp-label">Tax %</div><input class="inp" type="number" id="tax-pct" value="0" placeholder="0" oninput="G.sessionSettings.taxPct=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
-      <div class="inp-group"><div class="inp-label">Starting Bank</div><input class="inp" type="number" id="bank-start" placeholder="0" oninput="G.sessionSettings.bankStart=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
-      <div class="inp-group"><div class="inp-label">Chip Float</div><input class="inp" type="number" id="chip-float" placeholder="0" oninput="G.sessionSettings.chipFloat=parseFloat(this.value)||0;calcAll();renderAll();autoSave()"></div>
     </div>
   </div>
 
@@ -1063,19 +1053,7 @@ function calcAll() {
 function renderAll() {
   var d = calcDashboard();
 
-  // Game numbers
-  setText('gn-cash',    '$' + fmt(d.cashOnHand));
-  setText('gn-chips',   '$' + fmt(d.chipsOnHand));
-  setText('gn-ecash',   '$' + fmt(d.eCashOnHand));
-  // E-Cash breakdown by receiver
-  var ecashMap = calcEcashByReceiver();
-  var ecashDetail = document.getElementById('ecash-receivers-detail');
-  if (ecashDetail) {
-    var keys = Object.keys(ecashMap);
-    ecashDetail.innerHTML = keys.length
-      ? keys.map(function(k){ return '<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-muted)"><span>'+ecashMap[k].name+'</span><span style="color:var(--purple-light);font-weight:700">$'+fmt(ecashMap[k].balance)+'</span></div>'; }).join('')
-      : '';
-  }
+  // Breakdown + cash on hand
   setText('b-drop',     '$' + fmt(d.drop));
   setText('b-expenses', '$' + fmt(d.expenses));
   var staffTaxEl = document.getElementById('b-staff-tax');
@@ -1085,6 +1063,25 @@ function renderAll() {
   }
   var profitEl = document.getElementById('b-profit');
   if (profitEl) { profitEl.textContent = '$' + fmt(d.profit); profitEl.style.color = d.profit>=0?'var(--green)':'var(--red)'; }
+  var cohEl = document.getElementById('b-coh');
+  if (cohEl) {
+    cohEl.textContent = '$' + fmt(d.cashOnHand);
+    cohEl.style.color = d.cashOnHand >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+  var ecohEl = document.getElementById('b-ecoh');
+  if (ecohEl) {
+    ecohEl.textContent = '$' + fmt(d.eCashOnHand);
+    ecohEl.style.color = d.eCashOnHand >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+  // E-Cash breakdown by receiver
+  var ecashMap = calcEcashByReceiver();
+  var ecashDetail = document.getElementById('ecash-receivers-detail');
+  if (ecashDetail) {
+    var keys = Object.keys(ecashMap);
+    ecashDetail.innerHTML = keys.length
+      ? keys.map(function(k){ return '<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-muted)"><span>'+ecashMap[k].name+'</span><span style="color:var(--purple-light);font-weight:700">$'+fmt(ecashMap[k].balance)+'</span></div>'; }).join('')
+      : '';
+  }
   renderExpenseList();
 
   // Owes/owed — use display balance so pending turn-in projected nets update the lists
