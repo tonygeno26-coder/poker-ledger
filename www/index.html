@@ -143,6 +143,15 @@ input,select,button,textarea{font-family:inherit}
 .inp-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
 .inp-group{display:flex;flex-direction:column;gap:6px}
 select.inp{appearance:none;-webkit-appearance:none}
+.g-date-display{
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  font-weight:600;color:var(--text);cursor:pointer;font-family:inherit;
+  -webkit-appearance:none;appearance:none;
+}
+.g-date-native{
+  position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;
+  border:0;padding:0;margin:0;overflow:hidden;
+}
 
 /* BUTTONS */
 .btn{
@@ -369,7 +378,11 @@ select.inp{appearance:none;-webkit-appearance:none}
   <div class="card">
     <div class="dash-stack-1" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="inp-group"><div class="inp-label">Location</div><input class="inp" id="g-location" placeholder="e.g. Mike's Place" oninput="updateGameLabel()"></div>
-      <div class="inp-group"><div class="inp-label">Date</div><input class="inp" type="date" id="g-date" oninput="updateGameLabel()"></div>
+      <div class="inp-group" style="position:relative">
+        <div class="inp-label">Date</div>
+        <button type="button" class="inp g-date-display" id="g-date-display" onclick="openGameDatePicker()">Tap to set date</button>
+        <input class="g-date-native" type="date" id="g-date" tabindex="-1" aria-hidden="true" onchange="onGameDateChanged()">
+      </div>
     </div>
   </div>
 
@@ -1104,7 +1117,42 @@ function removeSettlementPayment(txnIdx) {
 
 function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function getVal(id) { var el=document.getElementById(id); return el?el.value:''; }
-function setVal(id,v) { var el=document.getElementById(id); if(el) el.value=v??''; }
+function setVal(id,v) {
+  var el=document.getElementById(id);
+  if(el) el.value=v??'';
+  if (id === 'g-date') syncDateDisplay();
+}
+
+function formatGameDateDisplay(iso) {
+  if (!iso) return 'Tap to set date';
+  var parts = String(iso).split('-');
+  if (parts.length !== 3) return iso;
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function syncDateDisplay() {
+  var disp = document.getElementById('g-date-display');
+  if (!disp) return;
+  disp.textContent = formatGameDateDisplay(getVal('g-date'));
+}
+
+function openGameDatePicker() {
+  var el = document.getElementById('g-date');
+  if (!el) return;
+  try {
+    if (typeof el.showPicker === 'function') el.showPicker();
+    else el.click();
+  } catch (err) {
+    try { el.click(); } catch (e2) {}
+  }
+}
+
+function onGameDateChanged() {
+  syncDateDisplay();
+  updateGameLabel();
+}
 function setText(id,v) { var el=document.getElementById(id); if(el) el.textContent=v; }
 function ls(k)   { try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v) { try{localStorage.setItem(k,v);}catch(e){} }
