@@ -206,12 +206,16 @@ select.inp{appearance:none;-webkit-appearance:none}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase;letter-spacing:0.5px}
 .modal-close{background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer}
 .sig-modal{max-width:720px;width:min(720px,96vw);padding:20px}
+.sig-modal-fullscreen{max-width:none;width:100%;height:100%;max-height:none;border-radius:0;border:none;display:flex;flex-direction:column;background:var(--surface);padding:16px;padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;overflow:hidden}
+.modal-bg.sig-overlay{background:rgba(0,0,0,0.94);padding:0;z-index:900;align-items:stretch;justify-content:stretch}
+.modal-bg.sig-overlay .sig-modal-fullscreen{flex:1}
 .sig-sub{font-size:13px;color:var(--text-muted);margin:-6px 0 14px;line-height:1.5;text-transform:none;letter-spacing:0;font-weight:400}
-.sig-canvas-wrap{width:100%;touch-action:none;-webkit-user-select:none;user-select:none}
-#marker-sign-canvas{display:block;width:100%;height:300px;background:#fff;border-radius:12px;border:2px solid var(--border);touch-action:none;cursor:crosshair}
-.sig-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.sig-canvas-wrap{width:100%;flex:1;min-height:220px;touch-action:none;-webkit-user-select:none;user-select:none;display:flex}
+#marker-sign-canvas{display:block;width:100%;height:100%;min-height:220px;background:#fff;border-radius:12px;border:2px solid var(--border);touch-action:none;cursor:crosshair;flex:1}
+.sig-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
 .sig-actions .btn{flex:1;min-width:100px}
-.sig-view-img{display:block;width:100%;max-height:360px;object-fit:contain;background:#fff;border-radius:12px;border:1px solid var(--border)}
+.sig-actions .sig-skip{flex:0 0 auto;background:none;border:none;color:var(--text-muted);font-size:13px;font-weight:600;padding:10px 12px;cursor:pointer;text-decoration:underline}
+.sig-view-img{display:block;width:100%;max-height:min(70vh,520px);object-fit:contain;background:#fff;border-radius:12px;border:1px solid var(--border);margin:0 auto}
 .sig-badge-btn{border:none;cursor:pointer;font:inherit}
 
 .toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));right:16px;left:16px;margin:0 auto;max-width:360px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;text-align:center}
@@ -667,37 +671,34 @@ select.inp{appearance:none;-webkit-appearance:none}
   </div>
 </div>
 
-<!-- MODAL: Marker Signature -->
-<div class="modal-bg" id="modal-marker-sign">
-  <div class="modal sig-modal">
+<!-- MODAL: Marker Signature (full-screen) -->
+<div class="modal-bg sig-overlay" id="modal-marker-sign">
+  <div class="modal sig-modal sig-modal-fullscreen">
     <div class="modal-title">
       <span id="marker-sign-title">MARKER AGREEMENT</span>
-      <button class="modal-close" onclick="cancelMarkerSignature()">✕</button>
+      <button class="modal-close" onclick="skipMarkerSignature()">✕</button>
     </div>
     <div class="sig-sub" id="marker-sign-sub"></div>
     <div class="sig-canvas-wrap">
       <canvas id="marker-sign-canvas" width="680" height="300"></canvas>
     </div>
     <div class="sig-actions">
-      <button class="btn btn-outline" onclick="clearMarkerSignature()">Clear</button>
-      <button class="btn btn-outline" onclick="cancelMarkerSignature()">Cancel</button>
-      <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green)" onclick="confirmMarkerSignature()">Confirm Signature</button>
+      <button type="button" class="btn btn-outline" onclick="clearMarkerSignature()">Clear</button>
+      <button type="button" class="btn" style="background:var(--gold);color:#000;border-color:var(--gold);font-weight:800" onclick="confirmMarkerSignature()">✓ Confirm Signature</button>
+      <button type="button" class="sig-skip" onclick="skipMarkerSignature()">Skip</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL: View Marker Signature -->
-<div class="modal-bg" id="modal-marker-view">
-  <div class="modal sig-modal">
+<!-- MODAL: View Marker Signature (full-screen read-only) -->
+<div class="modal-bg sig-overlay" id="modal-marker-view" onclick="if(event.target===this)closeModal('modal-marker-view')">
+  <div class="modal sig-modal sig-modal-fullscreen" style="justify-content:center">
     <div class="modal-title">
       <span id="marker-view-title">✍️ Marker Signature</span>
       <button class="modal-close" onclick="closeModal('modal-marker-view')">✕</button>
     </div>
     <div class="sig-sub" id="marker-view-sub"></div>
     <img id="marker-view-img" class="sig-view-img" alt="Marker signature">
-    <div class="sig-actions">
-      <button class="btn btn-outline" onclick="closeModal('modal-marker-view')">Close</button>
-    </div>
   </div>
 </div>
 
@@ -1849,7 +1850,7 @@ function rosterPlayerExpandedHtml(p) {
     var signCtrl = '';
     if (b.type === 'MARKER') {
       signCtrl = b.signatureData
-        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + i + ')">✍️ Signed</button>'
+        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + i + ')">✍️ SIGNED</button>'
         : '<button type="button" class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="event.stopPropagation();openMarkerSignModal(' + p.id + ',' + i + ')">Sign</button>';
     }
     lines += '<div class="roster-expand-line">'
@@ -2892,7 +2893,14 @@ function switchOwesTab(tab) {
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-bg').forEach(function(m){
-  m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
+  m.addEventListener('click', function(e){
+    if (e.target !== this) return;
+    if (this.id === 'modal-marker-sign') {
+      skipMarkerSignature();
+      return;
+    }
+    this.classList.remove('open');
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2911,9 +2919,8 @@ function openMarkerSignModal(playerId, buyInIndex) {
   var b = p.buyIns[buyInIndex];
   if (b.type !== 'MARKER') { toast('Only markers can be signed'); return; }
   _markerSignTarget = { playerId: p.id, buyInIndex: buyInIndex };
-  setText('marker-sign-title', 'MARKER AGREEMENT — ' + p.name);
-  var when = b.time || new Date().toLocaleString();
-  setText('marker-sign-sub', 'I acknowledge a marker of $' + fmt(b.amount) + ' — ' + when);
+  setText('marker-sign-title', 'MARKER AGREEMENT — $' + fmt(b.amount));
+  setText('marker-sign-sub', p.name + ' · I acknowledge a marker of $' + fmt(b.amount));
   openModal('modal-marker-sign');
   setTimeout(function(){
     initMarkerSignCanvas();
@@ -2925,6 +2932,12 @@ function cancelMarkerSignature() {
   _markerSignTarget = null;
   _markerSignDrawing = false;
   closeModal('modal-marker-sign');
+}
+
+function skipMarkerSignature() {
+  var hadTarget = !!_markerSignTarget;
+  cancelMarkerSignature();
+  if (hadTarget) toast('Marker unsigned ⚠️');
 }
 
 function clearMarkerSignature() {
@@ -2944,12 +2957,12 @@ function initMarkerSignCanvas() {
   var wrap = canvas && canvas.parentElement;
   if (!canvas || !wrap) return;
 
-  var w = Math.max(280, Math.floor(wrap.clientWidth));
-  var h = 300;
+  var w = Math.max(280, Math.floor(wrap.clientWidth || window.innerWidth || 320));
+  var h = Math.max(220, Math.floor(wrap.clientHeight || 300));
   canvas.width = w;
   canvas.height = h;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
 
   _markerSignCtx = canvas.getContext('2d');
   clearMarkerSignature();
@@ -2960,15 +2973,14 @@ function initMarkerSignCanvas() {
     canvas.addEventListener('pointermove', onMarkerSignPointerMove);
     canvas.addEventListener('pointerup', onMarkerSignPointerUp);
     canvas.addEventListener('pointercancel', onMarkerSignPointerUp);
-    canvas.addEventListener('pointerleave', onMarkerSignPointerUp);
   }
 }
 
 function markerSignPos(e) {
   var canvas = document.getElementById('marker-sign-canvas');
   var rect = canvas.getBoundingClientRect();
-  var scaleX = canvas.width / rect.width;
-  var scaleY = canvas.height / rect.height;
+  var scaleX = canvas.width / Math.max(1, rect.width);
+  var scaleY = canvas.height / Math.max(1, rect.height);
   return {
     x: (e.clientX - rect.left) * scaleX,
     y: (e.clientY - rect.top) * scaleY
@@ -3015,10 +3027,10 @@ function confirmMarkerSignature() {
   }
   var b = p.buyIns[_markerSignTarget.buyInIndex];
   var canvas = document.getElementById('marker-sign-canvas');
-  var dataUrl = canvas.toDataURL('image/png');
-  var signedAt = new Date().toISOString();
+  // Compress to JPEG for localStorage size — signature lives on buy-in only (no MARKER_SIGNED txn)
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.6);
   b.signatureData = dataUrl;
-  b.signedAt = signedAt;
+  b.signedAt = new Date().toISOString();
   var keepId = p.id;
   cancelMarkerSignature();
   rosterKeepExpanded(keepId);
@@ -3033,9 +3045,9 @@ function viewMarkerSignature(playerId, buyInIndex) {
     return;
   }
   var b = p.buyIns[buyInIndex];
-  setText('marker-view-title', '✍️ Marker Signature — ' + p.name);
+  setText('marker-view-title', p.name + ' — $' + fmt(b.amount));
   var signedLabel = b.signedAt ? new Date(b.signedAt).toLocaleString() : (b.time || '');
-  setText('marker-view-sub', 'Amount: $' + fmt(b.amount) + ' · Signed: ' + signedLabel);
+  setText('marker-view-sub', 'Marker signature · Signed ' + signedLabel);
   var img = document.getElementById('marker-view-img');
   if (img) img.src = b.signatureData;
   openModal('modal-marker-view');
