@@ -433,8 +433,18 @@ select.inp{appearance:none;-webkit-appearance:none}
       </div>
       <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()">🎲 Count Chips</button>
     </div>
-    <div id="chip-count-log" class="scroll-y" style="max-height:min(200px,30vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <div id="chip-count-log" class="scroll-y" style="max-height:min(200px,30vh);overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px">
       <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No chip counts logged</div>
+    </div>
+    <div class="inp-label" style="margin-bottom:6px">Starting Bank</div>
+    <div class="flex-row" style="gap:8px;margin-bottom:12px">
+      <input class="inp" type="number" id="dash-bank-start" placeholder="0" min="0" style="flex:1">
+      <button type="button" class="btn btn-purple btn-sm" style="flex-shrink:0" onclick="setStartingBank()">Set</button>
+    </div>
+    <div class="inp-label" style="margin-bottom:6px">Chip Float</div>
+    <div class="flex-row" style="gap:8px">
+      <input class="inp" type="number" id="dash-chip-float" placeholder="0" min="0" style="flex:1">
+      <button type="button" class="btn btn-purple btn-sm" style="flex-shrink:0" onclick="setChipFloat()">Set</button>
     </div>
   </div>
 
@@ -1291,6 +1301,19 @@ function renderAll() {
   renderChipCountLog();
   // Update expected chips on hand display
   setText('cc-expected', '$' + fmt(getExpectedChips()));
+  // Keep Starting Bank / Chip Float inputs in sync with session settings
+  if (G.sessionSettings) {
+    var bankEl = document.getElementById('dash-bank-start');
+    var floatEl = document.getElementById('dash-chip-float');
+    if (bankEl && document.activeElement !== bankEl) {
+      var bv = G.sessionSettings.bankStart || 0;
+      bankEl.value = bv ? bv : '';
+    }
+    if (floatEl && document.activeElement !== floatEl) {
+      var fv = G.sessionSettings.chipFloat || 0;
+      floatEl.value = fv ? fv : '';
+    }
+  }
 }
 
 var _rosterSearch = '';
@@ -3120,7 +3143,33 @@ function restoreInputs() {
   setVal('g-location', G.location||'');
   setVal('g-date', G.date||new Date().toISOString().split('T')[0]);
   if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
+  var bank = G.sessionSettings.bankStart || 0;
+  var chipF = G.sessionSettings.chipFloat || 0;
+  setVal('dash-bank-start', bank ? bank : '');
+  setVal('dash-chip-float', chipF ? chipF : '');
   updateGameLabel();
+}
+
+function setStartingBank() {
+  if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
+  var el = document.getElementById('dash-bank-start');
+  var amount = el ? (parseFloat(el.value) || 0) : 0;
+  if (amount < 0) { toast('Enter a valid starting bank'); return; }
+  G.sessionSettings.bankStart = amount;
+  autoSave();
+  calcAll(); renderAll();
+  toast('Starting bank set to $' + fmt(amount));
+}
+
+function setChipFloat() {
+  if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
+  var el = document.getElementById('dash-chip-float');
+  var amount = el ? (parseFloat(el.value) || 0) : 0;
+  if (amount < 0) { toast('Enter a valid chip float'); return; }
+  G.sessionSettings.chipFloat = amount;
+  autoSave();
+  calcAll(); renderAll();
+  toast('Chip float set to $' + fmt(amount));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3269,12 +3318,14 @@ function saveStartingCount() {
     actualTotal: total
   };
   G.startingChipCount = entry;
-  G.sessionSettings.chipFloat = total; // sync chip float to starting count (no dashboard UI)
+  G.sessionSettings.chipFloat = total; // sync chip float to starting count
   if (!G.chipCounts) G.chipCounts = [];
   G.chipCounts.unshift(entry);
   refreshStartingSavedBanner();
   updateRunningExpected();
+  setVal('dash-chip-float', total ? total : '');
   autoSave();
+  calcAll(); renderAll();
   toast('Starting count saved ✅ Chip float set to $' + fmt(total));
 }
 
