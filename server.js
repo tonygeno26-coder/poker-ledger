@@ -17,11 +17,12 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.warn('[warn] STRIPE_SECRET_KEY not set — checkout/webhook will fail until configured');
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_KEY || '',
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+const supabase =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -79,6 +80,15 @@ function isSubscriptionActive(user) {
   if (status === 'active' || status === 'promo') return notExpired;
   if (status === 'trial') return notExpired;
   return false;
+}
+
+function requireSupabase() {
+  if (!supabase) {
+    const err = new Error('Supabase not configured');
+    err.status = 503;
+    throw err;
+  }
+  return supabase;
 }
 
 async function getUserByEmail(email) {
@@ -214,6 +224,7 @@ app.get('/subscribe', function (_req, res) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.post('/auth/magic-link', async function (req, res) {
   try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     const email = normalizeEmail(req.body && req.body.email);
     if (!email || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email required' });
@@ -239,6 +250,7 @@ app.post('/auth/magic-link', async function (req, res) {
 
 app.post('/auth/verify', async function (req, res) {
   try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     const body = req.body || {};
     const tokenHash = body.token_hash || body.token;
     const type = body.type || 'email';
@@ -283,6 +295,7 @@ app.post('/auth/verify', async function (req, res) {
 // ── Subscription ──────────────────────────────────────────────────────────────
 app.get('/subscription/check', async function (req, res) {
   try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     const email = normalizeEmail(req.query.email);
     if (!email) return res.status(400).json({ error: 'email query required' });
 
@@ -307,6 +320,7 @@ app.get('/subscription/check', async function (req, res) {
 
 app.post('/subscription/create-checkout', async function (req, res) {
   try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
     const priceId = process.env.STRIPE_PRICE_ID;
     if (!priceId) return res.status(503).json({ error: 'STRIPE_PRICE_ID not set' });
@@ -339,6 +353,7 @@ app.post('/subscription/create-checkout', async function (req, res) {
 // ── Promo ─────────────────────────────────────────────────────────────────────
 app.post('/promo/redeem', async function (req, res) {
   try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     const email = normalizeEmail(req.body && req.body.email);
     const code = String((req.body && req.body.code) || '').trim().toUpperCase();
     if (!email) return res.status(400).json({ error: 'email required' });
