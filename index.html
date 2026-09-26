@@ -3308,19 +3308,34 @@ function switchCCTab(tab) {
   document.getElementById('cctab-starting').style.color      = tab==='starting' ? '#fff'           : 'var(--text-muted)';
   document.getElementById('cctab-running').style.background  = tab==='running'  ? 'var(--purple)'  : 'transparent';
   document.getElementById('cctab-running').style.color       = tab==='running'  ? '#fff'           : 'var(--text-muted)';
-  if (tab === 'running') { updateRunningExpected(); renderDealerBanks(); }
+  if (tab === 'running') { renderDealerBanks(); updateRunningExpected(); /* expected fresh from G, not last count */ }
 }
 
 function openChipCountModal() {
   console.log('[chip count modal opened] expected chips:', getExpectedChips());
-  // Reset inputs
+  // Each running count is a fresh snapshot — reset ALL count inputs (never seed from last save)
   CC_DENOMS.forEach(function(d){
     setVal('sc-d'+d, ''); setText('sc-d'+d+'-sv', '$0');
     setVal('rc-d'+d, ''); setText('rc-d'+d+'-rv', '$0');
   });
   setVal('rc-note', '');
+  // Bank amounts from a prior count live only in G.chipCounts[] log — clear live banks for a clean recount
+  G.dealerBanks = [];
+  renderDealerBanks();
+  // Clear sticky variance UI from previous open
+  setText('rc-denom-subtotal', '$0');
+  setText('rc-banks-subtotal', '$0');
+  setText('rc-banks-total', '$0');
+  setText('rc-actual-total', '$0');
+  setText('rc-variance-total', '—');
+  setText('rc-variance-display', '—');
+  var vEl = document.getElementById('rc-variance-total');
+  var vHdr = document.getElementById('rc-variance-display');
+  if (vEl) vEl.style.color = '';
+  if (vHdr) vHdr.style.color = '';
   // Show saved starting count if exists
   refreshStartingSavedBanner();
+  // Recalculate expected fresh from live G state (not last saved count)
   updateRunningExpected();
   switchCCTab('starting');
   openModal('modal-chip-count');
@@ -3401,10 +3416,20 @@ function refreshStartingSavedBanner() {
 }
 
 function getExpectedChips() {
-  // Expected BEFORE bank subtraction — banks are accounted separately in running count.
-  // chipsOnHand = chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut
-  var d = calcDashboard();
-  return d.chipsOnHand;
+  // Fresh expected from LIVE G state only.
+  // G.chipCounts[] is a history log — never feed prior actuals/variances into this.
+  // Banks are NOT subtracted here; they appear on the actual side (table + banks).
+  // expected = chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut
+  var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
+  var chipsDealt = 0, chipsReturned = 0, tipsOut = 0, dropOut = 0;
+  (G.players || []).forEach(function(p) {
+    (p.buyIns || []).forEach(function(b) { chipsDealt += b.amount || 0; });
+    (p.cashOuts || []).forEach(function(c) { chipsReturned += c.amount || 0; });
+    (p.tips || []).forEach(function(t) { tipsOut += t.amount || 0; });
+    (p.drops || []).forEach(function(d) { dropOut += d.amount || 0; });
+  });
+  // totalBankAmount is tracked live via getBankTotal() and added to actual, not expected
+  return chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut;
 }
 
 // Called from renderAll(); display-only chip count history (no accounting).
@@ -3491,11 +3516,12 @@ function renderDealerBanks() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function updateRunningTotal() {
-  // Chips on Table = denom count only; banks are pulled out of play but still accounted.
+  // Independent snapshot: Variance = (chips on table + banks) - getExpectedChips()
+  // Never compare to a previous count's actualTotal / variance.
   var denomTotal = calcChipsFromInputs('rc-d', '-rv');
-  var bankTotal  = getBankTotal();
+  var bankTotal  = getBankTotal(); // banks pulled — actual side only
   var totalAccounted = denomTotal + bankTotal;
-  var exp = getExpectedChips(); // before bank subtraction
+  var exp = getExpectedChips(); // fresh from G; ignores G.chipCounts log
   var variance = totalAccounted - exp;
   setText('rc-denom-subtotal', '$' + fmt(denomTotal));
   setText('rc-banks-subtotal', '$' + fmt(bankTotal));
@@ -3515,11 +3541,12 @@ function updateRunningTotal() {
 }
 
 function saveRunningCount() {
+  // Snapshot only — append to log. Do not mutate chipFloat or feed variance into next expected.
   var denomTotal = calcChipsFromInputs('rc-d', '-rv');
   var bankTotal  = getBankTotal();
   var total      = denomTotal + bankTotal;
   var exp        = getExpectedChips();
-  var variance   = total - exp;
+  var variance   = total - exp; // current actual - current expected (never prior actual)
   var chips = {};
   CC_DENOMS.forEach(function(d){ chips[d] = parseFloat((document.getElementById('rc-d'+d)||{value:0}).value)||0; });
   var note = getVal('rc-note');
@@ -3538,7 +3565,7 @@ function saveRunningCount() {
     note: note
   };
   if (!G.chipCounts) G.chipCounts = [];
-  G.chipCounts.unshift(entry);
+  G.chipCounts.unshift(entry); // log only — getExpectedChips never reads this
   closeModal('modal-chip-count');
   autoSave();
   var msg = Math.abs(variance)<1 ? '✅ Chips balanced!' : ('⚠️ Variance: '+(variance>=0?'+':'')+'$'+fmt(variance));
