@@ -344,9 +344,60 @@ select.inp{appearance:none;-webkit-appearance:none}
   #page-dashboard.active{display:flex;flex-direction:column}
   #page-dashboard > *{flex-shrink:0;width:100%;max-width:100%}
 }
+
+/* ── Auth / subscription gate ─────────────────────────────────────────────── */
+#pb-auth-screen{
+  display:none;position:fixed;inset:0;z-index:10000;
+  background:rgba(0,0,0,0.96);
+  align-items:center;justify-content:center;padding:24px;
+  padding-top:calc(24px + env(safe-area-inset-top));
+  padding-bottom:calc(24px + env(safe-area-inset-bottom));
+}
+#pb-auth-screen.show{display:flex}
+.pb-auth-card{width:100%;max-width:380px;text-align:center}
+.pb-auth-logo{font-size:22px;font-weight:900;letter-spacing:1.5px;color:var(--red);text-transform:uppercase;margin-bottom:6px}
+.pb-auth-sub{font-size:13px;color:var(--text-muted);margin-bottom:22px}
+.pb-auth-card .inp{width:100%;margin-bottom:10px;text-align:left}
+.pb-auth-card .btn{width:100%;margin-bottom:10px}
+.pb-auth-msg{font-size:13px;font-weight:600;min-height:1.3em;margin:8px 0 4px;color:var(--green)}
+.pb-auth-msg.err{color:var(--red)}
+.pb-auth-divider{height:1px;background:var(--border);margin:18px 0 14px}
+.pb-auth-promo-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px}
+.pb-banner{
+  display:none;padding:10px 14px;font-size:12px;font-weight:700;
+  border-bottom:1px solid var(--border);align-items:center;justify-content:space-between;gap:10px;
+}
+.pb-banner.show{display:flex}
+.pb-banner.trial{background:var(--gold-dim);color:var(--gold)}
+.pb-banner.expired{background:var(--red-dim);color:var(--red)}
+#pb-account-modal .modal{max-width:360px}
+
 </style>
 </head>
 <body>
+
+<!-- AUTH GATE -->
+<div id="pb-auth-screen" aria-hidden="true">
+  <div class="pb-auth-card">
+    <div class="pb-auth-logo">POCKETBOOKS POKER</div>
+    <div class="pb-auth-sub">Enter your email to continue</div>
+    <input class="inp" id="pb-auth-email" type="email" autocomplete="email" placeholder="you@email.com" inputmode="email">
+    <button type="button" class="btn btn-red" id="pb-auth-magic-btn" onclick="pbSendMagicLink()">Send Magic Link</button>
+    <div class="pb-auth-msg" id="pb-auth-msg"></div>
+    <div class="pb-auth-divider"></div>
+    <div class="pb-auth-promo-label">Have a promo code?</div>
+    <input class="inp" id="pb-auth-promo" type="text" autocomplete="off" placeholder="Promo code" style="text-transform:uppercase">
+    <button type="button" class="btn btn-outline" id="pb-auth-promo-btn" onclick="pbApplyPromo()" style="color:var(--gold);border-color:var(--gold)">Apply Code</button>
+  </div>
+</div>
+
+<!-- Trial / expired banners -->
+<div class="pb-banner trial" id="pb-trial-banner"><span id="pb-trial-text">Trial</span><span></span></div>
+<div class="pb-banner expired" id="pb-expired-banner">
+  <span>Subscription expired — renew to keep access</span>
+  <button type="button" class="btn btn-outline btn-xs" onclick="pbOpenCheckout()" style="color:var(--red);border-color:var(--red);flex-shrink:0">Renew</button>
+</div>
+
 
 <!-- HEADER -->
 <div class="header">
@@ -359,6 +410,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   <div class="flex-row no-print" style="gap:6px">
     <button class="btn btn-outline btn-sm" onclick="newGame(this)">New Game</button>
     <button class="btn btn-purple btn-sm" onclick="saveGame()">Save</button>
+    <button class="btn btn-outline btn-sm" type="button" onclick="pbOpenAccount()">Account</button>
   </div>
 </div>
 
@@ -673,6 +725,21 @@ select.inp{appearance:none;-webkit-appearance:none}
   </div>
 </div>
 
+
+<!-- MODAL: Account -->
+<div class="modal-bg" id="modal-pb-account" onclick="if(event.target===this)closeModal('modal-pb-account')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title"><span>Account</span><button type="button" class="modal-close" onclick="closeModal('modal-pb-account')">×</button></div>
+    <div style="padding:4px 0 12px;font-size:13px;line-height:1.7">
+      <div><span style="color:var(--text-muted)">Email</span><br><strong id="pb-acct-email">—</strong></div>
+      <div style="margin-top:10px"><span style="color:var(--text-muted)">Status</span><br><strong id="pb-acct-status">—</strong></div>
+      <div style="margin-top:10px"><span style="color:var(--text-muted)">Expires</span><br><strong id="pb-acct-end">—</strong></div>
+    </div>
+    <button type="button" class="btn btn-outline" style="width:100%;margin-bottom:8px" onclick="pbManageSubscription()">Manage Subscription</button>
+    <button type="button" class="btn btn-red" style="width:100%" onclick="pbLogout()">Log Out</button>
+  </div>
+</div>
+
 <!-- MODAL: Settle Up -->
 <div class="modal-bg" id="modal-settle-up">
   <div class="modal" style="max-width:540px">
@@ -916,8 +983,8 @@ function calcDashboard() {
   var bankStart = G.sessionSettings.bankStart || 0;
   var chipFloat = G.sessionSettings.chipFloat || 0;
   var cashIn=0,eCashIn=0,cashOut=0,eCashOut=0,chipsDealt=0,chipsReturned=0,drop=0,tips=0,expenses=0,bonusTotal=0,staffTax=0;
-  // Tips paid to staff leave the chip float (never returned). Drop chips leave float into the drop box.
-  var tipsOut = 0, dropOut = 0;
+  // Tips + drop are chips coming BACK to the float. Banks are chips pulled out of the float trays.
+  var tipsIn = 0, dropIn = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
       if (b.type==='CASH')  cashIn   += b.amount;
@@ -931,13 +998,14 @@ function calcDashboard() {
       if (c.method==='ECASH') eCashOut += c.amount;
       chipsReturned += c.amount;
     });
-    (p.drops||[]).forEach(function(d){ drop += d.amount; dropOut += d.amount; });
-    (p.tips||[]).forEach(function(t){ tips += t.amount; tipsOut += t.amount; });
+    (p.drops||[]).forEach(function(d){ drop += d.amount; dropIn += d.amount; });
+    (p.tips||[]).forEach(function(t){ tips += t.amount; tipsIn += t.amount; });
     // House cut of tips — only staff tax contributes to profit (not gross tips)
     if (p.staffRole) {
       (p.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount || 0; });
     }
   });
+  var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
   // Expenses: house card → G.expenses; staff row → p.expenses only (HOUSE_EXPENSE txn is log-only, not in G.expenses)
   (G.expenses||[]).forEach(function(e){ expenses += e.amount; });
   G.players.forEach(function(p){
@@ -947,8 +1015,8 @@ function calcDashboard() {
   return {
     cashOnHand:   bankStart + cashIn - cashOut,
     eCashOnHand:  eCashIn - eCashOut,
-    // Tips/drop are chips out of the float (not in chipsDealt); cash/ecash staff payouts already hit cash drawers only
-    chipsOnHand:  chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut,
+    // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled
+    chipsOnHand:  chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled,
     drop: drop,
     tips: tips,
     expenses: expenses,
@@ -3416,20 +3484,18 @@ function refreshStartingSavedBanner() {
 }
 
 function getExpectedChips() {
-  // Fresh expected from LIVE G state only.
-  // G.chipCounts[] is a history log — never feed prior actuals/variances into this.
-  // Banks are NOT subtracted here; they appear on the actual side (table + banks).
-  // expected = chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut
+  // Same formula as calcDashboard().chipsOnHand — live G only (chipCounts is log-only).
+  // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled
   var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
-  var chipsDealt = 0, chipsReturned = 0, tipsOut = 0, dropOut = 0;
+  var chipsDealt = 0, chipsReturned = 0, tipsIn = 0, dropIn = 0;
   (G.players || []).forEach(function(p) {
     (p.buyIns || []).forEach(function(b) { chipsDealt += b.amount || 0; });
     (p.cashOuts || []).forEach(function(c) { chipsReturned += c.amount || 0; });
-    (p.tips || []).forEach(function(t) { tipsOut += t.amount || 0; });
-    (p.drops || []).forEach(function(d) { dropOut += d.amount || 0; });
+    (p.tips || []).forEach(function(t) { tipsIn += t.amount || 0; });
+    (p.drops || []).forEach(function(d) { dropIn += d.amount || 0; });
   });
-  // totalBankAmount is tracked live via getBankTotal() and added to actual, not expected
-  return chipFloat - chipsDealt + chipsReturned - tipsOut - dropOut;
+  var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
+  return chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled;
 }
 
 // Called from renderAll(); display-only chip count history (no accounting).
@@ -3516,13 +3582,13 @@ function renderDealerBanks() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function updateRunningTotal() {
-  // Independent snapshot: Variance = (chips on table + banks) - getExpectedChips()
-  // Never compare to a previous count's actualTotal / variance.
+  // getExpectedChips already subtracts banksPulled → expected = chips that should be ON TABLE.
+  // Variance = chips on table - expected (do not add banks again or they double-count).
   var denomTotal = calcChipsFromInputs('rc-d', '-rv');
-  var bankTotal  = getBankTotal(); // banks pulled — actual side only
-  var totalAccounted = denomTotal + bankTotal;
-  var exp = getExpectedChips(); // fresh from G; ignores G.chipCounts log
-  var variance = totalAccounted - exp;
+  var bankTotal  = getBankTotal();
+  var totalAccounted = denomTotal + bankTotal; // display only
+  var exp = getExpectedChips();
+  var variance = denomTotal - exp;
   setText('rc-denom-subtotal', '$' + fmt(denomTotal));
   setText('rc-banks-subtotal', '$' + fmt(bankTotal));
   setText('rc-banks-total', '$' + fmt(bankTotal));
@@ -3544,9 +3610,9 @@ function saveRunningCount() {
   // Snapshot only — append to log. Do not mutate chipFloat or feed variance into next expected.
   var denomTotal = calcChipsFromInputs('rc-d', '-rv');
   var bankTotal  = getBankTotal();
-  var total      = denomTotal + bankTotal;
-  var exp        = getExpectedChips();
-  var variance   = total - exp; // current actual - current expected (never prior actual)
+  var total      = denomTotal + bankTotal; // logged snapshot (table + banks)
+  var exp        = getExpectedChips(); // already net of banks
+  var variance   = denomTotal - exp; // table vs expected-on-table
   var chips = {};
   CC_DENOMS.forEach(function(d){ chips[d] = parseFloat((document.getElementById('rc-d'+d)||{value:0}).value)||0; });
   var note = getVal('rc-note');
@@ -3573,8 +3639,309 @@ function saveRunningCount() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ── Pocketbooks auth / subscription gate ─────────────────────────────────────
+var PB_API = 'https://pocketbooks-poker-api-production.up.railway.app';
+var PB_AUTH_KEY = 'pb-auth';
+
+function pbGetAuth() {
+  try {
+    var raw = localStorage.getItem(PB_AUTH_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function pbSetAuth(obj) {
+  try { localStorage.setItem(PB_AUTH_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+
+function pbClearAuth() {
+  try { localStorage.removeItem(PB_AUTH_KEY); } catch (e) {}
+}
+
+function pbIsActive(auth) {
+  if (!auth || !auth.email) return false;
+  var st = String(auth.subscriptionStatus || '').toLowerCase();
+  if (st !== 'active' && st !== 'promo' && st !== 'trial') return false;
+  if (!auth.subscriptionEnd) return true;
+  var end = new Date(auth.subscriptionEnd).getTime();
+  return !isNaN(end) && end > Date.now();
+}
+
+function pbShowAuthScreen(show) {
+  var el = document.getElementById('pb-auth-screen');
+  if (!el) return;
+  if (show) {
+    el.classList.add('show');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  } else {
+    el.classList.remove('show');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+}
+
+function pbAuthMsg(text, isErr) {
+  var el = document.getElementById('pb-auth-msg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'pb-auth-msg' + (isErr ? ' err' : '');
+}
+
+function pbDaysRemaining(endIso) {
+  if (!endIso) return 0;
+  var ms = new Date(endIso).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86400000));
+}
+
+function pbUpdateBanners(auth) {
+  var trial = document.getElementById('pb-trial-banner');
+  var expired = document.getElementById('pb-expired-banner');
+  if (trial) trial.classList.remove('show');
+  if (expired) expired.classList.remove('show');
+  if (!auth) return;
+  var st = String(auth.subscriptionStatus || '').toLowerCase();
+  if (st === 'trial' && pbIsActive(auth)) {
+    var days = pbDaysRemaining(auth.subscriptionEnd);
+    var t = document.getElementById('pb-trial-text');
+    if (t) t.textContent = 'Trial — ' + days + ' day' + (days === 1 ? '' : 's') + ' remaining';
+    if (trial) trial.classList.add('show');
+  } else if (auth.email && !pbIsActive(auth)) {
+    if (expired) expired.classList.add('show');
+  }
+}
+
+async function pbApi(path, opts) {
+  opts = opts || {};
+  var res = await fetch(PB_API + path, Object.assign({
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+  }, opts));
+  var data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) {
+    var err = new Error((data && (data.error || data.message)) || ('Request failed (' + res.status + ')'));
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+function pbNormalizeAuthFromCheck(email, data) {
+  return {
+    email: email,
+    subscriptionStatus: data.status || data.subscription_status || 'none',
+    subscriptionEnd: data.subscription_end || null,
+    isActive: !!data.isActive
+  };
+}
+
+function pbNormalizeAuthFromVerify(data) {
+  return {
+    email: (data.user && data.user.email) || '',
+    subscriptionStatus: data.subscription_status || 'none',
+    subscriptionEnd: data.subscription_end || null,
+    isActive: !!data.isActive
+  };
+}
+
+async function pbRefreshSubscription(email) {
+  if (!email) return null;
+  var data = await pbApi('/subscription/check?email=' + encodeURIComponent(email), { method: 'GET' });
+  var auth = pbNormalizeAuthFromCheck(email, data);
+  pbSetAuth(auth);
+  return auth;
+}
+
+async function pbOpenCheckout(email) {
+  email = email || (pbGetAuth() && pbGetAuth().email) || (document.getElementById('pb-auth-email') && document.getElementById('pb-auth-email').value) || '';
+  email = String(email || '').trim().toLowerCase();
+  if (!email) { toast('Email required to renew'); return; }
+  try {
+    var data = await pbApi('/subscription/create-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ email: email })
+    });
+    if (data && data.checkoutUrl) {
+      window.open(data.checkoutUrl, '_blank');
+    } else {
+      toast('No checkout URL returned');
+    }
+  } catch (err) {
+    toast(err.message || 'Checkout failed');
+  }
+}
+
+async function pbSendMagicLink() {
+  var emailEl = document.getElementById('pb-auth-email');
+  var email = String((emailEl && emailEl.value) || '').trim().toLowerCase();
+  if (!email || email.indexOf('@') < 0) {
+    pbAuthMsg('Enter a valid email', true);
+    return;
+  }
+  var btn = document.getElementById('pb-auth-magic-btn');
+  if (btn) btn.disabled = true;
+  pbAuthMsg('Sending…');
+  try {
+    await pbApi('/auth/magic-link', { method: 'POST', body: JSON.stringify({ email: email }) });
+    pbAuthMsg('Check your email for a login link ✅');
+  } catch (err) {
+    pbAuthMsg(err.message || 'Failed to send magic link', true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function pbApplyPromo() {
+  var emailEl = document.getElementById('pb-auth-email');
+  var codeEl = document.getElementById('pb-auth-promo');
+  var email = String((emailEl && emailEl.value) || '').trim().toLowerCase();
+  var code = String((codeEl && codeEl.value) || '').trim();
+  if (!email || email.indexOf('@') < 0) {
+    pbAuthMsg('Enter your email first', true);
+    return;
+  }
+  if (!code) {
+    pbAuthMsg('Enter a promo code', true);
+    return;
+  }
+  var btn = document.getElementById('pb-auth-promo-btn');
+  if (btn) btn.disabled = true;
+  try {
+    var data = await pbApi('/promo/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ email: email, code: code })
+    });
+    if (!data || !data.success) {
+      pbAuthMsg((data && data.message) || 'Invalid promo code', true);
+      toast((data && data.message) || 'Invalid promo code');
+      return;
+    }
+    var auth = {
+      email: email,
+      subscriptionStatus: 'promo',
+      subscriptionEnd: data.subscription_end || null,
+      isActive: true
+    };
+    try {
+      var fresh = await pbRefreshSubscription(email);
+      if (fresh) auth = fresh;
+    } catch (e) { /* keep promo auth */ }
+    pbSetAuth(auth);
+    pbAuthMsg(data.message || 'Promo applied');
+    pbUnlockApp(auth);
+  } catch (err) {
+    pbAuthMsg(err.message || 'Promo failed', true);
+    toast(err.message || 'Promo failed');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function pbParseTokenFromUrl() {
+  var params = new URLSearchParams(window.location.search || '');
+  var hash = String(window.location.hash || '').replace(/^#/, '');
+  var hashParams = new URLSearchParams(hash);
+  var token = params.get('token') || params.get('token_hash') || hashParams.get('token') || hashParams.get('token_hash');
+  var accessToken = params.get('access_token') || hashParams.get('access_token');
+  var type = params.get('type') || hashParams.get('type') || 'email';
+  return { token: token, accessToken: accessToken, type: type };
+}
+
+function pbStripAuthParamsFromUrl() {
+  try {
+    var u = new URL(window.location.href);
+    ['token','token_hash','access_token','type','checkout'].forEach(function(k){ u.searchParams.delete(k); });
+    history.replaceState({}, '', u.pathname + u.search + (u.hash && u.hash.indexOf('access_token')>=0 ? '' : u.hash));
+  } catch (e) {}
+}
+
+async function pbHandleMagicLinkReturn() {
+  var parsed = pbParseTokenFromUrl();
+  if (!parsed.token && !parsed.accessToken) return null;
+  var body = {};
+  if (parsed.accessToken) body.access_token = parsed.accessToken;
+  if (parsed.token) body.token = parsed.token;
+  body.type = parsed.type || 'email';
+  var data = await pbApi('/auth/verify', { method: 'POST', body: JSON.stringify(body) });
+  var auth = pbNormalizeAuthFromVerify(data);
+  pbSetAuth(auth);
+  pbStripAuthParamsFromUrl();
+  return auth;
+}
+
+function pbUnlockApp(auth) {
+  pbShowAuthScreen(false);
+  pbUpdateBanners(auth);
+  init();
+  if (auth && !pbIsActive(auth)) {
+    // Allow viewing with expired banner; offer checkout
+    pbUpdateBanners(auth);
+  }
+}
+
+function pbOpenAccount() {
+  var auth = pbGetAuth() || {};
+  setText('pb-acct-email', auth.email || '—');
+  setText('pb-acct-status', auth.subscriptionStatus || '—');
+  setText('pb-acct-end', auth.subscriptionEnd ? new Date(auth.subscriptionEnd).toLocaleString() : '—');
+  openModal('modal-pb-account');
+}
+
+function pbManageSubscription() {
+  window.open(PB_API + '/subscribe', '_blank');
+}
+
+function pbLogout() {
+  pbClearAuth();
+  closeModal('modal-pb-account');
+  pbUpdateBanners(null);
+  pbShowAuthScreen(true);
+  pbAuthMsg('');
+}
+
+async function pbBoot() {
+  // Hide app behind auth until gate passes
+  pbShowAuthScreen(true);
+  try {
+    var fromLink = null;
+    try { fromLink = await pbHandleMagicLinkReturn(); } catch (e) {
+      pbAuthMsg(e.message || 'Login link invalid', true);
+    }
+    var auth = fromLink || pbGetAuth();
+    if (auth && auth.email) {
+      try {
+        auth = await pbRefreshSubscription(auth.email) || auth;
+      } catch (e) {
+        // Keep cached auth if network fails
+      }
+    }
+    if (fromLink && auth && !pbIsActive(auth)) {
+      pbSetAuth(auth);
+      pbUnlockApp(auth);
+      await pbOpenCheckout(auth.email);
+      return;
+    }
+    if (pbIsActive(auth)) {
+      pbUnlockApp(auth);
+      return;
+    }
+    if (auth && auth.email) {
+      var emailEl = document.getElementById('pb-auth-email');
+      if (emailEl && !emailEl.value) emailEl.value = auth.email;
+      pbUpdateBanners(auth);
+    }
+    pbShowAuthScreen(true);
+  } catch (err) {
+    console.error('[pbBoot]', err);
+    pbShowAuthScreen(true);
+    pbAuthMsg(err.message || 'Auth failed', true);
+  }
+}
+
 console.log('[app] localStorage key: pb-current | resetLocalData() to clear | G to inspect state');
-init();
+pbBoot();
 </script>
 </body>
 </html>
