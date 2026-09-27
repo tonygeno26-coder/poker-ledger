@@ -292,6 +292,46 @@ app.post('/auth/verify', async function (req, res) {
   }
 });
 
+// Dev/test login — bypasses magic-link email (Supabase free-tier rate limits).
+// Secret always required. Allowed when NODE_ENV !== 'production' OR secret matches.
+const TEST_LOGIN_SECRET = 'pbpoker-dev-2026';
+app.post('/auth/test-login', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const body = req.body || {};
+    const email = normalizeEmail(body.email);
+    const secret = String(body.secret || '');
+    const secretMatches = secret === TEST_LOGIN_SECRET;
+    const notProduction = process.env.NODE_ENV !== 'production';
+
+    if (!secretMatches) {
+      return res.status(403).json({ error: 'Invalid secret' });
+    }
+    if (!(notProduction || secretMatches)) {
+      return res.status(403).json({ error: 'test-login not available' });
+    }
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+
+    const user = await ensureUser(email);
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email
+      },
+      subscription_status: user.subscription_status,
+      subscription_end: user.subscription_end,
+      subscriptionStatus: user.subscription_status,
+      subscriptionEnd: user.subscription_end,
+      isActive: isSubscriptionActive(user)
+    });
+  } catch (err) {
+    console.error('[auth/test-login]', err);
+    res.status(500).json({ error: err.message || 'Test login failed' });
+  }
+});
+
 // ── Subscription ──────────────────────────────────────────────────────────────
 app.get('/subscription/check', async function (req, res) {
   try {
