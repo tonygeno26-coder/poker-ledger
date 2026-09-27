@@ -3759,6 +3759,7 @@ async function pbOpenCheckout(email) {
   email = String(email || '').trim().toLowerCase();
   if (!email) { toast('Email required to renew'); return; }
   try {
+    try { localStorage.setItem('pb-pending-email', email); } catch (e) {}
     var data = await pbApi('/subscription/create-checkout', {
       method: 'POST',
       body: JSON.stringify({ email: email })
@@ -3920,71 +3921,86 @@ async function pbBoot() {
   pbShowAuthScreen(true);
   try {
     var fromSuccess = pbDetectSubscribeSuccess();
-    var successEmail = '';
-    try {
-      successEmail = (new URLSearchParams(window.location.search || '').get('email') || '').trim().toLowerCase();
-    } catch (e) {}
+    if (fromSuccess) pbStripAuthParamsFromUrl();
 
+    // Magic-link return (token in URL) — verify before pending/auth restore
     var fromLink = null;
     try { fromLink = await pbHandleMagicLinkReturn(); } catch (e) {
       pbAuthMsg(e.message || 'Login link invalid', true);
     }
-
-    var auth = fromLink || pbGetAuth();
-    if (successEmail && (!auth || !auth.email)) {
-      auth = { email: successEmail, subscriptionStatus: 'none', subscriptionEnd: null, isActive: false };
+    if (fromLink && fromLink.email) {
+      try {
+        fromLink = await pbRefreshSubscription(fromLink.email) || fromLink;
+      } catch (e) {}
+      if (pbIsActive(fromLink)) {
+        try { localStorage.removeItem('pb-pending-email'); } catch (e) {}
+        pbUnlockApp(fromLink);
+        return;
+      }
+      pbSetAuth(fromLink);
+      pbUnlockApp(fromLink);
+      await pbOpenCheckout(fromLink.email);
+      return;
     }
 
-    // Always re-check server when we have an email (load, magic link, or post-checkout)
-    if (auth && auth.email) {
+    // (a) Post-Stripe return: pending email → subscription/check → unlock if active
+    var pendingEmail = '';
+    try { pendingEmail = String(localStorage.getItem('pb-pending-email') || '').trim().toLowerCase(); } catch (e) {}
+    if (pendingEmail) {
+      var pendingAuth = null;
       try {
-        auth = await pbRefreshSubscription(auth.email) || auth;
+        pendingAuth = await pbRefreshSubscription(pendingEmail);
+      } catch (e) {
+        // network — keep pending for next launch
+      }
+      if ((!pendingAuth || !pbIsActive(pendingAuth)) && fromSuccess) {
+        // Webhook may still be landing after Open App
+        try {
+          await new Promise(function(r){ setTimeout(r, 1200); });
+          pendingAuth = await pbRefreshSubscription(pendingEmail) || pendingAuth;
+        } catch (e) {}
+      }
+      if (pendingAuth && pbIsActive(pendingAuth)) {
+        pbSetAuth({
+          email: pendingAuth.email,
+          subscriptionStatus: pendingAuth.subscriptionStatus,
+          subscriptionEnd: pendingAuth.subscriptionEnd,
+          isActive: true
+        });
+        try { localStorage.removeItem('pb-pending-email'); } catch (e) {}
+        pbUnlockApp(pendingAuth);
+        return;
+      }
+      // Not active yet — leave pending, fall through to (b)/(c)
+      if (pendingAuth && pendingAuth.email) {
+        var pendingEl = document.getElementById('pb-auth-email');
+        if (pendingEl && !pendingEl.value) pendingEl.value = pendingAuth.email;
+      }
+    }
+
+    // (b) Existing pb-auth → re-check; update if upgraded (trial/promo → active)
+    var auth = pbGetAuth();
+    if (auth && auth.email && pbIsActive(auth)) {
+      try {
+        var refreshed = await pbRefreshSubscription(auth.email);
+        if (refreshed) auth = refreshed;
       } catch (e) {
         // Keep cached auth if network fails
       }
-    }
-
-    if (fromSuccess) {
-      pbStripAuthParamsFromUrl();
-      if (auth && pbIsActive(auth)) {
+      if (pbIsActive(auth)) {
         pbUnlockApp(auth);
         return;
       }
-      if (auth && auth.email) {
-        pbSetAuth(auth);
-        pbAuthMsg(pbIsActive(auth) ? '' : 'Payment received — refreshing subscription…');
-        // One short retry in case webhook is still landing
-        try {
-          await new Promise(function(r){ setTimeout(r, 1200); });
-          auth = await pbRefreshSubscription(auth.email) || auth;
-        } catch (e) {}
-        if (pbIsActive(auth)) {
-          pbUnlockApp(auth);
-          return;
-        }
-      }
     }
 
-    // After magic-link verify: re-check already done above; active → enter with no banners
-    if (fromLink && auth && pbIsActive(auth)) {
-      pbUnlockApp(auth);
-      return;
-    }
-
-    if (fromLink && auth && !pbIsActive(auth)) {
-      pbSetAuth(auth);
-      pbUnlockApp(auth);
-      await pbOpenCheckout(auth.email);
-      return;
-    }
-    if (pbIsActive(auth)) {
-      pbUnlockApp(auth);
-      return;
-    }
+    // (c) Auth screen
     if (auth && auth.email) {
       var emailEl = document.getElementById('pb-auth-email');
       if (emailEl && !emailEl.value) emailEl.value = auth.email;
       pbUpdateBanners(auth);
+    } else if (pendingEmail) {
+      var emailEl2 = document.getElementById('pb-auth-email');
+      if (emailEl2 && !emailEl2.value) emailEl2.value = pendingEmail;
     }
     pbShowAuthScreen(true);
   } catch (err) {
