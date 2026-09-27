@@ -335,8 +335,8 @@ app.post('/subscription/create-checkout', async function (req, res) {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${BASE_URL}/subscribe?checkout=success`,
-      cancel_url: `${BASE_URL}/subscribe?checkout=cancel`,
+      success_url: `${BASE_URL}/subscribe?success=true&email=${encodeURIComponent(email)}`,
+      cancel_url: `${BASE_URL}/subscribe?checkout=cancel&email=${encodeURIComponent(email)}`,
       metadata: {
         pocketbooks_user_id: user.id,
         email

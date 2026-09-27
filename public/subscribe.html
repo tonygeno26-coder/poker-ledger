@@ -13,6 +13,8 @@
       --muted: #9a9aa0;
       --red: #e03131;
       --red-dim: rgba(224, 49, 49, 0.18);
+      --green: #34d399;
+      --green-dim: rgba(16,185,129,0.14);
     }
     * { box-sizing: border-box; }
     body {
@@ -53,6 +55,10 @@
       background: var(--red); color: #fff; font-size: 16px; font-weight: 800; cursor: pointer;
     }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-green {
+      background: #059669;
+      margin-top: 8px;
+    }
     .msg {
       display: none; margin-top: 12px; padding: 12px; border-radius: 10px;
       font-size: 14px; font-weight: 600; line-height: 1.4;
@@ -62,10 +68,42 @@
     .msg.err { background: var(--red-dim); color: #ff8787; border: 1px solid rgba(224,49,49,0.35); }
     .status { font-size: 13px; color: var(--muted); margin-bottom: 14px; min-height: 1.2em; }
     a { color: var(--red); font-weight: 700; text-decoration: none; }
+    #subscribe-form { display: block; }
+    #success-screen {
+      display: none;
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid rgba(16,185,129,0.35);
+      border-radius: 16px;
+      padding: 36px 24px;
+      text-align: center;
+      box-shadow: 0 0 0 1px var(--green-dim);
+    }
+    #success-screen.show { display: block; }
+    .success-icon {
+      font-size: 3rem;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    .success-title {
+      font-size: 1.75rem;
+      font-weight: 900;
+      color: var(--green);
+      margin: 0 0 12px;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+    .success-sub {
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.5;
+      margin: 0 0 24px;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card" id="subscribe-form">
     <h1>Subscribe to Pocketbooks</h1>
     <p>$19.99/month — unlock the full poker ledger after your trial.</p>
     <div class="status" id="status">Preparing…</div>
@@ -74,6 +112,13 @@
     <button class="btn" id="pay-btn" type="button" onclick="startCheckout()">Continue to Stripe</button>
     <div class="msg" id="msg"></div>
     <p style="margin-top:18px;margin-bottom:0;font-size:13px"><a href="/">← Back</a></p>
+  </div>
+
+  <div id="success-screen" aria-live="polite">
+    <div class="success-icon" aria-hidden="true">✅</div>
+    <h1 class="success-title">✅ Subscription Active!</h1>
+    <p class="success-sub">Open the Pocketbooks Poker app to continue</p>
+    <a class="btn btn-green" id="open-app-btn" href="pocketbookspoker://subscribe/success">Open App</a>
   </div>
 
   <script>
@@ -90,6 +135,17 @@
     function hashParams() {
       var h = (window.location.hash || '').replace(/^#/, '');
       return new URLSearchParams(h);
+    }
+
+    function showSuccessScreen() {
+      var form = document.getElementById('subscribe-form');
+      var success = document.getElementById('success-screen');
+      if (form) form.style.display = 'none';
+      if (success) success.classList.add('show');
+      var email = (qs('email') || '').trim();
+      if (email) {
+        try { localStorage.setItem('pb_sub_email', email); } catch (e) {}
+      }
     }
 
     async function verifyFromLink() {
@@ -161,17 +217,19 @@
     }
 
     (function init() {
+      var success = qs('success');
       var checkout = qs('checkout');
-      if (checkout === 'success') {
-        document.getElementById('status').textContent = 'Payment received — activating your subscription.';
-        showMsg('Thanks! Access updates after Stripe webhook confirmation (usually seconds).', true);
-      } else if (checkout === 'cancel') {
+      if (success === 'true' || checkout === 'success') {
+        showSuccessScreen();
+        return;
+      }
+      if (checkout === 'cancel') {
         document.getElementById('status').textContent = 'Checkout canceled.';
         showMsg('No charge was made. You can try again anytime.', false);
       }
 
       try {
-        var saved = localStorage.getItem('pb_sub_email');
+        var saved = localStorage.getItem('pb_sub_email') || qs('email');
         if (saved) document.getElementById('email').value = saved;
       } catch (e) {}
 

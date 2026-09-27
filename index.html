@@ -3852,9 +3852,23 @@ function pbParseTokenFromUrl() {
 function pbStripAuthParamsFromUrl() {
   try {
     var u = new URL(window.location.href);
-    ['token','token_hash','access_token','type','checkout'].forEach(function(k){ u.searchParams.delete(k); });
-    history.replaceState({}, '', u.pathname + u.search + (u.hash && u.hash.indexOf('access_token')>=0 ? '' : u.hash));
+    ['token','token_hash','access_token','type','checkout','success','email'].forEach(function(k){ u.searchParams.delete(k); });
+    var hash = u.hash || '';
+    if (hash.indexOf('access_token') >= 0 || /subscribe\/success/i.test(hash)) hash = '';
+    history.replaceState({}, '', u.pathname + u.search + hash);
   } catch (e) {}
+}
+
+function pbDetectSubscribeSuccess() {
+  try {
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('success') === 'true' || params.get('checkout') === 'success') return true;
+    var href = String(window.location.href || '');
+    if (/subscribe\/success/i.test(href)) return true;
+    var hash = String(window.location.hash || '');
+    if (/subscribe\/success/i.test(hash)) return true;
+  } catch (e) {}
+  return false;
 }
 
 async function pbHandleMagicLinkReturn() {
@@ -3905,11 +3919,23 @@ async function pbBoot() {
   // Hide app behind auth until gate passes
   pbShowAuthScreen(true);
   try {
+    var fromSuccess = pbDetectSubscribeSuccess();
+    var successEmail = '';
+    try {
+      successEmail = (new URLSearchParams(window.location.search || '').get('email') || '').trim().toLowerCase();
+    } catch (e) {}
+
     var fromLink = null;
     try { fromLink = await pbHandleMagicLinkReturn(); } catch (e) {
       pbAuthMsg(e.message || 'Login link invalid', true);
     }
+
     var auth = fromLink || pbGetAuth();
+    if (successEmail && (!auth || !auth.email)) {
+      auth = { email: successEmail, subscriptionStatus: 'none', subscriptionEnd: null, isActive: false };
+    }
+
+    // Always re-check server when we have an email (load, magic link, or post-checkout)
     if (auth && auth.email) {
       try {
         auth = await pbRefreshSubscription(auth.email) || auth;
@@ -3917,6 +3943,34 @@ async function pbBoot() {
         // Keep cached auth if network fails
       }
     }
+
+    if (fromSuccess) {
+      pbStripAuthParamsFromUrl();
+      if (auth && pbIsActive(auth)) {
+        pbUnlockApp(auth);
+        return;
+      }
+      if (auth && auth.email) {
+        pbSetAuth(auth);
+        pbAuthMsg(pbIsActive(auth) ? '' : 'Payment received — refreshing subscription…');
+        // One short retry in case webhook is still landing
+        try {
+          await new Promise(function(r){ setTimeout(r, 1200); });
+          auth = await pbRefreshSubscription(auth.email) || auth;
+        } catch (e) {}
+        if (pbIsActive(auth)) {
+          pbUnlockApp(auth);
+          return;
+        }
+      }
+    }
+
+    // After magic-link verify: re-check already done above; active → enter with no banners
+    if (fromLink && auth && pbIsActive(auth)) {
+      pbUnlockApp(auth);
+      return;
+    }
+
     if (fromLink && auth && !pbIsActive(auth)) {
       pbSetAuth(auth);
       pbUnlockApp(auth);
