@@ -10,11 +10,28 @@ const PORT = Number(process.env.PORT) || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const TRIAL_DAYS = 7;
 
+// Stripe mode: "live" uses STRIPE_LIVE_* vars when set; otherwise falls back to test vars.
+const STRIPE_MODE = String(process.env.STRIPE_MODE || 'test').toLowerCase() === 'live' ? 'live' : 'test';
+const stripeKey =
+  STRIPE_MODE === 'live'
+    ? process.env.STRIPE_LIVE_SECRET_KEY || process.env.STRIPE_SECRET_KEY
+    : process.env.STRIPE_SECRET_KEY;
+const stripePriceId =
+  STRIPE_MODE === 'live'
+    ? process.env.STRIPE_LIVE_PRICE_ID || process.env.STRIPE_PRICE_ID
+    : process.env.STRIPE_PRICE_ID;
+const stripeWebhookSecret =
+  STRIPE_MODE === 'live'
+    ? process.env.STRIPE_LIVE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET
+    : process.env.STRIPE_WEBHOOK_SECRET;
+
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
   console.warn('[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — auth routes will fail until configured');
 }
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn('[warn] STRIPE_SECRET_KEY not set — checkout/webhook will fail until configured');
+if (!stripeKey) {
+  console.warn(
+    `[warn] Stripe secret not set for mode=${STRIPE_MODE} — checkout/webhook will fail until configured`
+  );
 }
 
 const supabase =
@@ -24,9 +41,7 @@ const supabase =
       })
     : null;
 
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
 
 const app = express();
 app.use(cors());
@@ -38,8 +53,16 @@ app.post(
   async function (req, res) {
     if (!stripe) return res.status(503).send('Stripe not configured');
     const sig = req.headers['stripe-signature'];
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) return res.status(503).send('STRIPE_WEBHOOK_SECRET not set');
+    const secret = stripeWebhookSecret;
+    if (!secret) {
+      return res
+        .status(503)
+        .send(
+          STRIPE_MODE === 'live'
+            ? 'STRIPE_LIVE_WEBHOOK_SECRET (or STRIPE_WEBHOOK_SECRET) not set'
+            : 'STRIPE_WEBHOOK_SECRET not set'
+        );
+    }
 
     let event;
     try {
@@ -392,8 +415,15 @@ app.post('/subscription/create-checkout', async function (req, res) {
   try {
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
     if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
-    const priceId = process.env.STRIPE_PRICE_ID;
-    if (!priceId) return res.status(503).json({ error: 'STRIPE_PRICE_ID not set' });
+    const priceId = stripePriceId;
+    if (!priceId) {
+      return res.status(503).json({
+        error:
+          STRIPE_MODE === 'live'
+            ? 'STRIPE_LIVE_PRICE_ID (or STRIPE_PRICE_ID) not set'
+            : 'STRIPE_PRICE_ID not set'
+      });
+    }
 
     const email = normalizeEmail(req.body && req.body.email);
     if (!email) return res.status(400).json({ error: 'email required' });
@@ -484,4 +514,7 @@ app.post('/promo/redeem', async function (req, res) {
 app.listen(PORT, function () {
   console.log(`[pocketbooks] subscription server listening on :${PORT}`);
   console.log(`[pocketbooks] BASE_URL=${BASE_URL}`);
+  console.log(
+    `[pocketbooks] STRIPE_MODE=${STRIPE_MODE} key=${stripeKey ? 'set' : 'missing'} price=${stripePriceId ? 'set' : 'missing'} webhook=${stripeWebhookSecret ? 'set' : 'missing'}`
+  );
 });
