@@ -190,6 +190,32 @@ select.inp{appearance:none;-webkit-appearance:none}
 .breakdown-cell .bc-val{font-size:20px;font-weight:800;color:var(--text)}
 .breakdown-cell.profit .bc-val{color:var(--green)}
 
+.hist-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;
+}
+.hist-card-head{padding:14px 16px}
+.hist-card-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.hist-card-meta{font-size:11px;color:var(--text-muted)}
+.hist-metrics{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 12px;
+}
+.hist-metric{
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;
+}
+.hist-metric .hm-lbl{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px}
+.hist-metric .hm-val{font-size:15px;font-weight:800;color:var(--text)}
+.hist-owes{padding:0 16px 12px;font-size:12px;color:var(--text-muted)}
+.hist-owes strong{color:var(--red)}
+.hist-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 14px}
+.hist-expand{
+  display:none;border-top:1px solid var(--border);padding:12px 16px;background:var(--surface);
+  font-size:12px;color:var(--text-muted);
+}
+.hist-card.open .hist-expand{display:block}
+.hist-expand h4{margin:0 0 8px;font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.6px}
+.hist-expand ul{margin:0 0 12px;padding-left:18px}
+.hist-expand li{margin-bottom:4px}
+
 .player-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:border-color 0.15s}
 .player-card:hover{border-color:var(--text-dim)}
 .player-card.active-card{border-color:var(--red);background:var(--surface2)}
@@ -3229,26 +3255,200 @@ function endGame(btn) {
 function clearHistory(btn) {
   confirmAction(btn, 'Click again to clear all saved games', function(){
     localStorage.removeItem('pb-history');
+    _historyExpanded = {};
     renderHistory();
     toast('History cleared');
   });
 }
 
+var _historyExpanded = {};
+
+function historyWithG(savedG, fn) {
+  var prev = G;
+  G = savedG || { players:[], txnLog:[], expenses:[], sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' };
+  try { return fn(); }
+  finally { G = prev; }
+}
+
+function buildHistorySummary(h) {
+  var g = h.G || {};
+  var players = (g.players || []).filter(function(p){ return !p.staffRole; });
+  var staff = (g.players || []).filter(function(p){ return !!p.staffRole; });
+  var dash = historyWithG(g, function(){ return calcDashboard(); });
+  var owes = historyWithG(g, function(){
+    return players.map(function(p){
+      return { name: p.name, bal: playerDisplayBalance(p) };
+    }).filter(function(x){ return x.bal < -SETTLE_EPSILON; })
+      .sort(function(a,b){ return a.bal - b.bal; });
+  });
+  var playerLines = historyWithG(g, function(){
+    return players.map(function(p){
+      var bal = playerDisplayBalance(p);
+      return { name: p.name, bal: bal };
+    });
+  });
+  var staffLines = staff.map(function(p){
+    return {
+      name: p.name,
+      role: (typeof staffRoleLabel === 'function') ? staffRoleLabel(normalizeStaffRole(p.staffRole)) : (p.staffRole || 'Staff')
+    };
+  });
+  var savedAt = h.date ? new Date(h.date) : null;
+  return {
+    id: h.id,
+    location: g.location || '',
+    sessionDate: g.date || '',
+    savedAt: savedAt,
+    playerCount: players.length,
+    staffCount: staff.length,
+    txnCount: (g.txnLog || []).length,
+    drop: dash.drop || 0,
+    expenses: dash.expenses || 0,
+    profit: dash.profit || 0,
+    topOwes: owes.slice(0, 3),
+    players: playerLines,
+    staff: staffLines
+  };
+}
+
+function formatHistoryExport(summary) {
+  var lines = [];
+  lines.push('POCKETBOOKS POKER — SESSION SUMMARY');
+  lines.push('================================');
+  lines.push('Location: ' + (summary.location || '—'));
+  lines.push('Session date: ' + (summary.sessionDate || '—'));
+  lines.push('Saved: ' + (summary.savedAt ? summary.savedAt.toLocaleString() : '—'));
+  lines.push('Players: ' + summary.playerCount + '  |  Staff: ' + summary.staffCount);
+  lines.push('Transactions: ' + summary.txnCount);
+  lines.push('Drop: $' + fmt(summary.drop));
+  lines.push('Expenses: $' + fmt(summary.expenses));
+  lines.push('Profit: $' + fmt(summary.profit));
+  lines.push('');
+  lines.push('Top owes house:');
+  if (!summary.topOwes.length) {
+    lines.push('  (none)');
+  } else {
+    summary.topOwes.forEach(function(o){
+      lines.push('  - ' + o.name + ': $' + fmt(Math.abs(o.bal)));
+    });
+  }
+  lines.push('');
+  lines.push('Players:');
+  if (!summary.players.length) {
+    lines.push('  (none)');
+  } else {
+    summary.players.forEach(function(p){
+      var tag = p.bal < -SETTLE_EPSILON ? 'owes $' + fmt(Math.abs(p.bal))
+        : p.bal > SETTLE_EPSILON ? 'owed $' + fmt(p.bal)
+        : 'settled';
+      lines.push('  - ' + p.name + ' (' + tag + ')');
+    });
+  }
+  lines.push('');
+  lines.push('Staff:');
+  if (!summary.staff.length) {
+    lines.push('  (none)');
+  } else {
+    summary.staff.forEach(function(s){
+      lines.push('  - ' + s.name + ' · ' + s.role);
+    });
+  }
+  lines.push('');
+  lines.push('Exported from Pocketbooks Poker');
+  return lines.join('\n');
+}
+
+function toggleHistoryExpand(id) {
+  _historyExpanded[id] = !_historyExpanded[id];
+  renderHistory();
+}
+
+function exportHistorySession(id) {
+  var history = JSON.parse(ls('pb-history')||'[]');
+  var h = history.find(function(x){ return x.id===id; });
+  if (!h) { toast('Session not found'); return; }
+  var text = formatHistoryExport(buildHistorySummary(h));
+  function copied() { toast('Session summary copied ✅'); }
+  function fallbackCopy() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      copied();
+    } catch (e) {
+      toast('Copy failed — long-press to select text');
+    }
+    document.body.removeChild(ta);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(copied).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
 function renderHistory() {
   var history = JSON.parse(ls('pb-history')||'[]');
   var el = document.getElementById('history-list');
+  if (!el) return;
   el.innerHTML = history.length
     ? history.map(function(h){
-        var d = new Date(h.date);
-        var label = [h.G.location,h.G.date].filter(Boolean).join(' · ') || d.toLocaleDateString();
-        var playerCount = (h.G.players||[]).length;
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer" onclick="loadGame(this,'+h.id+')">'
-          +'<div><div style="font-weight:700;font-size:14px">'+label+'</div>'
-          +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+playerCount+' players · '+d.toLocaleString()+'</div></div>'
-          +'<div style="display:flex;gap:8px">'
-          +'<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();loadGame(this,'+h.id+')">Load</button>'
-          +'<button class="btn btn-xs" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="event.stopPropagation();deleteGame('+h.id+')">🗑️</button>'
-          +'</div></div>';
+        var s = buildHistorySummary(h);
+        var open = !!_historyExpanded[h.id];
+        var label = [s.location, s.sessionDate].filter(Boolean).join(' · ')
+          || (s.savedAt ? s.savedAt.toLocaleDateString() : 'Saved game');
+        var profitColor = s.profit >= 0 ? 'var(--green)' : 'var(--red)';
+        var topOwesHtml = s.topOwes.length
+          ? s.topOwes.map(function(o){
+              return '<div>· <strong>' + o.name + '</strong> owes $' + fmt(Math.abs(o.bal)) + '</div>';
+            }).join('')
+          : '<div>No outstanding player debts</div>';
+        var playerList = s.players.length
+          ? '<ul>' + s.players.map(function(p){
+              var tag = p.bal < -SETTLE_EPSILON ? 'owes $' + fmt(Math.abs(p.bal))
+                : p.bal > SETTLE_EPSILON ? 'owed $' + fmt(p.bal)
+                : 'settled';
+              return '<li>' + p.name + ' — ' + tag + '</li>';
+            }).join('') + '</ul>'
+          : '<div style="margin-bottom:12px">No players</div>';
+        var staffList = s.staff.length
+          ? '<ul>' + s.staff.map(function(st){
+              return '<li>' + st.name + ' · ' + st.role + '</li>';
+            }).join('') + '</ul>'
+          : '<div style="margin-bottom:12px">No staff</div>';
+        return '<div class="hist-card' + (open ? ' open' : '') + '" data-hist-id="' + h.id + '">'
+          + '<div class="hist-card-head">'
+            + '<div class="hist-card-title">' + label + '</div>'
+            + '<div class="hist-card-meta">'
+              + s.playerCount + ' players · ' + s.staffCount + ' staff · '
+              + s.txnCount + ' txns'
+              + (s.savedAt ? ' · ' + s.savedAt.toLocaleString() : '')
+            + '</div>'
+          + '</div>'
+          + '<div class="hist-metrics">'
+            + '<div class="hist-metric"><div class="hm-lbl">Drop</div><div class="hm-val">$' + fmt(s.drop) + '</div></div>'
+            + '<div class="hist-metric"><div class="hm-lbl">Expenses</div><div class="hm-val">$' + fmt(s.expenses) + '</div></div>'
+            + '<div class="hist-metric"><div class="hm-lbl">Profit</div><div class="hm-val" style="color:' + profitColor + '">$' + fmt(s.profit) + '</div></div>'
+            + '<div class="hist-metric"><div class="hm-lbl">Saved</div><div class="hm-val" style="font-size:12px;font-weight:700">' + (s.savedAt ? s.savedAt.toLocaleDateString() : '—') + '</div></div>'
+          + '</div>'
+          + '<div class="hist-owes"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;color:var(--text-muted)">Top owes</div>' + topOwesHtml + '</div>'
+          + '<div class="hist-actions">'
+            + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();toggleHistoryExpand(' + h.id + ')">' + (open ? 'Collapse' : 'Expand') + '</button>'
+            + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();exportHistorySession(' + h.id + ')">Export</button>'
+            + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();loadGame(this,' + h.id + ')">Load</button>'
+            + '<button class="btn btn-xs" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="event.stopPropagation();deleteGame(' + h.id + ')">🗑️</button>'
+          + '</div>'
+          + '<div class="hist-expand">'
+            + '<h4>Players (' + s.playerCount + ')</h4>' + playerList
+            + '<h4>Staff (' + s.staffCount + ')</h4>' + staffList
+            + '<h4>Transactions</h4><div>' + s.txnCount + ' logged</div>'
+          + '</div>'
+        + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No saved games yet</div>';
 }
@@ -3273,6 +3473,7 @@ function deleteGame(id) {
   var history = JSON.parse(ls('pb-history')||'[]');
   history = history.filter(function(h){ return h.id!==id; });
   lsSet('pb-history', JSON.stringify(history));
+  delete _historyExpanded[id];
   renderHistory();
 }
 
