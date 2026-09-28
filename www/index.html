@@ -984,46 +984,58 @@ function updateStaffTaxPreview(staffId) {
 function calcDashboard() {
   var bankStart = G.sessionSettings.bankStart || 0;
   var chipFloat = G.sessionSettings.chipFloat || 0;
-  var cashIn=0,eCashIn=0,cashOut=0,eCashOut=0,chipsDealt=0,chipsReturned=0,drop=0,tips=0,expenses=0,bonusTotal=0,staffTax=0;
-  // Tips + drop are chips coming BACK to the float. Banks are chips pulled out of the float trays.
-  var tipsIn = 0, dropIn = 0;
+  var cashBuyIns = 0, eCashBuyIns = 0, cashPayouts = 0, eCashPayouts = 0;
+  var cashStaffPayouts = 0, eCashStaffPayouts = 0;
+  var chipsDealt = 0, chipsReturned = 0, drop = 0, tips = 0, expenses = 0, bonusChips = 0, staffTax = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
-      if (b.type==='CASH')  cashIn   += b.amount;
-      if (b.type==='ECASH') eCashIn  += b.amount;
-      if (b.type==='BONUS') bonusTotal += b.amount;
+      if (b.type==='CASH')  cashBuyIns  += b.amount;
+      if (b.type==='ECASH') eCashBuyIns += b.amount;
+      if (b.type==='BONUS') bonusChips  += b.amount;
       // ALL buy-in types (CASH/ECASH/MARKER/BONUS) deal real chips from the float
       chipsDealt += b.amount;
     });
     (p.cashOuts||[]).forEach(function(c) {
-      if (c.method==='CASH')  cashOut  += c.amount;
-      if (c.method==='ECASH') eCashOut += c.amount;
+      if (c.method==='CASH')  cashPayouts  += c.amount;
+      if (c.method==='ECASH') eCashPayouts += c.amount;
+      // ALL cash-outs return chips to the float (method is how we pay, not chip movement)
       chipsReturned += c.amount;
     });
-    (p.drops||[]).forEach(function(d){ drop += d.amount; dropIn += d.amount; });
-    (p.tips||[]).forEach(function(t){ tips += t.amount; tipsIn += t.amount; });
+    (p.staffPayouts||[]).forEach(function(sp) {
+      var m = String(sp.method || 'CASH').toUpperCase();
+      if (m === 'ECASH') eCashStaffPayouts += sp.amount || 0;
+      else cashStaffPayouts += sp.amount || 0;
+    });
+    (p.drops||[]).forEach(function(d){ drop += d.amount; });
+    (p.tips||[]).forEach(function(t){ tips += t.amount; });
     // House cut of tips — only staff tax contributes to profit (not gross tips)
     if (p.staffRole) {
       (p.staffTaxLog||[]).forEach(function(t){ staffTax += t.taxAmount || 0; });
     }
   });
   var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
-  // Expenses: house card → G.expenses; staff row → p.expenses only (HOUSE_EXPENSE txn is log-only, not in G.expenses)
-  (G.expenses||[]).forEach(function(e){ expenses += e.amount; });
+  // Expenses: house card → G.expenses; staff row → p.expenses (cash outflows; no method field)
+  var cashExpenses = 0;
+  (G.expenses||[]).forEach(function(e){ cashExpenses += e.amount; });
   G.players.forEach(function(p){
-    (p.expenses||[]).forEach(function(e){ expenses += e.amount || 0; });
+    (p.expenses||[]).forEach(function(e){ cashExpenses += e.amount || 0; });
   });
-  expenses += bonusTotal; // BONUS buy-ins are complimentary chips — a house cost like any other expense
+  expenses = cashExpenses; // operating expenses only — bonus chips tracked separately
   return {
-    cashOnHand:   bankStart + cashIn - cashOut,
-    eCashOnHand:  eCashIn - eCashOut,
-    // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled
-    chipsOnHand:  chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled,
+    // cashOnHand = bankStart + cashBuyIns - cashPayouts - cashStaffPayouts - cashExpenses
+    cashOnHand:   bankStart + cashBuyIns - cashPayouts - cashStaffPayouts - cashExpenses,
+    // eCashOnHand = eCashBuyIns - eCashPayouts - eCashStaffPayouts
+    eCashOnHand:  eCashBuyIns - eCashPayouts - eCashStaffPayouts,
+    // chipsOnHand = chipFloat - chipsDealt + chipsReturned - banksPulled
+    // Tips and drop do NOT affect chips
+    chipsOnHand:  chipFloat - chipsDealt + chipsReturned - banksPulled,
     drop: drop,
     tips: tips,
     expenses: expenses,
+    bonusChips: bonusChips,
     staffTax: staffTax,
-    profit: drop - expenses + staffTax // profit = drop + staff tax - expenses
+    // profit = drop + staffTaxWithheld - expenses - bonusChips
+    profit: drop + staffTax - expenses - bonusChips
   };
 }
 
@@ -3488,17 +3500,16 @@ function refreshStartingSavedBanner() {
 
 function getExpectedChips() {
   // Same formula as calcDashboard().chipsOnHand — live G only (chipCounts is log-only).
-  // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled
+  // chipsOnHand = chipFloat - chipsDealt + chipsReturned - banksPulled
+  // Tips and drop do NOT affect chips
   var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
-  var chipsDealt = 0, chipsReturned = 0, tipsIn = 0, dropIn = 0;
+  var chipsDealt = 0, chipsReturned = 0;
   (G.players || []).forEach(function(p) {
     (p.buyIns || []).forEach(function(b) { chipsDealt += b.amount || 0; });
     (p.cashOuts || []).forEach(function(c) { chipsReturned += c.amount || 0; });
-    (p.tips || []).forEach(function(t) { tipsIn += t.amount || 0; });
-    (p.drops || []).forEach(function(d) { dropIn += d.amount || 0; });
   });
   var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
-  return chipFloat - chipsDealt + chipsReturned + tipsIn + dropIn - banksPulled;
+  return chipFloat - chipsDealt + chipsReturned - banksPulled;
 }
 
 // Called from renderAll(); display-only chip count history (no accounting).
