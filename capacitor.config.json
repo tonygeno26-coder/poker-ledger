@@ -6,5 +6,11 @@
   "ios": {
     "contentInset": "always",
     "scrollEnabled": true
+  },
+  "server": {
+    "iosScheme": "pocketbookspoker"
+  },
+  "plugins": {
+    "App": {}
   }
 }

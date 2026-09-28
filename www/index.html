@@ -3842,14 +3842,28 @@ async function pbApplyPromo() {
   }
 }
 
-function pbParseTokenFromUrl() {
-  var params = new URLSearchParams(window.location.search || '');
-  var hash = String(window.location.hash || '').replace(/^#/, '');
-  var hashParams = new URLSearchParams(hash);
+function pbParseTokenFromHref(href) {
+  href = String(href || window.location.href || '');
+  var params = new URLSearchParams();
+  var hashParams = new URLSearchParams();
+  try {
+    var u = new URL(href);
+    params = u.searchParams;
+    hashParams = new URLSearchParams(String(u.hash || '').replace(/^#/, ''));
+  } catch (e) {
+    var qi = href.indexOf('?');
+    var hi = href.indexOf('#');
+    if (qi >= 0) params = new URLSearchParams(href.slice(qi + 1, hi > qi ? hi : href.length));
+    if (hi >= 0) hashParams = new URLSearchParams(href.slice(hi + 1));
+  }
   var token = params.get('token') || params.get('token_hash') || hashParams.get('token') || hashParams.get('token_hash');
   var accessToken = params.get('access_token') || hashParams.get('access_token');
   var type = params.get('type') || hashParams.get('type') || 'email';
   return { token: token, accessToken: accessToken, type: type };
+}
+
+function pbParseTokenFromUrl() {
+  return pbParseTokenFromHref(window.location.href);
 }
 
 function pbStripAuthParamsFromUrl() {
@@ -3860,9 +3874,8 @@ function pbStripAuthParamsFromUrl() {
   } catch (e) {}
 }
 
-async function pbHandleMagicLinkReturn() {
-  var parsed = pbParseTokenFromUrl();
-  if (!parsed.token && !parsed.accessToken) return null;
+async function pbVerifyParsedToken(parsed) {
+  if (!parsed || (!parsed.token && !parsed.accessToken)) return null;
   var body = {};
   if (parsed.accessToken) body.access_token = parsed.accessToken;
   if (parsed.token) body.token = parsed.token;
@@ -3870,8 +3883,88 @@ async function pbHandleMagicLinkReturn() {
   var data = await pbApi('/auth/verify', { method: 'POST', body: JSON.stringify(body) });
   var auth = pbNormalizeAuthFromVerify(data);
   pbSetAuth(auth);
+  return auth;
+}
+
+async function pbHandleMagicLinkReturn() {
+  var parsed = pbParseTokenFromUrl();
+  if (!parsed.token && !parsed.accessToken) return null;
+  var auth = await pbVerifyParsedToken(parsed);
   pbStripAuthParamsFromUrl();
   return auth;
+}
+
+async function pbApplyVerifiedAuth(auth, fromLink) {
+  if (!auth || !auth.email) return false;
+  try {
+    auth = await pbRefreshSubscription(auth.email) || auth;
+  } catch (e) { /* keep verified auth */ }
+  pbSetAuth(auth);
+  if (fromLink && !pbIsActive(auth)) {
+    pbUnlockApp(auth);
+    await pbOpenCheckout(auth.email);
+    return true;
+  }
+  if (pbIsActive(auth)) {
+    pbUnlockApp(auth);
+    return true;
+  }
+  var emailEl = document.getElementById('pb-auth-email');
+  if (emailEl && !emailEl.value) emailEl.value = auth.email;
+  pbUpdateBanners(auth);
+  pbShowAuthScreen(true);
+  return false;
+}
+
+async function pbHandleDeepLinkUrl(url) {
+  url = String(url || '');
+  if (!url) return null;
+  var parsed = pbParseTokenFromHref(url);
+  if (!parsed.token && !parsed.accessToken) return null;
+  try {
+    var auth = await pbVerifyParsedToken(parsed);
+    if (auth) await pbApplyVerifiedAuth(auth, true);
+    return auth;
+  } catch (err) {
+    pbAuthMsg(err.message || 'Login link invalid', true);
+    pbShowAuthScreen(true);
+    return null;
+  }
+}
+
+function pbGetCapacitorAppPlugin() {
+  try {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
+      ? window.Capacitor.Plugins.App
+      : null;
+  } catch (e) { return null; }
+}
+
+function pbListenDeepLinks() {
+  var App = pbGetCapacitorAppPlugin();
+  if (!App || typeof App.addListener !== 'function') return;
+  try {
+    App.addListener('appUrlOpen', function(event) {
+      var url = event && event.url;
+      if (!url) return;
+      pbHandleDeepLinkUrl(url);
+    });
+  } catch (e) {
+    console.warn('[pb] appUrlOpen listener failed', e);
+  }
+}
+
+async function pbHandleLaunchUrl() {
+  var App = pbGetCapacitorAppPlugin();
+  if (!App || typeof App.getLaunchUrl !== 'function') return null;
+  try {
+    var result = await App.getLaunchUrl();
+    var url = result && result.url;
+    if (!url) return null;
+    return await pbHandleDeepLinkUrl(url);
+  } catch (e) {
+    return null;
+  }
 }
 
 function pbUnlockApp(auth) {

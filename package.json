@@ -23,6 +23,7 @@
   "homepage": "https://github.com/tonygeno26-coder/poker-ledger#readme",
   "private": true,
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
     "@supabase/supabase-js": "^2.49.1",

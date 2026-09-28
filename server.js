@@ -235,7 +235,7 @@ app.post('/auth/magic-link', async function (req, res) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${BASE_URL}/subscribe`,
+        emailRedirectTo: 'pocketbookspoker://auth/callback',
         shouldCreateUser: true
       }
     });
