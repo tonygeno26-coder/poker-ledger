@@ -6,3 +6,6 @@ dist/
 .env
 .env.local
 *.pem
+
+.venv-icons/
+.venv*/

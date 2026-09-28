@@ -3,88 +3,266 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Pocketbooks Poker</title>
+  <title>PocketBooks Poker — Private Game Ledger</title>
+  <meta name="description" content="Home-game chip ledger for hosts. Markers, eCash, staff tips, and settle-up — $19.99/month.">
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0a0b;
-      --surface: #141416;
-      --border: #2a2a2e;
-      --text: #f5f5f5;
-      --muted: #9a9aa0;
-      --red: #e03131;
-      --red-dim: rgba(224, 49, 49, 0.18);
-      --gold: #f59f00;
+      --bg: #0a0a0a;
+      --bg-elev: #101410;
+      --navy: #0c2340;
+      --navy-mid: #163a66;
+      --green: #1a4d2e;
+      --green-bright: #2d6a45;
+      --gold: #d4a017;
+      --gold-soft: #e8c15a;
+      --text: #f2f0ea;
+      --muted: #9aa39a;
+      --line: rgba(212, 160, 23, 0.18);
+      --ok: #34d399;
+      --err: #f87171;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(224, 49, 49, 0.22), transparent 55%),
-        var(--bg);
+      font-family: "Outfit", sans-serif;
       color: var(--text);
+      background:
+        radial-gradient(ellipse 90% 55% at 50% -15%, rgba(12, 35, 64, 0.85), transparent 58%),
+        radial-gradient(ellipse 50% 40% at 90% 20%, rgba(26, 77, 46, 0.35), transparent 55%),
+        radial-gradient(ellipse 40% 35% at 10% 60%, rgba(212, 160, 23, 0.08), transparent 50%),
+        var(--bg);
       -webkit-font-smoothing: antialiased;
     }
-    .wrap {
-      max-width: 480px;
+    a { color: var(--gold-soft); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .nav {
+      max-width: 1080px;
       margin: 0 auto;
-      padding: 48px 20px 64px;
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
     }
-    .brand {
-      font-size: 1.75rem;
-      font-weight: 900;
-      letter-spacing: -0.03em;
-      margin: 0 0 8px;
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-brand img { width: 36px; height: 36px; object-fit: contain; }
+    .nav-links { display: flex; gap: 18px; align-items: center; font-size: 0.92rem; font-weight: 500; }
+    .nav-links a { color: var(--muted); text-decoration: none; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--gold), #b8860b);
+      color: #1a1400 !important;
+      font-weight: 700;
+      text-decoration: none !important;
+    }
+
+    .hero {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 56px 24px 72px;
       text-align: center;
     }
-    .brand span { color: var(--red); }
-    .tagline {
-      text-align: center;
+    .hero-logo {
+      width: min(420px, 88vw);
+      height: auto;
+      margin: 0 auto 28px;
+      display: block;
+      filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45));
+      animation: rise 0.9s ease-out both;
+    }
+    .hero h1 {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: clamp(1.85rem, 4.5vw, 2.75rem);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0 0 14px;
+      animation: rise 0.9s 0.08s ease-out both;
+    }
+    .hero p {
+      max-width: 520px;
+      margin: 0 auto 28px;
       color: var(--muted);
-      font-size: 0.95rem;
-      margin: 0 0 32px;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      animation: rise 0.9s 0.16s ease-out both;
+    }
+    .hero-ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      animation: rise 0.9s 0.24s ease-out both;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 52px;
+      padding: 0 22px;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none !important;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+      color: #1a1400;
+      box-shadow: 0 10px 28px rgba(212, 160, 23, 0.28);
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.16);
+    }
+
+    section {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 24px 56px;
+    }
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin: 0 0 10px;
+    }
+    .section-title {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 600;
+      margin: 0 0 10px;
+      letter-spacing: -0.02em;
+    }
+    .section-lead {
+      color: var(--muted);
+      margin: 0 0 28px;
+      max-width: 560px;
       line-height: 1.5;
     }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 16px;
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
     }
-    .price {
-      text-align: center;
-      margin-bottom: 20px;
+    .feature {
+      padding: 22px 20px;
+      border-top: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(12,35,64,0.35), transparent 80%);
     }
-    .price .amt {
-      font-size: 2.5rem;
-      font-weight: 900;
+    .feature h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+    .feature p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+    .feature .mark {
+      width: 28px;
+      height: 3px;
+      background: var(--gold);
+      margin-bottom: 14px;
+      border-radius: 2px;
+    }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (min-width: 800px) {
+      .pricing { grid-template-columns: 1fr 1.1fr; }
+    }
+    .price-panel {
+      padding: 28px 0 0;
+      border-top: 1px solid var(--line);
+    }
+    .price-amt {
+      font-size: clamp(2.6rem, 6vw, 3.4rem);
+      font-weight: 800;
       letter-spacing: -0.04em;
+      line-height: 1;
+      margin: 8px 0 6px;
     }
-    .price .amt small {
+    .price-amt small {
       font-size: 1rem;
       font-weight: 600;
       color: var(--muted);
+      letter-spacing: 0;
     }
-    .features {
+    .price-note { color: var(--muted); margin: 0 0 18px; line-height: 1.45; }
+    .price-list {
       list-style: none;
       padding: 0;
-      margin: 0 0 22px;
+      margin: 0;
     }
-    .features li {
+    .price-list li {
       display: flex;
       gap: 10px;
       align-items: flex-start;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
       font-size: 0.95rem;
       line-height: 1.4;
     }
-    .features li:last-child { border-bottom: none; }
-    .features .dot {
+    .price-list li:last-child { border-bottom: none; }
+    .price-list .dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--red); margin-top: 6px; flex-shrink: 0;
+      background: var(--gold); margin-top: 6px; flex-shrink: 0;
+    }
+
+    .signup {
+      padding: 24px;
+      border-radius: 16px;
+      background:
+        linear-gradient(160deg, rgba(12,35,64,0.55), rgba(16,20,16,0.9)),
+        var(--bg-elev);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    .signup h3 {
+      margin: 0 0 6px;
+      font-size: 1.15rem;
+    }
+    .signup .sub {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 0 0 18px;
+      line-height: 1.45;
     }
     label {
       display: block;
@@ -99,31 +277,24 @@
       width: 100%;
       height: 48px;
       border-radius: 10px;
-      border: 1px solid var(--border);
-      background: #0f0f11;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.35);
       color: var(--text);
       padding: 0 14px;
       font-size: 16px;
+      font-family: inherit;
       margin-bottom: 12px;
     }
-    input:focus { outline: none; border-color: var(--red); }
-    .btn {
-      width: 100%;
-      height: 52px;
-      border: none;
-      border-radius: 12px;
-      background: var(--red);
-      color: #fff;
-      font-size: 16px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      margin-top: 8px;
+    input:focus { outline: none; border-color: var(--gold); }
+    .signup .btn { width: 100%; }
+    .divider {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 18px 0 14px;
     }
     .msg {
       display: none;
@@ -136,63 +307,153 @@
       line-height: 1.4;
     }
     .msg.show { display: block; }
-    .msg.ok { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
-    .msg.err { background: var(--red-dim); color: #ff8787; border: 1px solid rgba(224,49,49,0.35); }
-    .divider {
+    .msg.ok { background: rgba(16,185,129,0.12); color: var(--ok); border: 1px solid rgba(16,185,129,0.3); }
+    .msg.err { background: rgba(248,113,113,0.12); color: var(--err); border: 1px solid rgba(248,113,113,0.3); }
+    .subscribe-link {
+      display: block;
       text-align: center;
+      margin-top: 16px;
+      font-size: 0.9rem;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin: 8px 0 16px;
     }
-    .foot {
-      text-align: center;
+
+    footer {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+      border-top: 1px solid rgba(255,255,255,0.06);
       color: var(--muted);
-      font-size: 12px;
-      margin-top: 24px;
+      font-size: 0.88rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer .brand-line { color: var(--text); font-weight: 600; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1 class="brand">Pocketbooks <span>Poker</span></h1>
-    <p class="tagline">Private game ledger for hosts who run real nights — markers, eCash, staff, and chip counts in one place.</p>
+  <nav class="nav" aria-label="Primary">
+    <a class="nav-brand" href="/">
+      <img src="/logo.png" alt="" width="36" height="36">
+      PocketBooks Poker
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/privacy.html">Privacy</a>
+      <a class="nav-cta" href="#get-started">Get started</a>
+    </div>
+  </nav>
 
-    <div class="card">
-      <div class="price">
-        <div class="amt">$19.99<small>/month</small></div>
+  <header class="hero">
+    <img class="hero-logo" src="/logo.png" alt="PocketBooks Poker">
+    <h1>The host’s ledger for real home games</h1>
+    <p>Markers, eCash, staff tips, and chip counts in one private book — so the night closes clean.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-gold" href="#get-started">Start free trial</a>
+      <a class="btn btn-outline" href="/subscribe">Already verified? Subscribe</a>
+    </div>
+  </header>
+
+  <section id="features">
+    <p class="section-label">Features</p>
+    <h2 class="section-title">Built for the table, not a spreadsheet</h2>
+    <p class="section-lead">Everything a host needs from first buy-in to final settle-up — without losing the thread mid-hand.</p>
+    <div class="features">
+      <article class="feature">
+        <div class="mark" aria-hidden="true"></div>
+        <h3>Marker signatures</h3>
+        <p>Issue credit at the table and capture a signature so the house book matches who sat short.</p>
+      </article>
+      <article class="feature">
+        <div class="mark" aria-hidden="true"></div>
+        <h3>eCash by receiver</h3>
+        <p>Track digital transfers to the right person so buy-ins reconcile without guessing Venmo screenshots.</p>
+      </article>
+      <article class="feature">
+        <div class="mark" aria-hidden="true"></div>
+        <h3>Staff tips &amp; payouts</h3>
+        <p>Log tip-outs, tax, and staff payouts next to player action — one set of house numbers.</p>
+      </article>
+      <article class="feature">
+        <div class="mark" aria-hidden="true"></div>
+        <h3>Running chip counts</h3>
+        <p>Keep banks and chip counts live as the night moves so settle-up isn’t a scramble at 2 a.m.</p>
+      </article>
+      <article class="feature">
+        <div class="mark" aria-hidden="true"></div>
+        <h3>Receipt capture</h3>
+        <p>Snap expense receipts into the session so house costs stay attached to the night they belong to.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <p class="section-label">Pricing</p>
+    <h2 class="section-title">Simple monthly access</h2>
+    <p class="section-lead">Seven-day trial after you verify your email. Then unlock the full ledger.</p>
+
+    <div class="pricing">
+      <div class="price-panel">
+        <div class="price-amt">$19.99<small>/month</small></div>
+        <p class="price-note">Cancel anytime. Promo codes supported for limited access.</p>
+        <ul class="price-list">
+          <li><span class="dot"></span><span>Marker signatures on the table</span></li>
+          <li><span class="dot"></span><span>eCash tracking by receiver</span></li>
+          <li><span class="dot"></span><span>Staff tips, tax, and payouts</span></li>
+          <li><span class="dot"></span><span>Running chip counts &amp; banks</span></li>
+          <li><span class="dot"></span><span>Receipt photo capture on expenses</span></li>
+        </ul>
       </div>
-      <ul class="features">
-        <li><span class="dot"></span><span>Marker signatures on the table</span></li>
-        <li><span class="dot"></span><span>eCash tracking by receiver</span></li>
-        <li><span class="dot"></span><span>Staff tips, tax, and payouts</span></li>
-        <li><span class="dot"></span><span>Running chip counts &amp; banks</span></li>
-        <li><span class="dot"></span><span>Receipt photo capture on expenses</span></li>
-      </ul>
 
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
-      <button class="btn" id="start-btn" type="button" onclick="sendMagicLink()">Get Started</button>
-      <div class="msg" id="start-msg"></div>
+      <div class="signup" id="get-started">
+        <h3>Get started with email</h3>
+        <p class="sub">We’ll send a magic link. After you verify, continue to subscribe or redeem a promo.</p>
+
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+        <button class="btn btn-gold" id="start-btn" type="button" onclick="sendMagicLink()">Send magic link</button>
+        <div class="msg" id="start-msg"></div>
+
+        <div class="divider">Have a promo?</div>
+
+        <label for="promo-email">Email</label>
+        <input id="promo-email" type="email" autocomplete="email" placeholder="you@example.com">
+        <label for="promo-code">Promo code</label>
+        <input id="promo-code" type="text" autocomplete="off" placeholder="CODE" style="text-transform:uppercase">
+        <button class="btn btn-outline" id="promo-btn" type="button" onclick="redeemPromo()">Redeem promo</button>
+        <div class="msg" id="promo-msg"></div>
+
+        <a class="subscribe-link" href="/subscribe">Already verified? Continue to subscribe →</a>
+      </div>
     </div>
+  </section>
 
-    <div class="divider">Have a promo?</div>
-
-    <div class="card">
-      <label for="promo-email">Email</label>
-      <input id="promo-email" type="email" autocomplete="email" placeholder="you@example.com">
-      <label for="promo-code">Promo code</label>
-      <input id="promo-code" type="text" autocomplete="off" placeholder="CODE" style="text-transform:uppercase">
-      <button class="btn btn-outline" id="promo-btn" type="button" onclick="redeemPromo()">Redeem Promo</button>
-      <div class="msg" id="promo-msg"></div>
+  <footer>
+    <div>
+      <div class="brand-line">PocketBooks Poker</div>
+      <div>© <span id="y"></span> Desert Spore LLC. All rights reserved.</div>
     </div>
-
-    <p class="foot">Already verified? <a href="/subscribe" style="color:var(--red);font-weight:700;text-decoration:none">Continue to subscribe →</a></p>
-  </div>
+    <div>
+      <a href="/privacy.html">Privacy</a>
+      ·
+      <a href="/subscribe">Subscribe</a>
+    </div>
+  </footer>
 
   <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+
     function showMsg(id, text, ok) {
       var el = document.getElementById(id);
       el.textContent = text;
@@ -213,7 +474,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email })
         });
-        var data = await res.json().catch(function(){ return {}; });
+        var data = await res.json().catch(function () { return {}; });
         if (!res.ok) throw new Error(data.error || 'Request failed');
         try { localStorage.setItem('pb_sub_email', email); } catch (e) {}
         showMsg('start-msg', 'Check your email for the magic link', true);
@@ -243,7 +504,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email, code: code })
         });
-        var data = await res.json().catch(function(){ return {}; });
+        var data = await res.json().catch(function () { return {}; });
         if (!res.ok || !data.success) throw new Error(data.message || data.error || 'Redeem failed');
         try { localStorage.setItem('pb_sub_email', email); } catch (e) {}
         var end = data.subscription_end ? new Date(data.subscription_end).toLocaleDateString() : '';
@@ -255,7 +516,7 @@
       }
     }
 
-    document.getElementById('email').addEventListener('keydown', function(e) {
+    document.getElementById('email').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') sendMagicLink();
     });
   </script>
