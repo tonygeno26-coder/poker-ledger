@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "UP6SM3X4K7.com.desertspore.pocketbookspoker",
+        "paths": [
+          "/auth/callback",
+          "/subscribe/success",
+          "/subscribe"
+        ]
+      }
+    ]
+  }
+}

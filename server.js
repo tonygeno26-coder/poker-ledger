@@ -60,6 +60,75 @@ app.post(
 );
 
 app.use(express.json());
+
+// Universal Links — AASA must be served before static with application/json
+app.get('/.well-known/apple-app-site-association', function (_req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  res.sendFile(
+    path.join(__dirname, 'public', '.well-known', 'apple-app-site-association')
+  );
+});
+
+// Magic-link bridge: HTTPS callback → custom scheme (query server-side; hash via HTML)
+const AUTH_CALLBACK_BRIDGE_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Signing in…</title></head>
+<body>
+<p>Opening Pocketbooks Poker…</p>
+<script>
+(function () {
+  function paramsFrom(str) {
+    var out = {};
+    String(str || '').replace(/^[#?]/, '').split('&').forEach(function (pair) {
+      if (!pair) return;
+      var i = pair.indexOf('=');
+      var k = decodeURIComponent((i >= 0 ? pair.slice(0, i) : pair).replace(/\\+/g, ' '));
+      var v = decodeURIComponent((i >= 0 ? pair.slice(i + 1) : '').replace(/\\+/g, ' '));
+      if (k) out[k] = v;
+    });
+    return out;
+  }
+  var q = paramsFrom(location.search);
+  var h = paramsFrom(location.hash);
+  var token = q.token_hash || q.token || h.token_hash || h.token || '';
+  var access = q.access_token || h.access_token || '';
+  var type = q.type || h.type || 'email';
+  var refresh = q.refresh_token || h.refresh_token || '';
+  var parts = [];
+  if (access) parts.push('access_token=' + encodeURIComponent(access));
+  if (token) {
+    parts.push('token=' + encodeURIComponent(token));
+    parts.push('token_hash=' + encodeURIComponent(token));
+  }
+  if (type) parts.push('type=' + encodeURIComponent(type));
+  if (refresh) parts.push('refresh_token=' + encodeURIComponent(refresh));
+  var dest = 'pocketbookspoker://auth/callback' + (parts.length ? ('?' + parts.join('&')) : '');
+  location.replace(dest);
+})();
+</script>
+</body></html>`;
+
+app.get('/auth/callback', function (req, res) {
+  var q = req.query || {};
+  var token = q.token_hash || q.token || '';
+  var access = q.access_token || '';
+  if (token || access) {
+    var parts = [];
+    if (access) parts.push('access_token=' + encodeURIComponent(String(access)));
+    if (token) {
+      parts.push('token=' + encodeURIComponent(String(token)));
+      parts.push('token_hash=' + encodeURIComponent(String(token)));
+    }
+    if (q.type) parts.push('type=' + encodeURIComponent(String(q.type)));
+    if (q.refresh_token) {
+      parts.push('refresh_token=' + encodeURIComponent(String(q.refresh_token)));
+    }
+    return res.redirect(302, 'pocketbookspoker://auth/callback?' + parts.join('&'));
+  }
+  // Hash fragments never reach the server — HTML extracts them client-side
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(AUTH_CALLBACK_BRIDGE_HTML);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 function normalizeEmail(email) {
@@ -235,7 +304,8 @@ app.post('/auth/magic-link', async function (req, res) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: 'pocketbookspoker://auth/callback',
+        emailRedirectTo:
+          'https://pocketbooks-poker-api-production.up.railway.app/auth/callback',
         shouldCreateUser: true
       }
     });

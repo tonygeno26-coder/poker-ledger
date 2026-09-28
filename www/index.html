@@ -4000,24 +4000,28 @@ function pbLogout() {
 async function pbBoot() {
   // Hide app behind auth until gate passes
   pbShowAuthScreen(true);
+  pbListenDeepLinks();
   try {
     var fromLink = null;
     try { fromLink = await pbHandleMagicLinkReturn(); } catch (e) {
       pbAuthMsg(e.message || 'Login link invalid', true);
     }
-    var auth = fromLink || pbGetAuth();
+    if (!fromLink) {
+      try { fromLink = await pbHandleLaunchUrl(); } catch (e) {
+        pbAuthMsg(e.message || 'Login link invalid', true);
+      }
+    }
+    if (fromLink) {
+      await pbApplyVerifiedAuth(fromLink, true);
+      return;
+    }
+    var auth = pbGetAuth();
     if (auth && auth.email) {
       try {
         auth = await pbRefreshSubscription(auth.email) || auth;
       } catch (e) {
         // Keep cached auth if network fails
       }
-    }
-    if (fromLink && auth && !pbIsActive(auth)) {
-      pbSetAuth(auth);
-      pbUnlockApp(auth);
-      await pbOpenCheckout(auth.email);
-      return;
     }
     if (pbIsActive(auth)) {
       pbUnlockApp(auth);
