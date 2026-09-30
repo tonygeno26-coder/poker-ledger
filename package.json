@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "cap:copy-web": "mkdir -p www && cp index.html www/index.html",
+    "cap:copy-web": "mkdir -p www && cp index.html www/index.html && cp -f public/logo.png www/logo.png",
     "cap:sync": "npm run cap:copy-web && npx cap sync",
     "cap:open:ios": "npm run cap:sync && npx cap open ios"
   },

@@ -33,12 +33,12 @@
   --purple-dim:var(--red-dim);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--text);height:auto;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+html,body{background:#000000;color:var(--text);height:auto;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+html{min-height:100%;min-height:-webkit-fill-available}
 body{
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   font-size:14px;
-  min-height:100vh;min-height:100dvh;
-  padding-top:env(safe-area-inset-top);
+  min-height:100vh;min-height:100dvh;min-height:-webkit-fill-available;
   padding-bottom:calc(88px + env(safe-area-inset-bottom));
   padding-left:env(safe-area-inset-left);
   padding-right:env(safe-area-inset-right);
@@ -51,17 +51,17 @@ input,select,button,textarea{font-family:inherit}
 
 /* HEADER */
 .header{
-  background:#000;
+  background:#000000;
   border-bottom:1px solid var(--border);
   padding:12px 16px;
+  padding-top:calc(12px + env(safe-area-inset-top));
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:200;
 }
 .logo{display:flex;align-items:center;gap:10px}
-.logo h1{
-  font-size:18px;font-weight:800;letter-spacing:1.5px;
-  color:var(--red);text-transform:uppercase;
-  background:none;-webkit-text-fill-color:unset;
+.logo img{
+  height:40px;width:auto;max-width:180px;
+  object-fit:contain;display:block;border-radius:4px;
 }
 .logo span{font-size:11px;color:var(--text-muted);display:block;font-weight:500;letter-spacing:0.2px;margin-top:2px}
 
@@ -69,7 +69,7 @@ input,select,button,textarea{font-family:inherit}
 .nav{
   position:fixed;left:0;right:0;bottom:0;z-index:300;
   display:flex;align-items:stretch;justify-content:space-around;
-  background:#000;
+  background:#000000;
   border-top:1px solid var(--border);
   padding:6px 4px calc(6px + env(safe-area-inset-bottom));
   overflow:visible;
@@ -88,7 +88,7 @@ input,select,button,textarea{font-family:inherit}
 .nav-btn.active{color:var(--red)}
 .nav-btn.active .nav-ico{filter:none;opacity:1}
 
-.main{padding:16px;max-width:720px;margin:0 auto;overflow:visible}
+.main{padding:16px;max-width:720px;margin:0 auto;overflow:visible;min-height:100vh;min-height:-webkit-fill-available}
 .page{display:none}
 .page.active{display:block;overflow:visible}
 #page-dashboard.active{overflow:visible}
@@ -431,7 +431,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <div class="header">
   <div class="logo">
     <div>
-      <h1>POCKETBOOKS</h1>
+      <img src="logo.png" alt="Pocketbooks Poker" height="40">
       <span id="game-label">No active game</span>
     </div>
   </div>
