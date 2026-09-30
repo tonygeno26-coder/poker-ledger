@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pocketbooks Poker">
 <title>Pocketbooks Poker</title>
 <style>
@@ -31,39 +31,60 @@
   --purple:var(--red);
   --purple-light:#ff6b6b;
   --purple-dim:var(--red-dim);
+  /* Cap edge-to-edge chrome */
+  --safe-top:max(env(safe-area-inset-top, 0px), 16px);
+  --safe-bottom:max(env(safe-area-inset-bottom, 0px), 8px);
+  --header-inner:80px; /* 56px logo + muted subtitle + bottom pad */
+  --header-h:calc(var(--safe-top) + var(--header-inner));
+  --nav-inner:58px;
+  --nav-h:calc(var(--safe-bottom) + var(--nav-inner));
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#000000;color:var(--text);height:auto;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
-html{min-height:100%;min-height:-webkit-fill-available}
+html{min-height:100%;min-height:-webkit-fill-available;background:#000000}
 body{
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   font-size:14px;
   min-height:100vh;min-height:100dvh;min-height:-webkit-fill-available;
-  padding-bottom:calc(88px + env(safe-area-inset-bottom));
-  padding-left:env(safe-area-inset-left);
-  padding-right:env(safe-area-inset-right);
+  background:#000000;
+  padding-top:0;
+  padding-bottom:var(--nav-h);
+  padding-left:env(safe-area-inset-left, 0px);
+  padding-right:env(safe-area-inset-right, 0px);
   -webkit-font-smoothing:antialiased;
+}
+/* Spacer so in-flow content (banners + main) clears the fixed header */
+body::before{
+  content:"";
+  display:block;
+  height:var(--header-h);
+  pointer-events:none;
 }
 input,select,button,textarea{font-family:inherit}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 
-/* HEADER */
+/* HEADER — fixed, paints behind status bar */
 .header{
+  position:fixed;top:0;left:0;right:0;z-index:200;
   background:#000000;
   border-bottom:1px solid var(--border);
-  padding:12px 16px;
-  padding-top:calc(12px + env(safe-area-inset-top));
+  padding:10px 16px 12px;
+  padding-top:var(--safe-top);
   display:flex;align-items:center;justify-content:space-between;
-  position:sticky;top:0;z-index:200;
+  gap:10px;
 }
-.logo{display:flex;align-items:center;gap:10px}
+.logo{display:flex;align-items:flex-start;gap:10px;min-width:0;padding-left:0}
 .logo img{
-  height:40px;width:auto;max-width:180px;
+  height:56px;width:auto;max-width:220px;
   object-fit:contain;display:block;border-radius:4px;
+  filter:drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
 }
-.logo span{font-size:11px;color:var(--text-muted);display:block;font-weight:500;letter-spacing:0.2px;margin-top:2px}
+.logo span{
+  font-size:10px;color:var(--text-muted);display:block;
+  font-weight:500;letter-spacing:0.2px;margin-top:3px;line-height:1.2;
+}
 
 /* BOTTOM TAB BAR */
 .nav{
@@ -71,7 +92,8 @@ input,select,button,textarea{font-family:inherit}
   display:flex;align-items:stretch;justify-content:space-around;
   background:#000000;
   border-top:1px solid var(--border);
-  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  padding:6px 4px;
+  padding-bottom:var(--safe-bottom);
   overflow:visible;
 }
 .nav-btn{
@@ -88,7 +110,7 @@ input,select,button,textarea{font-family:inherit}
 .nav-btn.active{color:var(--red)}
 .nav-btn.active .nav-ico{filter:none;opacity:1}
 
-.main{padding:16px;max-width:720px;margin:0 auto;overflow:visible;min-height:100vh;min-height:-webkit-fill-available}
+.main{padding:16px;max-width:720px;margin:0 auto;overflow:visible;min-height:calc(100vh - var(--header-h) - var(--nav-h));min-height:calc(100dvh - var(--header-h) - var(--nav-h));min-height:-webkit-fill-available}
 .page{display:none}
 .page.active{display:block;overflow:visible}
 #page-dashboard.active{overflow:visible}
@@ -431,7 +453,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <div class="header">
   <div class="logo">
     <div>
-      <img src="logo.png" alt="Pocketbooks Poker" height="40">
+      <img src="logo.png" alt="Pocketbooks Poker" height="56" width="auto">
       <span id="game-label">No active game</span>
     </div>
   </div>
