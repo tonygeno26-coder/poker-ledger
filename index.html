@@ -920,34 +920,76 @@ var G = {
 // ══════════════════════════════════════════════════════════════════════════════
 // ACCOUNTING
 // ══════════════════════════════════════════════════════════════════════════════
+/** Persisted chip turn-in total (history). Pending p.chipTurnIn alone is legacy fallback. */
+function playerChipTurnInsTotal(p) {
+  var hist = (p.chipTurnIns || []).reduce(function(s, t) {
+    return s + (Number(t && t.amount) || 0);
+  }, 0);
+  if (hist > 0) return hist;
+  // Legacy sessions: turn-in logged only on scalar before history array existed
+  return Number(p.chipTurnIn) || 0;
+}
+
+/**
+ * Buy-ins that create settlement debt (subtract in playerBalance).
+ * MARKER = unpaid chips (debt). CASH/ECASH = prepaid (not debt). BONUS = house expense (not debt).
+ * Including CASH/ECASH here would falsely put cash buyers on "Owes House" and break post-payout even.
+ */
+function playerDebtBuyInsTotal(p) {
+  return (p.buyIns || []).filter(function(b) {
+    return b.type === 'MARKER';
+  }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+}
+
+function playerCashOutsTotal(p) {
+  return (p.cashOuts || []).reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
+}
+
+function playerTotalInDisplay(p) {
+  // Display Total In: all buy-ins including BONUS / MARKER / CASH / ECASH
+  return (p.buyIns || []).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+}
+
+function playerTotalOutDisplay(p) {
+  // Display Total Out: all chip turn-ins + cash paid out
+  return playerChipTurnInsTotal(p) + playerCashOutsTotal(p);
+}
+
 function playerBalance(p) {
   // positive = house owes player   negative = player owes house
-  // ECASH buy-ins: player paid electronically — does NOT create player debt to house
-  // MARKER buy-ins: player owes house (no actual payment made)
-  // CASH buy-ins: player paid cash — does NOT create player debt
-  // Only MARKER creates a negative balance (owes house)
-  // markerCredits (e.g. tax-to-marker) reduce outstanding marker owe
-  var totalIn  = (p.buyIns||[]).filter(function(b){ return b.type==='MARKER'; }).reduce(function(s,b){return s+b.amount;},0);
-  var totalOut = (p.cashOuts||[]).reduce(function(s,c){return s+c.amount;},0);
-  // Reimbursements: player fronted money for the game — house owes it back on top of chips
-  var reimbursed = playerReimbursements(p).reduce(function(s,e){return s+e.amount;},0);
+  // MARKER buy-ins: subtract (player owes). BONUS: skip (house expense).
+  // CASH/ECASH: skip (already paid — not player debt).
+  // chipTurnIns: add (chips returned). cashOuts/payouts: subtract (house paid player).
+  // markerCredits (tax-toward-marker) still reduce marker owe.
+  var debtIn = playerDebtBuyInsTotal(p);
+  var turnIns = playerChipTurnInsTotal(p);
+  var paidOut = playerCashOutsTotal(p);
+  var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
   var markerCredits = playerMarkerCreditsTotal(p);
-  // totalOut - totalIn: cashOut from chips minus markers outstanding = player balance
-  // Negative means player has outstanding markers
-  // Positive means house owes player chips (+ any reimbursements)
-  var result = totalOut - totalIn + reimbursed + markerCredits;
-  console.table({ '[profile balance render]':'', player:p.name, playerBalanceResult:result, totalIn:totalIn, totalOut:totalOut, reimbursed:reimbursed, markerCredits:markerCredits, buyInCount:(p.buyIns||[]).length, markerBuyIns:(p.buyIns||[]).filter(function(b){return b.type==='MARKER';}).length });
+  var result = turnIns - debtIn - paidOut + reimbursed + markerCredits;
+  console.table({
+    '[profile balance render]': '',
+    player: p.name,
+    playerBalanceResult: result,
+    debtIn: debtIn,
+    turnIns: turnIns,
+    paidOut: paidOut,
+    reimbursed: reimbursed,
+    markerCredits: markerCredits,
+    bonusSkipped: playerBonusTotal(p),
+    buyInCount: (p.buyIns || []).length,
+    markerBuyIns: (p.buyIns || []).filter(function(b) { return b.type === 'MARKER'; }).length
+  });
   return result;
 }
 
-/** Display-only: chipTurnIn − markers while awaiting Pay Out (does not change playerBalance). */
+/** Same formula as playerBalance (turn-ins now persist, so pending payout is included). */
 function playerProjectedBalance(p) {
-  return (Number(p.chipTurnIn) || 0) - playerMarkerTotal(p);
+  return playerBalance(p);
 }
 
-/** Finalized playerBalance, or projected net when turn-in is logged and payout is pending. */
+/** playerBalance always; ~pending styling uses rosterChipTurnInLogged separately. */
 function playerDisplayBalance(p) {
-  if (rosterChipTurnInLogged(p)) return playerProjectedBalance(p);
   return playerBalance(p);
 }
 
@@ -2099,6 +2141,9 @@ function rosterLogTurnIn(id) {
   var el = document.getElementById('rx-turnin-amount-' + id);
   var amount = el ? (Number(el.value) || 0) : 0;
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
+  if (!p.chipTurnIns) p.chipTurnIns = [];
+  var time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = amount;
   appendTxn({ type: 'CHIP_TURN_IN', amount: amount, playerId: String(p.id), playerName: p.name });
   rosterKeepExpanded(id);
@@ -2109,6 +2154,11 @@ function rosterLogTurnIn(id) {
 function rosterResetTurnIn(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  var pending = Number(p.chipTurnIn) || 0;
+  if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
+    var last = p.chipTurnIns[p.chipTurnIns.length - 1];
+    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+  }
   p.chipTurnIn = 0;
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
@@ -2378,6 +2428,14 @@ function rosterPlayerExpandedHtml(p) {
       + '<button class="roster-del-btn" title="Void buy-in" onclick="event.stopPropagation();voidRosterBuyIn(this,' + p.id + ',' + i + ')">✕</button>'
       + '</div>';
   });
+  (p.chipTurnIns || []).forEach(function(t, i){
+    lines += '<div class="roster-expand-line">'
+      + '<span class="badge badge-green">TURN IN</span>'
+      + '<span style="font-weight:800;color:var(--green)">$' + fmt(t.amount) + '</span>'
+      + '<span class="roster-expand-meta">' + (t.time || '') + '</span>'
+      + '<button class="roster-del-btn" title="Void turn-in" onclick="event.stopPropagation();voidRosterTurnIn(this,' + p.id + ',' + i + ')">✕</button>'
+      + '</div>';
+  });
   (p.cashOuts || []).forEach(function(c, i){
     lines += '<div class="roster-expand-line">'
       + '<span class="badge badge-green">OUT</span>'
@@ -2388,24 +2446,28 @@ function rosterPlayerExpandedHtml(p) {
       + '</div>';
   });
   if (!lines) {
-    lines = '<div class="roster-expand-meta" style="padding:2px 0 4px">No buy-ins or cash-outs yet</div>';
+    lines = '<div class="roster-expand-meta" style="padding:2px 0 4px">No buy-ins, turn-ins, or cash-outs yet</div>';
   }
 
   var summary = '';
+  var totalIn = playerTotalInDisplay(p);
+  var totalOut = playerTotalOutDisplay(p);
   var dispBal = playerDisplayBalance(p);
   var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
     : (dispBal < 0 ? 'var(--red)' : (rosterChipTurnInLogged(p) ? 'var(--gold)' : 'var(--green)'));
   var balPrefix = rosterChipTurnInLogged(p) ? '~' : '';
   var balAbs = '$' + fmt(Math.abs(dispBal));
+  summary += '<div class="roster-expand-summary">Total In: <strong style="color:var(--text)">$' + fmt(totalIn) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Total Out: <strong style="color:var(--text)">$' + fmt(totalOut) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balPrefix + balAbs + '</strong>'
     + (rosterChipTurnInLogged(p) ? ' <span style="color:var(--gold);font-size:11px">(pending payout)</span>' : '')
     + '</div>';
   if (rosterChipTurnInLogged(p)) {
     summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(p.chipTurnIn) + '</strong></div>';
   }
-  var markerTotal = playerMarkerTotal(p);
-  if (markerTotal > 0) {
-    summary += '<div class="roster-expand-summary">📋 Marker: <strong style="color:var(--orange)">$' + fmt(markerTotal) + '</strong> outstanding</div>';
+  var markerOutstanding = playerOutstandingMarker(p);
+  if (markerOutstanding > 0 || playerMarkerTotal(p) > 0) {
+    summary += '<div class="roster-expand-summary">📋 Marker: <strong style="color:var(--orange)">$' + fmt(markerOutstanding) + '</strong> outstanding</div>';
   }
   var bonusTotal = playerBonusTotal(p);
   if (bonusTotal > 0) {
@@ -2779,6 +2841,25 @@ function voidRosterCashOut(btn, playerId, index) {
   });
 }
 
+function voidRosterTurnIn(btn, playerId, index) {
+  confirmAction(btn, 'Click again to void this turn-in', function(){
+    var p = G.players.find(function(pl){ return pl.id === playerId; });
+    if (!p || !p.chipTurnIns || !p.chipTurnIns[index]) return;
+    var t = p.chipTurnIns[index];
+    p.chipTurnIns.splice(index, 1);
+    if (Number(p.chipTurnIn) === Number(t.amount)) p.chipTurnIn = 0;
+    appendTxn({
+      type: 'VOID_CHIP_TURN_IN',
+      amount: t.amount,
+      playerId: String(p.id),
+      playerName: p.name
+    });
+    rosterKeepExpanded(playerId);
+    calcAll(); renderAll(); autoSave();
+    toast('Turn-in voided');
+  });
+}
+
 function rosterPlayerRow(p) {
   var active = p.id === _activePlayerId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
@@ -3065,7 +3146,7 @@ function addPerson() {
       canLogDrop:      staffRole === 'dealer',
       canReceiveECash: true
     },
-    buyIns: [], cashOuts: [], drops: [], tips: [], expenses: [], markerCredits: []
+    buyIns: [], cashOuts: [], chipTurnIns: [], drops: [], tips: [], expenses: [], markerCredits: []
   };
   if (staffRole === 'chef') newP.basePay = 0;
   if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
@@ -3166,6 +3247,9 @@ function logTurnIn(id) {
   var el = document.getElementById('turnin-amount-' + id);
   var amount = el ? (Number(el.value)||0) : 0;
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
+  if (!p.chipTurnIns) p.chipTurnIns = [];
+  var time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = amount;
   appendTxn({ type:'CHIP_TURN_IN', amount:amount, playerId:String(p.id), playerName:p.name });
   calcAll(); renderAll();
@@ -3177,6 +3261,11 @@ function logTurnIn(id) {
 function resetTurnIn(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  var pending = Number(p.chipTurnIn) || 0;
+  if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
+    var last = p.chipTurnIns[p.chipTurnIns.length - 1];
+    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+  }
   p.chipTurnIn = 0;
   calcAll(); renderAll();
   if (isPlayerSeat(p)) renderPlayerDetail(id); else renderStaffDetail(id);
