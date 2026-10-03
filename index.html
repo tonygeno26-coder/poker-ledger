@@ -2149,9 +2149,18 @@ function rosterChipTurnInLogged(p) {
   return !!(p && Number(p.chipTurnIn) > 0);
 }
 
-/** Marker chips outstanding and no turn-in yet — payout/cash-out must wait. */
+/**
+ * Marker still uncovered by chip turn-ins — payout/cash-out must wait.
+ * Compare sum(chipTurnIns) to outstanding marker debt (MARKER buy-ins − markerCredits).
+ * Pending turn-in cycle uses chip Pay Out instead (not blocked here).
+ */
 function markerBlocksPayout(p) {
-  return !!(p && playerMarkerTotal(p) > 0 && !rosterChipTurnInLogged(p));
+  if (!p) return false;
+  if (rosterChipTurnInLogged(p)) return false;
+  var outstandingMarkerDebt = playerOutstandingMarker(p);
+  if (outstandingMarkerDebt <= 0) return false;
+  var totalChipTurnIns = playerChipTurnInsTotal(p);
+  return totalChipTurnIns < outstandingMarkerDebt;
 }
 
 function rosterKeepExpanded(id) {
@@ -2722,7 +2731,7 @@ function rosterAddCashOut(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
   if (markerBlocksPayout(p)) {
-    toast('Turn in chips first — $' + fmt(playerMarkerTotal(p)) + ' marker outstanding');
+    toast('Turn in chips first — $' + fmt(playerOutstandingMarker(p)) + ' marker outstanding');
     return;
   }
   var el = document.getElementById('rx-cashout-amount-' + id);
@@ -2947,8 +2956,11 @@ function rosterTurnInSectionHtml(p, markerTotal) {
     calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:var(--green)">$0</span></div>';
   }
 
-  var markerWarn = markerTotal > 0
-    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">' + lucideIcon('alert-triangle','action-ico') + ' Turn in chips first — $' + fmt(markerTotal) + ' marker outstanding</div>'
+  // Warn only while turn-ins have not yet covered outstanding marker debt
+  var outstandingMarkerDebt = playerOutstandingMarker(p);
+  var totalChipTurnIns = playerChipTurnInsTotal(p);
+  var markerWarn = (outstandingMarkerDebt > 0 && totalChipTurnIns < outstandingMarkerDebt)
+    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">' + lucideIcon('alert-triangle','action-ico') + ' Turn in chips first — $' + fmt(outstandingMarkerDebt) + ' marker outstanding</div>'
       + '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red);display:flex;align-items:flex-start;gap:6px">' + lucideIcon('alert-triangle','action-ico') + ' Player must turn in chips before payout — chips cover the marker first</div>'
       + '<button type="button" class="btn btn-outline roster-turnin-btn" disabled style="width:100%;margin-bottom:12px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed" title="Turn in chips first">Pay Out</button>'
     : '';
@@ -3860,7 +3872,7 @@ function addCashOut(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
   if (markerBlocksPayout(p)) {
-    toast('Turn in chips first — $' + fmt(playerMarkerTotal(p)) + ' marker outstanding');
+    toast('Turn in chips first — $' + fmt(playerOutstandingMarker(p)) + ' marker outstanding');
     return;
   }
   var el = document.getElementById('cashout-amount-' + id);
