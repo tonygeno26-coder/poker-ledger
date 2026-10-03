@@ -116,6 +116,8 @@ const AUTH_CALLBACK_BRIDGE_HTML = `<!DOCTYPE html>
   var access = q.access_token || h.access_token || '';
   var type = q.type || h.type || 'email';
   var refresh = q.refresh_token || h.refresh_token || '';
+  var role = q.role || h.role || '';
+  var owner = q.owner || h.owner || '';
   var parts = [];
   if (access) parts.push('access_token=' + encodeURIComponent(access));
   if (token) {
@@ -124,6 +126,8 @@ const AUTH_CALLBACK_BRIDGE_HTML = `<!DOCTYPE html>
   }
   if (type) parts.push('type=' + encodeURIComponent(type));
   if (refresh) parts.push('refresh_token=' + encodeURIComponent(refresh));
+  if (role) parts.push('role=' + encodeURIComponent(role));
+  if (owner) parts.push('owner=' + encodeURIComponent(owner));
   var dest = 'pocketbookspoker://auth/callback' + (parts.length ? ('?' + parts.join('&')) : '');
   location.replace(dest);
 })();
@@ -145,6 +149,8 @@ app.get('/auth/callback', function (req, res) {
     if (q.refresh_token) {
       parts.push('refresh_token=' + encodeURIComponent(String(q.refresh_token)));
     }
+    if (q.role) parts.push('role=' + encodeURIComponent(String(q.role)));
+    if (q.owner) parts.push('owner=' + encodeURIComponent(String(q.owner)));
     return res.redirect(302, 'pocketbookspoker://auth/callback?' + parts.join('&'));
   }
   // Hash fragments never reach the server — HTML extracts them client-side
@@ -183,6 +189,18 @@ function requireSupabase() {
   return supabase;
 }
 
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function bearerToken(req) {
+  const header = String((req.headers && req.headers.authorization) || '');
+  if (!header.toLowerCase().startsWith('bearer ')) return '';
+  return header.slice(7).trim();
+}
+
 async function getUserByEmail(email) {
   const { data, error } = await supabase
     .from('users')
@@ -191,6 +209,86 @@ async function getUserByEmail(email) {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+async function getUserById(id) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function resolveOwnerRef(ownerRef) {
+  const ref = String(ownerRef || '').trim();
+  if (!ref) return null;
+  if (ref.includes('@')) return getUserByEmail(normalizeEmail(ref));
+  return getUserById(ref);
+}
+
+/** Authenticate via Supabase access JWT (Authorization: Bearer …). */
+async function requireAuthUser(req) {
+  requireSupabase();
+  const token = bearerToken(req);
+  if (!token) throw httpError(401, 'Authorization Bearer token required');
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data || !data.user) {
+    throw httpError(401, (error && error.message) || 'Invalid or expired token');
+  }
+
+  const email = normalizeEmail(data.user.email);
+  if (!email) throw httpError(401, 'No email on auth user');
+
+  const user = await ensureUser(email);
+  return { authUser: data.user, user, accessToken: token };
+}
+
+async function activateHostViewer(viewerUser, ownerRef) {
+  const owner = await resolveOwnerRef(ownerRef);
+  if (!owner) throw httpError(400, 'Owner not found for host_viewer activation');
+  if (owner.id === viewerUser.id) {
+    throw httpError(400, 'Viewer cannot link to themselves as host_viewer');
+  }
+
+  const viewerEmail = normalizeEmail(viewerUser.email);
+  const { data: invite, error: inviteErr } = await supabase
+    .from('host_viewers')
+    .select('*')
+    .eq('owner_user_id', owner.id)
+    .eq('viewer_email', viewerEmail)
+    .in('status', ['pending', 'active'])
+    .maybeSingle();
+  if (inviteErr) throw inviteErr;
+  if (!invite) {
+    throw httpError(403, 'No pending host_viewer invite for this owner');
+  }
+
+  const now = new Date().toISOString();
+  const { data: updatedUser, error: updErr } = await supabase
+    .from('users')
+    .update({
+      role: 'host_viewer',
+      linked_owner_id: owner.id
+    })
+    .eq('id', viewerUser.id)
+    .select('*')
+    .single();
+  if (updErr) throw updErr;
+
+  const { error: hvErr } = await supabase
+    .from('host_viewers')
+    .update({
+      status: 'active',
+      viewer_user_id: viewerUser.id,
+      updated_at: now
+    })
+    .eq('id', invite.id);
+  if (hvErr) throw hvErr;
+
+  return updatedUser;
 }
 
 async function ensureUser(email) {
@@ -348,6 +446,8 @@ app.post('/auth/verify', async function (req, res) {
     const tokenHash = body.token_hash || body.token;
     const type = body.type || 'email';
     const accessToken = body.access_token;
+    const roleParam = String(body.role || (req.query && req.query.role) || '').trim();
+    const ownerParam = String(body.owner || (req.query && req.query.owner) || '').trim();
 
     let authUser = null;
 
@@ -369,7 +469,13 @@ app.post('/auth/verify', async function (req, res) {
     const email = normalizeEmail(authUser && authUser.email);
     if (!email) return res.status(400).json({ error: 'No email on auth user' });
 
-    const user = await ensureUser(email);
+    let user = await ensureUser(email);
+
+    // Host-viewer magic-link activation: role=host_viewer&owner=<email|userId>
+    if (roleParam === 'host_viewer' && ownerParam) {
+      user = await activateHostViewer(user, ownerParam);
+    }
+
     res.json({
       user: {
         id: user.id,
@@ -377,11 +483,14 @@ app.post('/auth/verify', async function (req, res) {
       },
       subscription_status: user.subscription_status,
       subscription_end: user.subscription_end,
-      isActive: isSubscriptionActive(user)
+      isActive: isSubscriptionActive(user),
+      role: user.role || 'owner',
+      linked_owner_id: user.linked_owner_id || null
     });
   } catch (err) {
     console.error('[auth/verify]', err);
-    res.status(401).json({ error: err.message || 'Verification failed' });
+    const status = err.status || 401;
+    res.status(status).json({ error: err.message || 'Verification failed' });
   }
 });
 
@@ -508,6 +617,219 @@ app.post('/promo/redeem', async function (req, res) {
   } catch (err) {
     console.error('[promo/redeem]', err);
     res.status(500).json({ success: false, message: err.message || 'Redeem failed' });
+  }
+});
+
+// ── Host viewer invites ───────────────────────────────────────────────────────
+app.post('/invite/host-viewer', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user: ownerUser } = await requireAuthUser(req);
+    const body = req.body || {};
+    const ownerEmail = normalizeEmail(body.ownerEmail);
+    const viewerEmail = normalizeEmail(body.viewerEmail);
+
+    if (!ownerEmail || !ownerEmail.includes('@')) {
+      return res.status(400).json({ error: 'ownerEmail required' });
+    }
+    if (!viewerEmail || !viewerEmail.includes('@')) {
+      return res.status(400).json({ error: 'viewerEmail required' });
+    }
+    if (ownerEmail !== normalizeEmail(ownerUser.email)) {
+      return res.status(403).json({ error: 'JWT email must match ownerEmail' });
+    }
+    if (ownerUser.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers cannot invite other viewers' });
+    }
+    if (ownerEmail === viewerEmail) {
+      return res.status(400).json({ error: 'Cannot invite yourself as host viewer' });
+    }
+
+    const owner = await ensureUser(ownerEmail);
+    await ensureUser(viewerEmail);
+
+    const now = new Date().toISOString();
+    const { data: existing, error: existErr } = await supabase
+      .from('host_viewers')
+      .select('*')
+      .eq('owner_user_id', owner.id)
+      .eq('viewer_email', viewerEmail)
+      .maybeSingle();
+    if (existErr) throw existErr;
+
+    if (existing) {
+      const { error: updErr } = await supabase
+        .from('host_viewers')
+        .update({
+          status: existing.status === 'active' ? 'active' : 'pending',
+          updated_at: now
+        })
+        .eq('id', existing.id);
+      if (updErr) throw updErr;
+    } else {
+      const { error: insErr } = await supabase.from('host_viewers').insert({
+        owner_user_id: owner.id,
+        viewer_email: viewerEmail,
+        status: 'pending',
+        created_at: now,
+        updated_at: now
+      });
+      if (insErr) throw insErr;
+    }
+
+    const redirectTo =
+      `${BASE_URL}/auth/callback` +
+      `?role=host_viewer&owner=${encodeURIComponent(ownerEmail)}`;
+
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
+      email: viewerEmail,
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: true,
+        data: {
+          role: 'host_viewer',
+          owner: ownerEmail
+        }
+      }
+    });
+    if (otpErr) throw otpErr;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[invite/host-viewer]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to invite host viewer' });
+  }
+});
+
+app.get('/invite/host-viewers/:ownerUserId', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const ownerUserId = String(req.params.ownerUserId || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+    if (user.id !== ownerUserId) {
+      return res.status(403).json({ error: 'Only the owner can list their host viewers' });
+    }
+
+    const { data, error } = await supabase
+      .from('host_viewers')
+      .select('id, owner_user_id, viewer_email, viewer_user_id, status, created_at, updated_at')
+      .eq('owner_user_id', ownerUserId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    res.json({ viewers: data || [] });
+  } catch (err) {
+    console.error('[invite/host-viewers]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to list host viewers' });
+  }
+});
+
+app.delete('/invite/host-viewer/:id', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    const { data: row, error: fetchErr } = await supabase
+      .from('host_viewers')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!row) return res.status(404).json({ error: 'Invite not found' });
+    if (row.owner_user_id !== user.id) {
+      return res.status(403).json({ error: 'Only the owner can revoke this invite' });
+    }
+
+    const now = new Date().toISOString();
+    const { error: updErr } = await supabase
+      .from('host_viewers')
+      .update({ status: 'revoked', updated_at: now })
+      .eq('id', id);
+    if (updErr) throw updErr;
+
+    // Clear viewer role linkage if this was their active owner link
+    if (row.viewer_user_id) {
+      await supabase
+        .from('users')
+        .update({ role: 'owner', linked_owner_id: null })
+        .eq('id', row.viewer_user_id)
+        .eq('linked_owner_id', row.owner_user_id)
+        .eq('role', 'host_viewer');
+    }
+
+    res.json({ success: true, status: 'revoked' });
+  } catch (err) {
+    console.error('[invite/host-viewer DELETE]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to revoke host viewer' });
+  }
+});
+
+app.get('/game/current/:ownerUserId', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const ownerUserId = String(req.params.ownerUserId || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+
+    const viewerEmail = normalizeEmail(user.email);
+    let hv = null;
+    const { data: byUserId, error: byUserErr } = await supabase
+      .from('host_viewers')
+      .select('id, status, viewer_email, viewer_user_id')
+      .eq('owner_user_id', ownerUserId)
+      .eq('status', 'active')
+      .eq('viewer_user_id', user.id)
+      .maybeSingle();
+    if (byUserErr) throw byUserErr;
+    hv = byUserId;
+    if (!hv) {
+      const { data: byEmail, error: byEmailErr } = await supabase
+        .from('host_viewers')
+        .select('id, status, viewer_email, viewer_user_id')
+        .eq('owner_user_id', ownerUserId)
+        .eq('status', 'active')
+        .eq('viewer_email', viewerEmail)
+        .maybeSingle();
+      if (byEmailErr) throw byEmailErr;
+      hv = byEmail;
+    }
+
+    const linkedOk =
+      user.role === 'host_viewer' && String(user.linked_owner_id || '') === ownerUserId;
+    if (!hv && !linkedOk) {
+      return res.status(403).json({
+        error: 'Active host_viewer access required for this owner'
+      });
+    }
+
+    const { data: game, error: gameErr } = await supabase
+      .from('games')
+      .select('id, owner_user_id, state, updated_at')
+      .eq('owner_user_id', ownerUserId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (gameErr) throw gameErr;
+
+    if (!game) {
+      return res.status(404).json({
+        error:
+          'No game synced for this owner yet. Owner app must POST/upsert into games before viewers can load current G.'
+      });
+    }
+
+    // Return latest G JSON only
+    res.json(game.state);
+  } catch (err) {
+    console.error('[game/current]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to load current game' });
   }
 });
 
