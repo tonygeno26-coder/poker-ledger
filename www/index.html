@@ -3548,7 +3548,10 @@ function init() {
       delete G.type;
       delete G.stakes;
       migrateStaffRoles();
-      restoreInputs(); // keeps saved game date
+      restoreInputs();
+      // Active session always opens as today (local YMD); history loadGame keeps its date.
+      setVal('g-date', todayLocalYMD());
+      updateGameLabel(); // syncs G.date + persists via autoSave
     } catch(e) {
       console.warn('init restore error:', e);
       setVal('g-date', todayLocalYMD());
