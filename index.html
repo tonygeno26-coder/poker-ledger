@@ -694,7 +694,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         <div class="inp-label" style="margin-bottom:4px">Expected</div>
         <div id="cc-expected" style="font-size:22px;font-weight:800;color:var(--gold)">$0</div>
       </div>
-      <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()"><i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Count Chips</button>
+      <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="openChipCountModal()"><i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Count Chips</button>
     </div>
     <div id="cc-last-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--text-muted)">No running counts yet</div>
     <div class="inp-label" style="margin-bottom:6px">Count Log</div>
@@ -1147,51 +1147,22 @@ function playerCreditsTotal(p) {
 
 function playerBalance(p) {
   // Anthony verified formula — signed: positive = house owes, negative = player owes.
-  // markerDebt = MARKER buy-ins − markerCredits (outstanding).
-  // chipTurnIns = sum non-voided turn-ins.
-  // CASH / ECASH / BONUS never subtract from payout math.
-  // Credits reduce player-owes OR add to house-owes.
-  // cashOuts already paid reduce remaining house-owes payout.
+  // chipTurnIns = sum non-voided p.chipTurnIns[] (via playerChipTurnInsTotal).
+  // markerDebt  = sum MARKER buy-ins − markerCredits (outstanding; tax-to-marker preserved).
+  // credits     = sum p.credits[]; paidOut = sum p.cashOuts[] (actual cash paid).
+  // balance = chipTurnIns − markerDebt + credits − paidOut.
+  // CASH / ECASH / BONUS never enter payout debt.
   var markerDebt = playerOutstandingMarker(p);
   var chipTurnIns = playerChipTurnInsTotal(p);
   var paidOut = playerCashOutsTotal(p);
-  var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
   var credits = playerCreditsTotal(p);
   // Still playing (no turn-ins, no marker): house owes nothing — not cash/eCash/bonus estimates.
   if (chipTurnIns <= SETTLE_EPSILON && markerDebt <= SETTLE_EPSILON) {
-    console.table({
-      '[profile balance render]': '',
-      player: p.name,
-      playerBalanceResult: 0,
-      stillPlaying: true,
-      markerDebt: markerDebt,
-      chipTurnIns: chipTurnIns,
-      paidOut: paidOut,
-      reimbursed: reimbursed,
-      credits: credits
-    });
     return 0;
   }
-  // Unified: chipTurnIns − markerDebt + credits − paidOut (+ reimbursed).
   // chipTurnIns >= markerDebt → house owes; chipTurnIns < markerDebt → player owes (credits net).
   // chipTurnIns === 0 && markerDebt > 0 → ~ player owes (tilde display).
-  var result = chipTurnIns - markerDebt + credits - paidOut + reimbursed;
-  console.table({
-    '[profile balance render]': '',
-    player: p.name,
-    playerBalanceResult: result,
-    markerDebt: markerDebt,
-    chipTurnIns: chipTurnIns,
-    paidOut: paidOut,
-    reimbursed: reimbursed,
-    credits: credits,
-    cashSkipped: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'CASH'; }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0),
-    eCashSkipped: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'ECASH'; }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0),
-    bonusSkipped: playerBonusTotal(p),
-    markerBuyIns: playerDebtBuyInsTotal(p),
-    markerCredits: playerMarkerCreditsTotal(p)
-  });
-  return result;
+  return chipTurnIns - markerDebt + credits - paidOut;
 }
 
 /** Same formula as playerBalance. */
@@ -1605,8 +1576,7 @@ function getTotalExpenses() {
 
 function calcDashboard() {
   var bankStart = G.sessionSettings.bankStart || 0;
-  var cashBuyIns = 0, eCashBuyIns = 0, cashPayouts = 0, eCashPayouts = 0;
-  var cashStaffPayouts = 0, eCashStaffPayouts = 0;
+  var cashBuyIns = 0, eCashBuyIns = 0, cashPaidOut = 0, eCashPaidOut = 0;
   var drop = 0, tips = 0, staffTax = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
@@ -1614,13 +1584,8 @@ function calcDashboard() {
       if (b.type==='ECASH') eCashBuyIns += b.amount;
     });
     (p.cashOuts||[]).forEach(function(c) {
-      if (c.method==='CASH')  cashPayouts  += c.amount;
-      if (c.method==='ECASH') eCashPayouts += c.amount;
-    });
-    (p.staffPayouts||[]).forEach(function(sp) {
-      var m = String(sp.method || 'CASH').toUpperCase();
-      if (m === 'ECASH') eCashStaffPayouts += sp.amount || 0;
-      else cashStaffPayouts += sp.amount || 0;
+      if (c.method==='CASH')  cashPaidOut  += c.amount;
+      if (c.method==='ECASH') eCashPaidOut += c.amount;
     });
     tips += tipsTotal(p); // dashboard tips total only — chips use calculateChipMovements().chipsIn.tips once
     // House cut of tips — only staff tax contributes to profit (not gross tips)
@@ -1632,32 +1597,26 @@ function calcDashboard() {
       });
     }
   });
-  // Dashboard DROP = sum all active DROP txns (txnLog preferred; player drops[] fallback)
+  // Dashboard DROP = sum staff drops only (txnLog preferred; player drops[] fallback)
   drop = totalDropLogged();
   var eb = getExpenseBreakdown();
-  var expenses = eb.total;
-  var bonusChips = eb.bonusBuyIns;
-  var houseCashPaid = eb.houseCashPaid;
-  var houseECashPaid = eb.houseECashPaid;
-  var otherCashExpenses = eb.otherCashExpenses;
-  var staffCashExpenses = eb.staffReimbursements;
-  // Paid house still hits profit (cash/eCash already left); unified total is unpaid-only for house.
-  // Legacy otherCashExpenses (rare G.expenses with playerId) kept in profit/cash, not Expenses cell.
+  var expenses = getTotalExpenses();
+  var cashHouseExpenses = eb.houseCashPaid;
   return {
-    // cashOnHand: paid house CASH + staff/other immediate outflows (unpaid house not yet paid)
-    cashOnHand:   bankStart + cashBuyIns - cashPayouts - cashStaffPayouts - houseCashPaid - otherCashExpenses - staffCashExpenses,
-    // eCashOnHand: paid house ECASH outflows
-    eCashOnHand:  eCashBuyIns - eCashPayouts - eCashStaffPayouts - houseECashPaid,
+    // CASH ON HAND = bankStart + cashBuyIns − cashPaidOut − cashHouseExpenses
+    cashOnHand:   bankStart + cashBuyIns - cashPaidOut - cashHouseExpenses,
+    // ECASH ON HAND = eCashBuyIns − eCashPaidOut (method ECASH cashOuts)
+    eCashOnHand:  eCashBuyIns - eCashPaidOut,
     // chipsOnHand via calculateChipMovements() only — explicit in/out ledger
     chipsOnHand:  calculateChipMovements().chipsOnHand,
     drop: drop,
     tips: tips,
     expenses: expenses,
-    bonusChips: bonusChips,
+    bonusChips: eb.bonusBuyIns,
     staffTax: staffTax,
     expenseBreakdown: eb,
-    // profit: drop + staffTax − getTotalExpenses() − paid house − legacy other cash expenses
-    profit: drop + staffTax - expenses - houseCashPaid - houseECashPaid - otherCashExpenses
+    // PROFIT = drop + staffTax − getTotalExpenses()
+    profit: drop + staffTax - expenses
   };
 }
 
@@ -2084,9 +2043,7 @@ function resetLocalData(btn) {
     var keys = ['pb-current','pb-history','pb-player-profiles','pb-club','pb-clubs',
                 'pb-player','pb-tickets','pb-balance','pb-balance-start','pb-ledger',
                 'hostActiveBets','pb-sports-token','pb-club-players'];
-    var cleared = [];
-    keys.forEach(function(k){ if(localStorage.getItem(k)!==null){ localStorage.removeItem(k); cleared.push(k); }});
-    console.log('[reset local data] cleared keys:', cleared);
+    keys.forEach(function(k){ localStorage.removeItem(k); });
     location.reload();
   });
 }
@@ -4154,8 +4111,6 @@ function addBuyIn(id) {
   var buyTypeEl = document.getElementById('buyin-type-' + id);
   var buyType = buyTypeEl ? buyTypeEl.value : 'CASH';
 
-  console.table({ '[addBuyIn]':'', id:id, inputId:inputId, inputFound:!!el, raw:raw, amount:amount, buyType:buyType, playerFound:!!p });
-
   if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
 
   // E-Cash requires a receiver
@@ -5296,7 +5251,6 @@ function switchCCTab(tab) {
 }
 
 function openChipCountModal() {
-  console.log('[chip count modal opened] expected chips:', getExpectedChips());
   // Fresh count inputs each open — reset denoms / note only (never seed from last save)
   CC_DENOMS.forEach(function(d){
     setVal('sc-d'+d, ''); setText('sc-d'+d+'-sv', '$0');
@@ -5581,7 +5535,6 @@ function getBankTotal() {
 }
 
 function addDealerBank() {
-  console.log('[chip-bank] add bank clicked');
   if (!G.dealerBanks) G.dealerBanks = [];
   G.dealerBanks.push({ id: Date.now(), name: '', amount: 0 });
   renderDealerBanks();
@@ -6338,7 +6291,6 @@ async function pbBoot() {
   }
 }
 
-console.log('[app] localStorage key: pb-current | resetLocalData() to clear | G to inspect state');
 refreshLucideIcons();
 pbBoot();
 </script>
