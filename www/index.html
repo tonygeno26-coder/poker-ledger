@@ -1096,17 +1096,33 @@ function playerChipTurnInsTotal(p) {
 }
 
 /**
- * Buy-ins that create settlement debt (subtract in playerBalance).
- * CASH = debt (nets against chip turn-in / cash payout).
- * MARKER = unpaid chips (debt).
- * ECASH = NOT debt — tracked in E-Cash on Hand separately; full chip turn-in is house-owes.
- * BONUS = house expense (not debt).
+ * MARKER buy-ins only (raw sum before markerCredits).
+ * CASH / ECASH / BONUS never enter payout debt — cash→drop, eCash→on hand, bonus→expenses.
  */
 function playerDebtBuyInsTotal(p) {
   return (p.buyIns || []).filter(function(b) {
-    var t = String(b.type || '').toUpperCase();
-    return t === 'CASH' || t === 'MARKER';
+    return String(b.type || '').toUpperCase() === 'MARKER';
   }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+}
+
+/** Soft chip-proxy estimate while still playing (no turn-ins, no marker debt). */
+function playerStillPlayingEstimate(p) {
+  var chipProxy = (p.buyIns || []).filter(function(b) {
+    var t = String(b.type || '').toUpperCase();
+    return t === 'CASH' || t === 'ECASH' || t === 'BONUS';
+  }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+  var paidOut = playerCashOutsTotal(p);
+  var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
+  var credits = playerCreditsTotal(p);
+  return chipProxy + credits - paidOut + reimbursed;
+}
+
+/** Tilde (~) only before any chip turn-in and with no marker debt (still playing). */
+function rosterBalanceIsTilde(p) {
+  if (!p) return false;
+  if (playerChipTurnInsTotal(p) > SETTLE_EPSILON) return false;
+  if (playerOutstandingMarker(p) > SETTLE_EPSILON) return false;
+  return playerStillPlayingEstimate(p) > SETTLE_EPSILON || playerTotalInDisplay(p) > SETTLE_EPSILON;
 }
 
 function playerCashOutsTotal(p) {
@@ -1130,44 +1146,47 @@ function playerCreditsTotal(p) {
 }
 
 function playerBalance(p) {
-  // positive = house owes player   negative = player owes house
-  // CASH + MARKER buy-ins: subtract (debt). ECASH: skip (E-Cash on Hand). BONUS: skip.
-  // chipTurnIns + credits: add. cashOuts/payouts: subtract.
-  // markerCredits (tax-toward-marker) still reduce marker owe.
-  // Formula: turnIns + credits − cashBuyIns − markerBuyIns − cashOuts (+ reimbursed + markerCredits).
-  var debtIn = playerDebtBuyInsTotal(p);
-  var turnIns = playerChipTurnInsTotal(p);
+  // Anthony verified formula — signed: positive = house owes, negative = player owes.
+  // markerDebt = MARKER buy-ins − markerCredits (outstanding).
+  // chipTurnIns = sum non-voided turn-ins.
+  // CASH / ECASH / BONUS never subtract from payout math.
+  // Credits reduce player-owes OR add to house-owes.
+  // cashOuts already paid reduce remaining house-owes payout.
+  var markerDebt = playerOutstandingMarker(p);
+  var chipTurnIns = playerChipTurnInsTotal(p);
   var paidOut = playerCashOutsTotal(p);
   var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
-  var markerCredits = playerMarkerCreditsTotal(p);
   var credits = playerCreditsTotal(p);
-  var result = turnIns - debtIn - paidOut + reimbursed + markerCredits + credits;
+  // Unified: chipTurnIns − markerDebt + credits − paidOut (+ reimbursed).
+  // chipTurnIns >= markerDebt → house owes; chipTurnIns < markerDebt → player owes (credits net).
+  // chipTurnIns === 0 && markerDebt === 0 → still playing (display uses ~ estimate; numeric = credits − paidOut).
+  var result = chipTurnIns - markerDebt + credits - paidOut + reimbursed;
   console.table({
     '[profile balance render]': '',
     player: p.name,
     playerBalanceResult: result,
-    debtIn: debtIn,
-    turnIns: turnIns,
+    markerDebt: markerDebt,
+    chipTurnIns: chipTurnIns,
     paidOut: paidOut,
     reimbursed: reimbursed,
-    markerCredits: markerCredits,
     credits: credits,
-    bonusSkipped: playerBonusTotal(p),
+    cashSkipped: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'CASH'; }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0),
     eCashSkipped: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'ECASH'; }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0),
-    buyInCount: (p.buyIns || []).length,
-    cashBuyIns: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'CASH'; }).length,
-    markerBuyIns: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'MARKER'; }).length
+    bonusSkipped: playerBonusTotal(p),
+    markerBuyIns: playerDebtBuyInsTotal(p),
+    markerCredits: playerMarkerCreditsTotal(p)
   });
   return result;
 }
 
-/** Same formula as playerBalance (turn-ins now persist, so pending payout is included). */
+/** Same formula as playerBalance. */
 function playerProjectedBalance(p) {
   return playerBalance(p);
 }
 
-/** playerBalance always; ~pending styling uses rosterChipTurnInLogged separately. */
+/** Display amount: still-playing tilde uses buy-in chip proxy; else exact playerBalance. */
 function playerDisplayBalance(p) {
+  if (rosterBalanceIsTilde(p)) return playerStillPlayingEstimate(p);
   return playerBalance(p);
 }
 
@@ -2127,9 +2146,9 @@ function tipsTotal(p) {
 }
 
 function rosterPlayerStatusBadge(p) {
-  var pending = rosterChipTurnInLogged(p);
-  var bal = pending ? playerProjectedBalance(p) : playerBalance(p);
-  if (!pending) {
+  var tilde = rosterBalanceIsTilde(p);
+  var bal = tilde ? playerDisplayBalance(p) : playerBalance(p);
+  if (!tilde) {
     var info = calcSettlementInfo(bal, p.id, 'BALANCE');
     if (info.status === 'SETTLED') return '<span class="badge badge-green">Settled</span>';
     if (info.status === 'PARTIAL') return '<span class="badge badge-yellow">Partial</span>';
@@ -2159,17 +2178,17 @@ function rosterBalAmt(bal) {
   return '<span class="roster-amt pos">$' + fmt(bal) + '</span>';
 }
 
-/** Roster header balance: gold ~pending after turn-in, else finalized playerBalance. */
+/** Roster header balance: gold ~ only while still playing (no turn-ins yet); never after a turn-in. */
 function rosterPlayerBalCell(p) {
-  if (rosterChipTurnInLogged(p)) {
-    var bal = playerProjectedBalance(p);
+  if (rosterBalanceIsTilde(p)) {
+    var bal = playerDisplayBalance(p);
     if (Math.abs(bal) <= SETTLE_EPSILON) {
-      return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$0</span>';
+      return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$0</span>';
     }
     if (bal < 0) {
-      return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$' + fmt(Math.abs(bal)) + '</span>';
+      return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$' + fmt(Math.abs(bal)) + '</span>';
     }
-    return '<span class="roster-amt" style="color:var(--gold)" title="Pending payout">~$' + fmt(bal) + '</span>';
+    return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$' + fmt(bal) + '</span>';
   }
   return rosterBalAmt(playerBalance(p));
 }
@@ -2738,13 +2757,22 @@ function rosterUpdateTurnInPreview(id) {
   var amount = Number(el.value) || 0;
   var alreadyIn = playerChipTurnInsTotal(p);
   var chipsIn = alreadyIn + amount;
-  var markerTotal = playerMarkerTotal(p);
-  var net = chipsIn - markerTotal;
+  var markerDebt = playerOutstandingMarker(p);
+  var credits = playerCreditsTotal(p);
+  var paidOut = playerCashOutsTotal(p);
+  var net = chipsIn - markerDebt + credits - paidOut;
   var html = '<div class="roster-turnin-calc-row"><span class="lbl">Chips In</span><span class="val">$' + fmt(chipsIn) + '</span></div>';
-  if (markerTotal > 0) {
-    html += '<div class="roster-turnin-calc-row"><span class="lbl">Marker</span><span class="val" style="color:var(--red)">-$' + fmt(markerTotal) + '</span></div>';
+  if (markerDebt > 0) {
+    html += '<div class="roster-turnin-calc-row"><span class="lbl">Marker debt</span><span class="val" style="color:var(--red)">-$' + fmt(markerDebt) + '</span></div>';
   }
-  html += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:' + (net >= 0 ? 'var(--green)' : 'var(--red)') + '">$' + fmt(net) + '</span></div>';
+  if (credits > 0) {
+    html += '<div class="roster-turnin-calc-row"><span class="lbl">Credits</span><span class="val" style="color:#3b82f6">+$' + fmt(credits) + '</span></div>';
+  }
+  if (net >= 0) {
+    html += '<div class="roster-turnin-calc-row"><span class="lbl">House owes</span><span class="val" style="color:var(--green)">$' + fmt(net) + '</span></div>';
+  } else {
+    html += '<div class="roster-turnin-calc-row"><span class="lbl">Player owes</span><span class="val" style="color:var(--red)">$' + fmt(Math.abs(net)) + '</span></div>';
+  }
   if (chipsIn > 0 && net < 0) {
     html += '<div class="roster-turnin-warn">' + lucideIcon('alert-triangle','action-ico') + ' Player short $' + fmt(Math.abs(net)) + '</div>';
   }
@@ -3032,19 +3060,29 @@ function rosterAddStaffPayout(id) {
 
 function rosterTurnInSectionHtml(p, markerTotal) {
   markerTotal = Number(markerTotal) || 0;
+  var markerDebt = playerOutstandingMarker(p);
+  var credits = playerCreditsTotal(p);
   if (rosterChipTurnInLogged(p)) {
     var totalTurnIns = playerChipTurnInsTotal(p);
-    var pendingTurnIn = Number(p.chipTurnIn) || 0;
-    var netPayout = Math.max(0, pendingTurnIn - markerTotal);
+    var bal = playerBalance(p);
+    var netPayout = Math.max(0, bal); // house owes → chipTurnIns − markerDebt + credits (− paidOut)
+    var playerOwesAmt = bal < -SETTLE_EPSILON ? Math.abs(bal) : 0;
+    var netLine = playerOwesAmt > 0
+      ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red)">Owes <strong>$' + fmt(playerOwesAmt) + '</strong></div>'
+      : (markerDebt > 0 || credits > 0
+        ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px">'
+          + (markerDebt > 0 ? 'Marker debt: <strong style="color:var(--red)">-$' + fmt(markerDebt) + '</strong>' : '')
+          + (markerDebt > 0 && credits > 0 ? ' · ' : '')
+          + (credits > 0 ? 'Credits: <strong style="color:#3b82f6">+$' + fmt(credits) + '</strong>' : '')
+          + ' · House owes: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
+        : '');
     return '<div class="roster-turnin-block" id="rx-turnin-block-' + p.id + '">'
       + '<div class="roster-turnin-label" style="display:flex;justify-content:space-between;align-items:center">'
         + '<span>Payout</span>'
         + '<a onclick="rosterResetTurnIn(' + p.id + ')" style="font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--purple-light);cursor:pointer;text-decoration:underline">Re-count</a>'
       + '</div>'
       + '<div class="roster-turnin-locked">' + lucideIcon('lock','action-ico') + ' Chips turned in: $' + fmt(totalTurnIns) + '</div>'
-      + (markerTotal > 0
-        ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px">Marker: <strong style="color:var(--red)">-$' + fmt(markerTotal) + '</strong> · Net: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
-        : '')
+      + netLine
       + '<div class="roster-form-label">Add more chips</div>'
       + '<div class="roster-turnin-input-row" style="margin-bottom:10px">'
         + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
@@ -3061,22 +3099,24 @@ function rosterTurnInSectionHtml(p, markerTotal) {
         + '<input type="number" class="roster-turnin-input" id="rx-cashout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
         + '<button class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" onclick="rosterAddCashOut(' + p.id + ')">Pay Out</button>'
       + '</div>'
+      + (playerOwesAmt > 0
+        ? '<div class="roster-expand-summary" style="margin-top:8px;color:var(--red);font-weight:700">Owes $' + fmt(playerOwesAmt) + '</div>'
+        : '')
     + '</div>';
   }
 
   var calcHtml = '<div class="roster-turnin-calc-row"><span class="lbl">Chips In</span><span class="val">$0</span></div>';
-  if (markerTotal > 0) {
-    calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">Marker</span><span class="val" style="color:var(--red)">-$' + fmt(markerTotal) + '</span></div>'
-      + '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:var(--red)">-$' + fmt(markerTotal) + '</span></div>';
+  if (markerDebt > 0) {
+    calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">Marker debt</span><span class="val" style="color:var(--red)">-$' + fmt(markerDebt) + '</span></div>'
+      + '<div class="roster-turnin-calc-row"><span class="lbl">Player owes</span><span class="val" style="color:var(--red)">$' + fmt(markerDebt) + '</span></div>';
   } else {
-    calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:var(--green)">$0</span></div>';
+    calcHtml += '<div class="roster-turnin-calc-row"><span class="lbl">House owes</span><span class="val" style="color:var(--green)">$0</span></div>';
   }
 
   // Warn only while turn-ins have not yet covered outstanding marker debt
-  var outstandingMarkerDebt = playerOutstandingMarker(p);
   var totalChipTurnIns = playerChipTurnInsTotal(p);
-  var markerWarn = (outstandingMarkerDebt > 0 && totalChipTurnIns < outstandingMarkerDebt)
-    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">' + lucideIcon('alert-triangle','action-ico') + ' Turn in chips first — $' + fmt(outstandingMarkerDebt) + ' marker outstanding</div>'
+  var markerWarn = (markerDebt > 0 && totalChipTurnIns < markerDebt)
+    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">' + lucideIcon('alert-triangle','action-ico') + ' Turn in chips first — $' + fmt(markerDebt) + ' marker outstanding</div>'
       + '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red);display:flex;align-items:flex-start;gap:6px">' + lucideIcon('alert-triangle','action-ico') + ' Player must turn in chips before payout — chips cover the marker first</div>'
       + '<button type="button" class="btn btn-outline roster-turnin-btn" disabled style="width:100%;margin-bottom:12px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed" title="Turn in chips first">Pay Out</button>'
     : '';
@@ -3096,33 +3136,24 @@ function rosterPlayerExpandedHtml(p) {
   var lines = renderPlayerHistoryLines(p);
 
   var summary = '';
-  // Total In/Out helpers already fall back to txnLog when arrays are empty
-  var totalIn = playerTotalInDisplay(p);
-  var totalOut = playerTotalOutDisplay(p);
+  var chipsIn = playerChipTurnInsTotal(p);
+  var markerDebt = playerOutstandingMarker(p);
+  var creditsTotal = playerCreditsTotal(p);
+  var tilde = rosterBalanceIsTilde(p);
   var dispBal = playerDisplayBalance(p);
   var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
-    : (dispBal < 0 ? 'var(--red)' : (rosterChipTurnInLogged(p) ? 'var(--gold)' : 'var(--green)'));
-  var balPrefix = rosterChipTurnInLogged(p) ? '~' : '';
+    : (dispBal < 0 ? 'var(--red)' : (tilde ? 'var(--gold)' : 'var(--green)'));
+  var balPrefix = tilde ? '~' : '';
   var balAbs = '$' + fmt(Math.abs(dispBal));
   var balLabel = Math.abs(dispBal) <= SETTLE_EPSILON ? balAbs
     : (dispBal < 0 ? balPrefix + balAbs + ' (player owes)' : balPrefix + balAbs + ' (house owes)');
-  var creditsTotal = playerCreditsTotal(p);
-  summary += '<div class="roster-expand-summary">Total In: <strong style="color:var(--text)">$' + fmt(totalIn) + '</strong></div>';
-  if (creditsTotal > 0) {
-    summary += '<div class="roster-expand-summary">Credits: <strong style="color:#3b82f6">-$' + fmt(creditsTotal) + '</strong></div>';
-  }
-  summary += '<div class="roster-expand-summary">Total Out: <strong style="color:var(--text)">$' + fmt(totalOut) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(chipsIn) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Marker debt: <strong style="color:' + (markerDebt > 0 ? 'var(--orange)' : 'var(--text-muted)') + '">$' + fmt(markerDebt) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Credits: <strong style="color:' + (creditsTotal > 0 ? '#3b82f6' : 'var(--text-muted)') + '">$' + fmt(creditsTotal) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong>'
-    + (rosterChipTurnInLogged(p) ? ' <span style="color:var(--gold);font-size:11px">(pending payout)</span>' : '')
+    + (tilde ? ' <span style="color:var(--gold);font-size:11px">(still playing)</span>' : '')
     + '</div>';
-  if (playerChipTurnInsTotal(p) > 0) {
-    summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(playerChipTurnInsTotal(p)) + '</strong></div>';
-  }
   var markerTotal = playerMarkerTotal(p);
-  var markerOutstanding = playerOutstandingMarker(p);
-  if (markerOutstanding > 0 || markerTotal > 0) {
-    summary += '<div class="roster-expand-summary">' + lucideIcon('receipt','action-ico') + ' Marker: <strong style="color:var(--orange)">$' + fmt(markerOutstanding) + '</strong> outstanding</div>';
-  }
   var bonusTotal = playerBonusTotal(p);
   if (bonusTotal > 0) {
     summary += '<div class="roster-expand-summary">' + lucideIcon('award','action-ico') + ' Bonus: <strong style="color:var(--gold)">$' + fmt(bonusTotal) + '</strong> (house expense)</div>';
