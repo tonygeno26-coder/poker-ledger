@@ -1556,8 +1556,9 @@ function updateStaffTaxPreview(staffId) {
 
 /**
  * Unified expense components for Breakdown + Expenses accordion.
- * total = unpaid G.expenses (HOUSE) + BONUS buy-ins + Σ p.credits[] + Σ p.expenses[] (staff reimb).
- * Paid house leaves Cash/eCash on hand — excluded from total (not double-counted).
+ * total = houseUnpaid + houseCashPaid + houseECashPaid + BONUS + credits + staff reimb.
+ * Paid house still reduces Cash/eCash on hand separately (unchanged on-hand math).
+ * Accordion/audit keep unpaid vs paid lines distinct; total includes both.
  * Player credits and staff reimbursements are separate arrays; do not sum the same id twice.
  */
 function getExpenseBreakdown() {
@@ -1590,7 +1591,7 @@ function getExpenseBreakdown() {
       staffReimbursements += Number(e && e.amount) || 0;
     });
   });
-  var total = houseUnpaid + bonusBuyIns + playerCredits + staffReimbursements;
+  var total = houseUnpaid + houseCashPaid + houseECashPaid + bonusBuyIns + playerCredits + staffReimbursements;
   return {
     houseUnpaid: houseUnpaid,
     houseCashPaid: houseCashPaid,
@@ -1604,8 +1605,8 @@ function getExpenseBreakdown() {
 }
 
 function getTotalExpenses() {
-  // FORMULA 2 (locked): unpaid houseExpenses (G.expenses HOUSE) + BONUS buy-ins
-  //   + all player credits + all staff p.expenses[] — single source, no double count
+  // FORMULA 2: houseUnpaid + houseCashPaid + houseECashPaid + BONUS + credits + staff
+  // Paid house is in total (EST. PROFIT changes); Cash/eCash on hand still subtracts paid separately.
   return getExpenseBreakdown().total;
 }
 
@@ -1795,6 +1796,8 @@ function buildAuditSnapshot() {
     },
     expenses: {
       house: eb.houseUnpaid,
+      houseCashPaid: eb.houseCashPaid,
+      houseECashPaid: eb.houseECashPaid,
       bonus: eb.bonusBuyIns,
       credits: eb.playerCredits,
       staffReimburse: eb.staffReimbursements,
@@ -1879,6 +1882,8 @@ function formatAuditPlainText(snap) {
 
   lines.push('=== EXPENSES ===');
   lines.push('house (unpaid):   ' + formatAuditMoney(snap.expenses.house));
+  lines.push('house (cash paid):' + formatAuditMoney(snap.expenses.houseCashPaid || 0));
+  lines.push('house (eCash paid):' + formatAuditMoney(snap.expenses.houseECashPaid || 0));
   lines.push('bonus:            ' + formatAuditMoney(snap.expenses.bonus));
   lines.push('credits:          ' + formatAuditMoney(snap.expenses.credits));
   lines.push('staff reimburse:  ' + formatAuditMoney(snap.expenses.staffReimburse));
@@ -1992,6 +1997,8 @@ function renderAuditPanelBody(snap) {
 
   html += '<div class="audit-sec"><div class="audit-sec-title">Expenses</div>';
   html += auditRowHtml('house (unpaid)', formatAuditMoney(snap.expenses.house));
+  html += auditRowHtml('house (cash paid)', formatAuditMoney(snap.expenses.houseCashPaid || 0));
+  html += auditRowHtml('house (eCash paid)', formatAuditMoney(snap.expenses.houseECashPaid || 0));
   html += auditRowHtml('bonus', formatAuditMoney(snap.expenses.bonus));
   html += auditRowHtml('credits', formatAuditMoney(snap.expenses.credits));
   html += auditRowHtml('staff reimburse', formatAuditMoney(snap.expenses.staffReimburse));
@@ -2938,6 +2945,9 @@ function rosterHistoryTypeBadge(kind, buyType) {
   if (k === 'CREDIT' || k === 'PLAYER_CREDIT') {
     return '<span class="badge badge-blue">CREDIT</span>';
   }
+  if (k === 'MARKER_PAYMENT') {
+    return '<span class="badge badge-green">PAY IN</span>';
+  }
   if (k === 'BUY_IN' || k.slice(-6) === '_BUYIN') {
     var bt = String(buyType || k.replace(/_BUYIN$/, '') || 'CASH').toUpperCase();
     return rosterBuyInTypeBadge(bt);
@@ -2979,6 +2989,7 @@ function buildPlayerHistoryRows(p) {
     else if (typ === 'CASH_OUT') kind = 'CASH_OUT';
     else if (typ === 'PAYOUT' || typ === 'PAID_OUT') kind = 'PAYOUT';
     else if (typ === 'PLAYER_CREDIT') kind = 'CREDIT';
+    else if (typ === 'MARKER_PAYMENT') kind = 'MARKER_PAYMENT';
     else if (typ.slice(-6) === '_BUYIN') {
       kind = 'BUY_IN';
       buyType = typ.replace(/_BUYIN$/, '') || t.method || 'CASH';
@@ -3142,11 +3153,11 @@ function renderPlayerHistoryLines(p) {
   }
   return rows.map(function(row) {
     var badge = rosterHistoryTypeBadge(row.kind, row.buyType);
-    var amtColor = (row.kind === 'CHIP_TURN_IN' || row.kind === 'CASH_OUT' || row.kind === 'PAYOUT')
+    var amtColor = (row.kind === 'CHIP_TURN_IN' || row.kind === 'CASH_OUT' || row.kind === 'PAYOUT' || row.kind === 'MARKER_PAYMENT')
       ? 'color:var(--green)'
       : (row.kind === 'CREDIT' ? 'color:#3b82f6' : '');
     var meta = '';
-    if (row.kind === 'CASH_OUT' && row.method) {
+    if ((row.kind === 'CASH_OUT' || row.kind === 'MARKER_PAYMENT') && row.method) {
       meta += '<span class="roster-expand-meta">' + row.method + '</span>';
     }
     if (row.kind === 'CREDIT' && row.desc) {
@@ -3171,7 +3182,7 @@ function renderPlayerHistoryLines(p) {
     } else if (row.kind === 'CREDIT' && row.arrayIndex != null) {
       voidBtn = '<button class="roster-del-btn" title="Void credit" onclick="event.stopPropagation();voidRosterCredit(this,' + p.id + ',' + row.arrayIndex + ')">' + lucideIcon('x','action-ico') + '</button>';
     } else if (row.source === 'txn' || row.source === 'pending') {
-      // txn-only / pending: void via txn id or pending reset
+      // txn-only / pending: void via txn id or pending reset (incl. MARKER_PAYMENT)
       if (row.kind === 'CHIP_TURN_IN' && row.source === 'pending') {
         voidBtn = '<button class="roster-del-btn" title="Clear turn-in" onclick="event.stopPropagation();rosterResetTurnIn(' + p.id + ')">' + lucideIcon('x','action-ico') + '</button>';
       } else if (row.txnId) {
@@ -3355,14 +3366,11 @@ function rosterPayHouseOwes(btn, id) {
   });
 }
 
-/** Player-owes COLLECT / PAY IN — reduces marker debt via markerCredits + cash/eCash on hand. */
+/** Player-owes COLLECT / PAY IN — reduces marker debt via markerCredits + cash/eCash on hand.
+ *  Allowed during pending chip turn-in (rosterTurnInSectionHtml COLLECT path). */
 function rosterCollectPlayerOwes(btn, id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) { toast('Player not found'); return; }
-  if (rosterChipTurnInLogged(p)) {
-    toast('Finish chip turn-in first');
-    return;
-  }
   var bal = playerBalance(p);
   if (bal >= -SETTLE_EPSILON) { toast('Nothing to collect'); return; }
   var oweAmt = Math.abs(bal);
@@ -3400,6 +3408,10 @@ function rosterCollectPlayerOwes(btn, id) {
       method: method,
       timestamp: ts
     });
+    // After collect clears balance, clear pending turn-in flag so Settled ✓ shows
+    if (Math.abs(playerBalance(p)) <= SETTLE_EPSILON) {
+      p.chipTurnIn = 0;
+    }
     _balPayoutFlashId = id;
     _balPayoutFlashUntil = Date.now() + 2500;
     _balPayoutFlashKind = 'collect';
@@ -3767,9 +3779,31 @@ function rosterTurnInSectionHtml(p, markerTotal) {
           + (credits > 0 ? 'Credits: <strong style="color:#3b82f6">+$' + fmt(credits) + '</strong>' : '')
           + ' · House owes: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
         : '');
+    var settleBlock = playerOwesAmt > 0
+      ? ('<div class="roster-form-label">COLLECT</div>'
+        + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--red)">Owes $' + fmt(playerOwesAmt) + ' — collect from player</div>'
+        + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="CASH">'
+        + '<div class="roster-inline-row">'
+          + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + (Math.round(playerOwesAmt * 100) / 100) + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
+          + '<div class="roster-pill-row" id="rx-bal-payout-method-pills-' + p.id + '" style="margin:0;flex-shrink:0">'
+            + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+            + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+          + '</div>'
+          + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);flex-shrink:0" onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN</button>'
+        + '</div>')
+      : ('<div class="roster-form-label">Payout Amount</div>'
+        + '<input type="hidden" id="rx-cashout-method-' + p.id + '" value="CASH">'
+        + '<div class="roster-pill-row" id="rx-cashout-method-pills-' + p.id + '">'
+          + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+          + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+        + '</div>'
+        + '<div class="roster-turnin-input-row">'
+          + '<input type="number" class="roster-turnin-input" id="rx-cashout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
+          + '<button class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" onclick="rosterAddCashOut(' + p.id + ')">Pay Out</button>'
+        + '</div>');
     return '<div class="roster-turnin-block" id="rx-turnin-block-' + p.id + '">'
       + '<div class="roster-turnin-label" style="display:flex;justify-content:space-between;align-items:center">'
-        + '<span>Payout</span>'
+        + '<span>' + (playerOwesAmt > 0 ? 'Collect' : 'Payout') + '</span>'
         + '<a onclick="rosterResetTurnIn(' + p.id + ')" style="font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--purple-light);cursor:pointer;text-decoration:underline">Re-count</a>'
       + '</div>'
       + '<div class="roster-turnin-locked">' + lucideIcon('lock','action-ico') + ' Chips turned in: $' + fmt(totalTurnIns) + '</div>'
@@ -3780,19 +3814,7 @@ function rosterTurnInSectionHtml(p, markerTotal) {
         + '<button type="button" class="btn btn-purple roster-turnin-btn" onclick="rosterLogTurnIn(' + p.id + ')">Log Turn-In</button>'
       + '</div>'
       + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px"></div>'
-      + '<div class="roster-form-label">Payout Amount</div>'
-      + '<input type="hidden" id="rx-cashout-method-' + p.id + '" value="CASH">'
-      + '<div class="roster-pill-row" id="rx-cashout-method-pills-' + p.id + '">'
-        + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'CASH\')">Cash</button>'
-        + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
-      + '</div>'
-      + '<div class="roster-turnin-input-row">'
-        + '<input type="number" class="roster-turnin-input" id="rx-cashout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
-        + '<button class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" onclick="rosterAddCashOut(' + p.id + ')">Pay Out</button>'
-      + '</div>'
-      + (playerOwesAmt > 0
-        ? '<div class="roster-expand-summary" style="margin-top:8px;color:var(--red);font-weight:700">Owes $' + fmt(playerOwesAmt) + '</div>'
-        : '')
+      + settleBlock
     + '</div>';
   }
 
@@ -4305,6 +4327,28 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
       if (p.credits && p.credits.length) {
         var cri = p.credits.findIndex(function(c){ return Number(c.amount) === amt; });
         if (cri >= 0) p.credits.splice(cri, 1);
+      }
+    } else if (typ === 'MARKER_PAYMENT') {
+      // Reverse markerCredits payment (prefer timestamp match with voided txn)
+      if (p.markerCredits && p.markerCredits.length) {
+        var txnTs = txn && txn.timestamp ? String(txn.timestamp) : '';
+        var mci = -1;
+        if (txnTs) {
+          mci = p.markerCredits.findIndex(function(c) {
+            return c
+              && String(c.source || '').toLowerCase() === 'payment'
+              && Number(c.amount) === amt
+              && String(c.timestamp || '') === txnTs;
+          });
+        }
+        if (mci < 0) {
+          mci = p.markerCredits.findIndex(function(c) {
+            return c
+              && String(c.source || '').toLowerCase() === 'payment'
+              && Number(c.amount) === amt;
+          });
+        }
+        if (mci >= 0) p.markerCredits.splice(mci, 1);
       }
     }
 
@@ -5062,6 +5106,7 @@ function renderExpenseList() {
 
   var eb = getExpenseBreakdown();
   var houseUnpaid = eb.houseUnpaid;
+  var housePaid = (eb.houseCashPaid || 0) + (eb.houseECashPaid || 0);
   var creditsSum = eb.playerCredits;
   var staffTotal = eb.staffReimbursements;
   var bonusIssued = eb.bonusBuyIns;
@@ -5169,9 +5214,10 @@ function renderExpenseList() {
       }).join('')
     : '<div class="expense-acc-empty">No staff reimbursements</div>';
 
-  // ── TOTAL ──
+  // ── TOTAL ── (unpaid vs paid house kept separate; grand includes both)
   var totalsHtml = '<div class="expense-acc-totals">'
     + '<div style="display:flex;justify-content:space-between"><span>House (unpaid)</span><strong>$' + fmt(houseUnpaid) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between"><span>House (paid)</span><strong>$' + fmt(housePaid) + '</strong></div>'
     + '<div style="display:flex;justify-content:space-between"><span>Player credits</span><strong style="color:#3b82f6">$' + fmt(creditsSum) + '</strong></div>'
     + '<div style="display:flex;justify-content:space-between"><span>Staff</span><strong style="color:var(--green)">$' + fmt(staffTotal) + '</strong></div>'
     + '<div style="display:flex;justify-content:space-between"><span>Bonus</span><strong style="color:var(--gold)">$' + fmt(bonusIssued) + '</strong></div>'
