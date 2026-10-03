@@ -532,14 +532,14 @@ select.inp{appearance:none;-webkit-appearance:none}
 /* ── Auth / subscription gate ─────────────────────────────────────────────── */
 #pb-auth-screen{
   display:none;position:fixed;inset:0;z-index:10000;
-  background:rgba(0,0,0,0.96);
+  background:var(--bg);
   align-items:center;justify-content:center;padding:24px;
   padding-top:calc(24px + env(safe-area-inset-top));
   padding-bottom:calc(24px + env(safe-area-inset-bottom));
 }
 #pb-auth-screen.show{display:flex}
 .pb-auth-card{width:100%;max-width:380px;text-align:center}
-.pb-auth-logo{font-size:22px;font-weight:900;letter-spacing:1.5px;color:var(--red);text-transform:uppercase;margin-bottom:6px}
+.pb-auth-logo-img{display:block;width:78%;max-width:300px;height:auto;margin:0 auto 14px}
 .pb-auth-sub{font-size:13px;color:var(--text-muted);margin-bottom:22px}
 .pb-auth-card .inp{width:100%;margin-bottom:10px;text-align:left}
 .pb-auth-card .btn{width:100%;margin-bottom:10px}
@@ -579,7 +579,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 <!-- AUTH GATE -->
 <div id="pb-auth-screen" aria-hidden="true">
   <div class="pb-auth-card">
-    <div class="pb-auth-logo">POCKETBOOKS POKER</div>
+    <img class="pb-auth-logo-img" src="logo.png" alt="Pocketbooks Poker">
     <div class="pb-auth-sub">Enter your email to continue</div>
     <input class="inp" id="pb-auth-email" type="email" autocomplete="email" placeholder="you@email.com" inputmode="email">
     <button type="button" class="btn btn-red" id="pb-auth-magic-btn" onclick="pbSendMagicLink()">Send Magic Link</button>
