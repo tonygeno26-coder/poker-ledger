@@ -157,7 +157,8 @@ body.host-view-mode .btn-red:not(.hv-allow),
 body.host-view-mode .end-game-btn,
 body.host-view-mode #hdr-menu-item-new,
 body.host-view-mode #hdr-menu-item-save,
-body.host-view-mode #hdr-menu-item-account{display:none!important}
+body.host-view-mode #hdr-menu-item-account,
+body.host-view-mode #hdr-menu-item-audit{display:none!important}
 body.host-view-mode #page-players > .card:has(#quick-add-name){display:none!important}
 body.host-view-mode input,
 body.host-view-mode select,
@@ -389,6 +390,23 @@ select.inp{appearance:none;-webkit-appearance:none}
 .sig-view-img{display:block;width:100%;max-height:min(70vh,520px);object-fit:contain;background:#FFFFFF;border:none;border-radius:8px;margin:0 auto}
 .sig-badge-btn{border:none;cursor:pointer;font:inherit}
 
+/* Audit panel (full-screen, operator-only) */
+.modal-bg.audit-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.96);padding:0;z-index:9800;align-items:stretch;justify-content:stretch}
+.modal-bg.audit-overlay .audit-modal-fullscreen{flex:1;max-width:none;width:100%;height:100%;max-height:none;border-radius:0;border:none;display:flex;flex-direction:column;background:#0b0b0b;padding:16px;padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;overflow:hidden}
+.audit-modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0 12px}
+.audit-sec{margin-bottom:18px}
+.audit-sec-title{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--gold);margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.audit-row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px;line-height:1.4}
+.audit-row .audit-k{color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.audit-row .audit-v{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+.audit-row.audit-sub .audit-k{padding-left:12px;font-size:12px}
+.audit-row.audit-total{margin-top:4px;padding-top:8px;border-top:1px solid var(--border)}
+.audit-row.audit-total .audit-k,.audit-row.audit-total .audit-v{color:var(--text);font-weight:800}
+.audit-empty{font-size:12px;color:var(--text-muted);padding:4px 0}
+.audit-person{margin:10px 0 6px;font-size:13px;font-weight:800;color:var(--text)}
+.audit-actions{display:flex;gap:10px;flex-shrink:0;padding-top:10px;border-top:1px solid var(--border)}
+.audit-actions .btn{flex:1}
+
 .toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));right:16px;left:16px;margin:0 auto;max-width:360px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;text-align:center}
 .toast.show{opacity:1}
 .confirm-armed{outline:2px solid var(--red)!important;outline-offset:1px;animation:armPulse 0.6s ease-in-out infinite alternate}
@@ -597,6 +615,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="layers" aria-hidden="true"></i></span>New Game</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="save" aria-hidden="true"></i></span>Save</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="user" aria-hidden="true"></i></span>Account</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-audit" onclick="headerMenuAudit()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="clipboard-list" aria-hidden="true"></i></span>Audit</button>
   <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="lock" aria-hidden="true"></i></span>Log Out</button>
 </div>
 
@@ -931,6 +950,21 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   </div>
 </div>
 
+
+<!-- MODAL: Audit (full-screen, operator-only) -->
+<div class="modal-bg audit-overlay" id="modal-audit" onclick="if(event.target===this)closeAuditPanel()">
+  <div class="modal audit-modal-fullscreen" onclick="event.stopPropagation()">
+    <div class="modal-title">
+      <span class="ico-inline"><i data-lucide="clipboard-list" aria-hidden="true"></i> Audit</span>
+      <button type="button" class="modal-close" onclick="closeAuditPanel()" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <div class="audit-modal-body" id="audit-panel-body"></div>
+    <div class="audit-actions">
+      <button type="button" class="btn btn-purple" id="audit-copy-btn" onclick="copyAuditReport()"><i data-lucide="copy" class="action-ico" aria-hidden="true"></i> Copy Audit</button>
+      <button type="button" class="btn btn-outline" onclick="closeAuditPanel()">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: Account -->
 <div class="modal-bg" id="modal-pb-account" onclick="if(event.target===this)closeModal('modal-pb-account')">
@@ -1629,6 +1663,412 @@ function calcDashboard() {
   };
 }
 
+/**
+ * Display-only audit snapshot. Reuses locked helpers / same arrays as
+ * playerBalance, getExpenseBreakdown, calcDashboard, staffTipBalance.
+ * Does not invent alternate math sources.
+ */
+var _auditPlainText = '';
+
+function buildAuditSnapshot() {
+  var bankStart = (G.sessionSettings && G.sessionSettings.bankStart) || 0;
+  var cashBuyIns = 0, eCashBuyIns = 0, cashPaidOut = 0, eCashPaidOut = 0;
+  var staffPaidOutCash = 0, staffPaidOutEcash = 0;
+  var cashBuyInLines = [];
+  var eCashBuyInLines = [];
+  var players = [];
+  var staff = [];
+
+  (G.players || []).forEach(function(p) {
+    (p.buyIns || []).forEach(function(b) {
+      var amt = Number(b.amount) || 0;
+      if (b.type === 'CASH') {
+        cashBuyIns += amt;
+        cashBuyInLines.push({ name: p.name || 'Player', amount: amt });
+      }
+      if (b.type === 'ECASH') {
+        eCashBuyIns += amt;
+        eCashBuyInLines.push({ name: p.name || 'Player', amount: amt });
+      }
+    });
+    (p.cashOuts || []).forEach(function(c) {
+      var cm = String(c.method || c.payMethod || '').toUpperCase();
+      if (cm === 'CASH')  cashPaidOut  += c.amount || 0;
+      if (cm === 'ECASH') eCashPaidOut += c.amount || 0;
+    });
+    (p.staffPayouts || []).forEach(function(sp) {
+      var sm = String(sp.method || sp.payMethod || 'CASH').toUpperCase();
+      if (sm === 'ECASH') staffPaidOutEcash += sp.amount || 0;
+      else staffPaidOutCash += sp.amount || 0;
+    });
+
+    if (isPlayerSeat(p)) {
+      var chipTurnIns = playerChipTurnInsTotal(p);
+      var markerDebt = playerOutstandingMarker(p);
+      var credits = playerCreditsTotal(p);
+      var paidOut = playerCashOutsTotal(p);
+      players.push({
+        name: p.name || 'Player',
+        chipTurnIns: chipTurnIns,
+        markerDebt: markerDebt,
+        credits: credits,
+        paidOut: paidOut,
+        balance: playerBalance(p),
+        stillPlaying: playerIsStillPlaying(p),
+        tilde: rosterBalanceIsTilde(p)
+      });
+    }
+
+    if (isStaffSeat(p)) {
+      var grossTips = tipsTotal(p);
+      var taxPaid = (p.staffTaxLog || []).reduce(function(s, t) { return s + (t.taxAmount || 0); }, 0);
+      var reimbursements = staffExpensesTotal(p);
+      var staffPaid = staffPayoutsTotal(p);
+      var ecashUsed = staffEcashUsed(p);
+      staff.push({
+        name: p.name || 'Staff',
+        role: staffRoleLabel(p.staffRole || p.role),
+        grossTips: grossTips,
+        tax: taxPaid,
+        reimbursements: reimbursements,
+        ecashReceived: ecashUsed,
+        paidOut: staffPaid,
+        balance: staffTipBalance(p)
+      });
+    }
+  });
+
+  var eb = getExpenseBreakdown();
+  var d = calcDashboard();
+  var cashExpensesPaid = eb.houseCashPaid;
+  var eCashExpensesPaid = eb.houseECashPaid;
+
+  var txnCounts = {};
+  var txnTotal = 0;
+  (G.txnLog || []).forEach(function(t) {
+    if (!txnIsActive(t)) return;
+    var typ = String(t.type || 'UNKNOWN');
+    txnCounts[typ] = (txnCounts[typ] || 0) + 1;
+    txnTotal += 1;
+  });
+
+  return {
+    players: players,
+    cash: {
+      bankStart: bankStart,
+      buyIns: cashBuyInLines,
+      buyInsTotal: cashBuyIns,
+      paidOut: cashPaidOut,
+      expenses: cashExpensesPaid,
+      staffPaid: staffPaidOutCash,
+      onHand: d.cashOnHand
+    },
+    ecash: {
+      buyIns: eCashBuyInLines,
+      buyInsTotal: eCashBuyIns,
+      paidOut: eCashPaidOut,
+      expenses: eCashExpensesPaid,
+      staffPaid: staffPaidOutEcash,
+      onHand: d.eCashOnHand
+    },
+    expenses: {
+      house: eb.houseUnpaid,
+      bonus: eb.bonusBuyIns,
+      credits: eb.playerCredits,
+      staffReimburse: eb.staffReimbursements,
+      total: eb.total
+    },
+    profit: {
+      drop: d.drop,
+      staffTax: d.staffTax,
+      expenses: d.expenses,
+      estProfit: d.profit
+    },
+    staff: staff,
+    txnCounts: txnCounts,
+    txnTotal: txnTotal
+  };
+}
+
+function formatAuditMoney(n) {
+  var v = parseFloat(n) || 0;
+  var sign = v < 0 ? '-' : '';
+  return sign + '$' + fmt(Math.abs(v));
+}
+
+function formatAuditPlainText(snap) {
+  var lines = [];
+  lines.push('POCKETBOOKS POKER — AUDIT');
+  if (G.location) lines.push('Location: ' + G.location);
+  if (G.date) lines.push('Date: ' + G.date);
+  lines.push('');
+
+  lines.push('=== PLAYER BALANCES ===');
+  if (!snap.players.length) {
+    lines.push('(none)');
+  } else {
+    snap.players.forEach(function(p) {
+      var balLabel = p.tilde ? ('~' + formatAuditMoney(p.balance)) : formatAuditMoney(p.balance);
+      if (p.stillPlaying) balLabel = formatAuditMoney(0) + ' (still playing)';
+      lines.push(p.name);
+      lines.push('  chipTurnIns: ' + formatAuditMoney(p.chipTurnIns));
+      lines.push('  markerDebt:  ' + formatAuditMoney(p.markerDebt));
+      lines.push('  credits:     ' + formatAuditMoney(p.credits));
+      lines.push('  paidOut:     ' + formatAuditMoney(p.paidOut));
+      lines.push('  balance:     ' + balLabel);
+    });
+  }
+  lines.push('');
+
+  lines.push('=== CASH ON HAND ===');
+  lines.push('bankStart:        ' + formatAuditMoney(snap.cash.bankStart));
+  if (!snap.cash.buyIns.length) {
+    lines.push('cash buy-ins:     $0');
+  } else {
+    lines.push('cash buy-ins:');
+    snap.cash.buyIns.forEach(function(b) {
+      lines.push('  ' + b.name + ': ' + formatAuditMoney(b.amount));
+    });
+    lines.push('  total: ' + formatAuditMoney(snap.cash.buyInsTotal));
+  }
+  lines.push('cash paid out:    ' + formatAuditMoney(snap.cash.paidOut));
+  lines.push('cash expenses:    ' + formatAuditMoney(snap.cash.expenses));
+  lines.push('staff cash paid:  ' + formatAuditMoney(snap.cash.staffPaid));
+  lines.push('CASH ON HAND:     ' + formatAuditMoney(snap.cash.onHand));
+  lines.push('');
+
+  lines.push('=== ECASH ON HAND ===');
+  if (!snap.ecash.buyIns.length) {
+    lines.push('eCash buy-ins:    $0');
+  } else {
+    lines.push('eCash buy-ins:');
+    snap.ecash.buyIns.forEach(function(b) {
+      lines.push('  ' + b.name + ': ' + formatAuditMoney(b.amount));
+    });
+    lines.push('  total: ' + formatAuditMoney(snap.ecash.buyInsTotal));
+  }
+  lines.push('eCash paid out:   ' + formatAuditMoney(snap.ecash.paidOut));
+  lines.push('eCash expenses:   ' + formatAuditMoney(snap.ecash.expenses));
+  lines.push('staff eCash paid: ' + formatAuditMoney(snap.ecash.staffPaid));
+  lines.push('ECASH ON HAND:    ' + formatAuditMoney(snap.ecash.onHand));
+  lines.push('');
+
+  lines.push('=== EXPENSES ===');
+  lines.push('house (unpaid):   ' + formatAuditMoney(snap.expenses.house));
+  lines.push('bonus:            ' + formatAuditMoney(snap.expenses.bonus));
+  lines.push('credits:          ' + formatAuditMoney(snap.expenses.credits));
+  lines.push('staff reimburse:  ' + formatAuditMoney(snap.expenses.staffReimburse));
+  lines.push('TOTAL EXPENSES:   ' + formatAuditMoney(snap.expenses.total));
+  lines.push('');
+
+  lines.push('=== PROFIT ===');
+  lines.push('drop:             ' + formatAuditMoney(snap.profit.drop));
+  lines.push('staff tax:        ' + formatAuditMoney(snap.profit.staffTax));
+  lines.push('expenses:         ' + formatAuditMoney(snap.profit.expenses));
+  lines.push('EST. PROFIT:      ' + formatAuditMoney(snap.profit.estProfit));
+  lines.push('');
+
+  lines.push('=== STAFF BALANCES ===');
+  if (!snap.staff.length) {
+    lines.push('(none)');
+  } else {
+    snap.staff.forEach(function(s) {
+      lines.push(s.name + ' · ' + s.role);
+      lines.push('  gross tips:      ' + formatAuditMoney(s.grossTips));
+      lines.push('  tax:             ' + formatAuditMoney(s.tax));
+      lines.push('  reimbursements:  ' + formatAuditMoney(s.reimbursements));
+      if (s.ecashReceived > SETTLE_EPSILON) {
+        lines.push('  eCash received:  ' + formatAuditMoney(s.ecashReceived));
+      }
+      lines.push('  paid out:        ' + formatAuditMoney(s.paidOut));
+      lines.push('  balance:         ' + formatAuditMoney(s.balance));
+    });
+  }
+  lines.push('');
+
+  lines.push('=== TRANSACTION COUNT ===');
+  var types = Object.keys(snap.txnCounts).sort();
+  if (!types.length) {
+    lines.push('(none)');
+  } else {
+    types.forEach(function(typ) {
+      lines.push(typ + ': ' + snap.txnCounts[typ]);
+    });
+  }
+  lines.push('TOTAL: ' + snap.txnTotal);
+  return lines.join('\n');
+}
+
+function auditRowHtml(label, value, opts) {
+  opts = opts || {};
+  var cls = 'audit-row' + (opts.sub ? ' audit-sub' : '') + (opts.total ? ' audit-total' : '');
+  var vColor = opts.color ? (' style="color:' + opts.color + '"') : '';
+  return '<div class="' + cls + '"><span class="audit-k">' + label + '</span><span class="audit-v"' + vColor + '>' + value + '</span></div>';
+}
+
+function renderAuditPanelBody(snap) {
+  var html = '';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Player Balances</div>';
+  if (!snap.players.length) {
+    html += '<div class="audit-empty">(none)</div>';
+  } else {
+    snap.players.forEach(function(p) {
+      var balLabel = p.tilde ? ('~' + formatAuditMoney(p.balance)) : formatAuditMoney(p.balance);
+      if (p.stillPlaying) balLabel = formatAuditMoney(0) + ' · still playing';
+      var balColor = p.balance > SETTLE_EPSILON ? 'var(--green)' : (p.balance < -SETTLE_EPSILON ? 'var(--red)' : '');
+      html += '<div class="audit-person">' + p.name + '</div>';
+      html += auditRowHtml('chipTurnIns', formatAuditMoney(p.chipTurnIns), { sub: true });
+      html += auditRowHtml('markerDebt', formatAuditMoney(p.markerDebt), { sub: true });
+      html += auditRowHtml('credits', formatAuditMoney(p.credits), { sub: true });
+      html += auditRowHtml('paidOut', formatAuditMoney(p.paidOut), { sub: true });
+      html += auditRowHtml('balance', balLabel, { sub: true, total: true, color: balColor });
+    });
+  }
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Cash on Hand</div>';
+  html += auditRowHtml('bankStart', formatAuditMoney(snap.cash.bankStart));
+  if (!snap.cash.buyIns.length) {
+    html += auditRowHtml('cash buy-ins', '$0');
+  } else {
+    html += auditRowHtml('cash buy-ins', formatAuditMoney(snap.cash.buyInsTotal));
+    snap.cash.buyIns.forEach(function(b) {
+      html += auditRowHtml(b.name, formatAuditMoney(b.amount), { sub: true });
+    });
+  }
+  html += auditRowHtml('cash paid out', formatAuditMoney(snap.cash.paidOut));
+  html += auditRowHtml('cash expenses', formatAuditMoney(snap.cash.expenses));
+  html += auditRowHtml('staff cash paid', formatAuditMoney(snap.cash.staffPaid));
+  html += auditRowHtml('CASH ON HAND', formatAuditMoney(snap.cash.onHand), {
+    total: true,
+    color: snap.cash.onHand >= 0 ? 'var(--green)' : 'var(--red)'
+  });
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">eCash on Hand</div>';
+  if (!snap.ecash.buyIns.length) {
+    html += auditRowHtml('eCash buy-ins', '$0');
+  } else {
+    html += auditRowHtml('eCash buy-ins', formatAuditMoney(snap.ecash.buyInsTotal));
+    snap.ecash.buyIns.forEach(function(b) {
+      html += auditRowHtml(b.name, formatAuditMoney(b.amount), { sub: true });
+    });
+  }
+  html += auditRowHtml('eCash paid out', formatAuditMoney(snap.ecash.paidOut));
+  html += auditRowHtml('eCash expenses', formatAuditMoney(snap.ecash.expenses));
+  html += auditRowHtml('staff eCash paid', formatAuditMoney(snap.ecash.staffPaid));
+  html += auditRowHtml('ECASH ON HAND', formatAuditMoney(snap.ecash.onHand), {
+    total: true,
+    color: snap.ecash.onHand >= 0 ? 'var(--green)' : 'var(--red)'
+  });
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Expenses</div>';
+  html += auditRowHtml('house (unpaid)', formatAuditMoney(snap.expenses.house));
+  html += auditRowHtml('bonus', formatAuditMoney(snap.expenses.bonus));
+  html += auditRowHtml('credits', formatAuditMoney(snap.expenses.credits));
+  html += auditRowHtml('staff reimburse', formatAuditMoney(snap.expenses.staffReimburse));
+  html += auditRowHtml('TOTAL', formatAuditMoney(snap.expenses.total), { total: true });
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Profit</div>';
+  html += auditRowHtml('drop', formatAuditMoney(snap.profit.drop));
+  html += auditRowHtml('staff tax', formatAuditMoney(snap.profit.staffTax));
+  html += auditRowHtml('expenses', formatAuditMoney(snap.profit.expenses));
+  html += auditRowHtml('EST. PROFIT', formatAuditMoney(snap.profit.estProfit), {
+    total: true,
+    color: snap.profit.estProfit >= 0 ? 'var(--green)' : 'var(--red)'
+  });
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Staff Balances</div>';
+  if (!snap.staff.length) {
+    html += '<div class="audit-empty">(none)</div>';
+  } else {
+    snap.staff.forEach(function(s) {
+      var balColor = s.balance > SETTLE_EPSILON ? 'var(--green)' : (s.balance < -SETTLE_EPSILON ? 'var(--red)' : '');
+      html += '<div class="audit-person">' + s.name + ' · ' + s.role + '</div>';
+      html += auditRowHtml('gross tips', formatAuditMoney(s.grossTips), { sub: true });
+      html += auditRowHtml('tax', formatAuditMoney(s.tax), { sub: true });
+      html += auditRowHtml('reimbursements', formatAuditMoney(s.reimbursements), { sub: true });
+      if (s.ecashReceived > SETTLE_EPSILON) {
+        html += auditRowHtml('eCash received', formatAuditMoney(s.ecashReceived), { sub: true });
+      }
+      html += auditRowHtml('paid out', formatAuditMoney(s.paidOut), { sub: true });
+      html += auditRowHtml('balance', formatAuditMoney(s.balance), { sub: true, total: true, color: balColor });
+    });
+  }
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Transaction Count</div>';
+  var types = Object.keys(snap.txnCounts).sort();
+  if (!types.length) {
+    html += '<div class="audit-empty">(none)</div>';
+  } else {
+    types.forEach(function(typ) {
+      html += auditRowHtml(typ, String(snap.txnCounts[typ]));
+    });
+  }
+  html += auditRowHtml('TOTAL', String(snap.txnTotal), { total: true });
+  html += '</div>';
+
+  return html;
+}
+
+function isAuditPanelOpen() {
+  var el = document.getElementById('modal-audit');
+  return !!(el && el.classList.contains('open'));
+}
+
+function openAuditPanel() {
+  if (_hostViewMode) {
+    toast('Audit is operator-only');
+    return;
+  }
+  var body = document.getElementById('audit-panel-body');
+  if (!body) return;
+  var snap = buildAuditSnapshot();
+  _auditPlainText = formatAuditPlainText(snap);
+  body.innerHTML = renderAuditPanelBody(snap);
+  openModal('modal-audit');
+  refreshLucideIcons();
+}
+
+function closeAuditPanel() {
+  closeModal('modal-audit');
+}
+
+function copyAuditReport() {
+  if (_hostViewMode) {
+    toast('Audit is operator-only');
+    return;
+  }
+  var text = _auditPlainText || formatAuditPlainText(buildAuditSnapshot());
+  function copied() { toast('Audit copied ✅'); }
+  function fallbackCopy() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      copied();
+    } catch (e) {
+      toast('Copy failed — long-press to select text');
+    }
+    document.body.removeChild(ta);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(copied).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
 function appendTxn(entry) {
   G._seq = (G._seq||0)+1;
   G.txnLog.unshift(Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry));
@@ -2035,6 +2475,14 @@ function headerMenuLogout() {
   closeHeaderMenu();
   pbLogout();
 }
+function headerMenuAudit() {
+  closeHeaderMenu();
+  if (_hostViewMode) {
+    toast('Audit is operator-only');
+    return;
+  }
+  openAuditPanel();
+}
 document.addEventListener('click', function(ev) {
   if (!isHeaderMenuOpen()) return;
   var menu = document.getElementById('hdr-menu');
@@ -2044,7 +2492,9 @@ document.addEventListener('click', function(ev) {
   closeHeaderMenu();
 });
 document.addEventListener('keydown', function(ev) {
-  if (ev.key === 'Escape' && isHeaderMenuOpen()) closeHeaderMenu();
+  if (ev.key !== 'Escape') return;
+  if (isAuditPanelOpen()) { closeAuditPanel(); return; }
+  if (isHeaderMenuOpen()) closeHeaderMenu();
 });
 
 function resetLocalData(btn) {
