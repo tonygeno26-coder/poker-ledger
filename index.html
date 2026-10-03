@@ -1686,6 +1686,7 @@ function buildAuditSnapshot() {
   var markerPaidCash = 0, markerPaidEcash = 0;
   var cashBuyInLines = [];
   var eCashBuyInLines = [];
+  var markerPaidEcashLines = [];
   var players = [];
   var staff = [];
 
@@ -1717,8 +1718,17 @@ function buildAuditSnapshot() {
       if (src !== 'payment' && src !== 'collect' && src !== 'pay_in') return;
       var mm = String(c.method || 'CASH').toUpperCase();
       var mAmt = Number(c.amount) || 0;
-      if (mm === 'ECASH') markerPaidEcash += mAmt;
-      else markerPaidCash += mAmt;
+      if (mm === 'ECASH') {
+        markerPaidEcash += mAmt;
+        var recv = String(c.receivedByName || c.receivedBy || '').trim();
+        markerPaidEcashLines.push({
+          name: p.name || 'Player',
+          amount: mAmt,
+          receivedBy: recv
+        });
+      } else {
+        markerPaidCash += mAmt;
+      }
     });
 
     if (isPlayerSeat(p)) {
@@ -1787,6 +1797,7 @@ function buildAuditSnapshot() {
       buyIns: eCashBuyInLines,
       buyInsTotal: eCashBuyIns,
       markerPaid: markerPaidEcash,
+      markerPaidLines: markerPaidEcashLines,
       paidOut: eCashPaidOut,
       expenses: eCashExpensesPaid,
       staffPaid: staffPaidOutEcash,
@@ -1872,6 +1883,10 @@ function formatAuditPlainText(snap) {
     lines.push('  total: ' + formatAuditMoney(snap.ecash.buyInsTotal));
   }
   lines.push('marker paid in:   ' + formatAuditMoney(snap.ecash.markerPaid || 0));
+  (snap.ecash.markerPaidLines || []).forEach(function(m) {
+    var label = m.receivedBy ? (m.name + ' → ' + m.receivedBy) : m.name;
+    lines.push('  ' + label + ': ' + formatAuditMoney(m.amount));
+  });
   lines.push('eCash paid out:   ' + formatAuditMoney(snap.ecash.paidOut));
   lines.push('eCash expenses:   ' + formatAuditMoney(snap.ecash.expenses));
   lines.push('staff eCash paid: ' + formatAuditMoney(snap.ecash.staffPaid));
@@ -1984,6 +1999,10 @@ function renderAuditPanelBody(snap) {
     });
   }
   html += auditRowHtml('marker paid in', formatAuditMoney(snap.ecash.markerPaid || 0));
+  (snap.ecash.markerPaidLines || []).forEach(function(m) {
+    var label = m.receivedBy ? (m.name + ' → ' + m.receivedBy) : m.name;
+    html += auditRowHtml(label, formatAuditMoney(m.amount), { sub: true });
+  });
   html += auditRowHtml('eCash paid out', formatAuditMoney(snap.ecash.paidOut));
   html += auditRowHtml('eCash expenses', formatAuditMoney(snap.ecash.expenses));
   html += auditRowHtml('staff eCash paid', formatAuditMoney(snap.ecash.staffPaid));
@@ -2185,6 +2204,11 @@ function txnReasonLabel(t) {
       return note ? ('Credit · ' + note) : 'Player credit';
     case 'MARKER_PAYMENT': {
       var mpM = String(t.method || 'CASH').toUpperCase() === 'ECASH' ? 'eCash' : 'Cash';
+      if (mpM === 'eCash') {
+        var mpRecv = String(t.receivedByName || t.receivedBy || '').trim();
+        if (mpRecv) mpRecv = mpRecv.replace(/\s*\([^)]*\)\s*$/, '').trim() || mpRecv;
+        if (mpRecv) return withNote('Marker payment · eCash · ' + mpRecv);
+      }
       return withNote('Marker payment · ' + mpM);
     }
     case 'SETTLEMENT_PAYMENT':
@@ -2990,6 +3014,7 @@ function buildPlayerHistoryRows(p) {
       timestamp: ts,
       seq: t.seq != null ? t.seq : txnIdx,
       method: t.method || '',
+      receivedByName: t.receivedByName || t.receivedBy || '',
       desc: t.desc || t.description || '',
       source: 'txn',
       txnIdx: txnIdx,
@@ -3137,7 +3162,13 @@ function renderPlayerHistoryLines(p) {
       : (row.kind === 'CREDIT' ? 'color:#3b82f6' : '');
     var meta = '';
     if ((row.kind === 'CASH_OUT' || row.kind === 'MARKER_PAYMENT') && row.method) {
-      meta += '<span class="roster-expand-meta">' + row.method + '</span>';
+      var metaMethod = row.method;
+      if (row.kind === 'MARKER_PAYMENT' && String(row.method).toUpperCase() === 'ECASH') {
+        var rbn = String(row.receivedByName || '').trim();
+        if (rbn) rbn = rbn.replace(/\s*\([^)]*\)\s*$/, '').trim() || rbn;
+        metaMethod = rbn ? ('eCash · ' + rbn) : 'eCash';
+      }
+      meta += '<span class="roster-expand-meta">' + metaMethod + '</span>';
     }
     if (row.kind === 'CREDIT' && row.desc) {
       meta += '<span class="roster-expand-meta">' + row.desc + '</span>';
@@ -3220,6 +3251,9 @@ function rosterSetBalPayoutMethod(id, method) {
       pills[i].classList.toggle('active', pills[i].getAttribute('data-method') === method);
     }
   }
+  // Receiver row exists only on COLLECT blocks — never on PAY OUT
+  var row = document.getElementById('rx-bal-payout-receiver-row-' + id);
+  if (row) row.style.display = method === 'ECASH' ? 'block' : 'none';
 }
 
 /**
@@ -3270,6 +3304,12 @@ function rosterHouseOwesPayoutHtml(p) {
           + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
         + '</div>'
         + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);flex-shrink:0" onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN</button>'
+      + '</div>'
+      + '<div id="rx-bal-payout-receiver-row-' + p.id + '" style="display:none;margin-top:8px">'
+        + '<div class="roster-form-label">eCash received by</div>'
+        + '<select class="inp" id="rx-bal-payout-receiver-' + p.id + '" style="width:100%">'
+          + '<option value="">— Select receiver —</option>' + getEcashReceiverOptions()
+        + '</select>'
       + '</div>'
     + '</div>';
   }
@@ -3369,14 +3409,27 @@ function rosterCollectPlayerOwes(btn, id) {
     toast('Amount exceeds collectable ($' + fmt(maxCollect) + ')');
     return;
   }
-  confirmAction(btn, 'Click again to collect $' + fmt(amount) + ' via ' + method, function(){
+  var receivedById = '', receivedByName = '';
+  if (method === 'ECASH') {
+    var recEl = document.getElementById('rx-bal-payout-receiver-' + id);
+    receivedById = recEl ? recEl.value : '';
+    if (!receivedById) { toast('Select who received the E-Cash'); return; }
+    var recOpt = recEl && recEl.options[recEl.selectedIndex];
+    receivedByName = recOpt ? recOpt.text : receivedById;
+  }
+  var confirmLbl = method === 'ECASH'
+    ? ('Marker payment · eCash · ' + receivedByName)
+    : 'Marker payment · Cash';
+  confirmAction(btn, 'Click again to collect $' + fmt(amount) + ' — ' + confirmLbl, function(){
     var ts = new Date().toISOString();
     if (!p.markerCredits) p.markerCredits = [];
     p.markerCredits.push({
       amount: amount,
       source: 'payment',
       method: method,
-      timestamp: ts
+      timestamp: ts,
+      receivedById: receivedById || undefined,
+      receivedByName: receivedByName || undefined
     });
     // Primary txn: MARKER_PAYMENT (method cash/eCash). Reduces markerDebt via markerCredits.
     appendTxn({
@@ -3385,7 +3438,9 @@ function rosterCollectPlayerOwes(btn, id) {
       playerId: String(p.id),
       playerName: p.name,
       method: method,
-      timestamp: ts
+      timestamp: ts,
+      receivedById: receivedById || undefined,
+      receivedByName: receivedByName || undefined
     });
     // After collect clears balance, clear pending turn-in flag so Settled ✓ shows
     if (Math.abs(playerBalance(p)) <= SETTLE_EPSILON) {
@@ -3437,6 +3492,12 @@ function rosterUpdateTurnInPreview(id) {
   var previewEl = document.getElementById('rx-turnin-preview-' + id);
   if (!el || !previewEl) return;
   var amount = Number(el.value) || 0;
+  // Pending COLLECT view starts with empty preview — keep hidden until amount entered
+  if (!amount && rosterChipTurnInLogged(p)) {
+    previewEl.innerHTML = '';
+    previewEl.style.display = 'none';
+    return;
+  }
   var alreadyIn = playerChipTurnInsTotal(p);
   var chipsIn = alreadyIn + amount;
   var markerDebt = playerOutstandingMarker(p);
@@ -3458,6 +3519,7 @@ function rosterUpdateTurnInPreview(id) {
   if (chipsIn > 0 && net < 0) {
     html += '<div class="roster-turnin-warn">' + lucideIcon('alert-triangle','action-ico') + ' Player short $' + fmt(Math.abs(net)) + '</div>';
   }
+  previewEl.style.display = '';
   previewEl.innerHTML = html;
 }
 
@@ -3749,8 +3811,9 @@ function rosterTurnInSectionHtml(p, markerTotal) {
     var bal = playerBalance(p);
     var netPayout = Math.max(0, bal); // house owes → chipTurnIns − markerDebt + credits (− paidOut)
     var playerOwesAmt = bal < -SETTLE_EPSILON ? Math.abs(bal) : 0;
+    // COLLECT path: show "COLLECT / Owes $X" once (no duplicate netLine owes)
     var netLine = playerOwesAmt > 0
-      ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red)">Owes <strong>$' + fmt(playerOwesAmt) + '</strong></div>'
+      ? ''
       : (markerDebt > 0 || credits > 0
         ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px">'
           + (markerDebt > 0 ? 'Marker debt: <strong style="color:var(--red)">-$' + fmt(markerDebt) + '</strong>' : '')
@@ -3759,8 +3822,7 @@ function rosterTurnInSectionHtml(p, markerTotal) {
           + ' · House owes: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
         : '');
     var settleBlock = playerOwesAmt > 0
-      ? ('<div class="roster-form-label">COLLECT</div>'
-        + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--red)">Owes $' + fmt(playerOwesAmt) + ' — collect from player</div>'
+      ? ('<div class="roster-form-label">COLLECT / Owes $' + fmt(playerOwesAmt) + '</div>'
         + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="CASH">'
         + '<div class="roster-inline-row">'
           + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + (Math.round(playerOwesAmt * 100) / 100) + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
@@ -3769,6 +3831,12 @@ function rosterTurnInSectionHtml(p, markerTotal) {
             + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
           + '</div>'
           + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);flex-shrink:0" onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN</button>'
+        + '</div>'
+        + '<div id="rx-bal-payout-receiver-row-' + p.id + '" style="display:none;margin-top:8px">'
+          + '<div class="roster-form-label">eCash received by</div>'
+          + '<select class="inp" id="rx-bal-payout-receiver-' + p.id + '" style="width:100%">'
+            + '<option value="">— Select receiver —</option>' + getEcashReceiverOptions()
+          + '</select>'
         + '</div>')
       : ('<div class="roster-form-label">Payout Amount</div>'
         + '<input type="hidden" id="rx-cashout-method-' + p.id + '" value="CASH">'
@@ -3792,7 +3860,7 @@ function rosterTurnInSectionHtml(p, markerTotal) {
         + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
         + '<button type="button" class="btn btn-purple roster-turnin-btn" onclick="rosterLogTurnIn(' + p.id + ')">Log Turn-In</button>'
       + '</div>'
-      + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px"></div>'
+      + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px;display:none"></div>'
       + settleBlock
     + '</div>';
   }
@@ -5789,11 +5857,18 @@ function toggleEcashReceiver(playerId, buyType) {
   }
 }
 
-// E-Cash on Hand per receiver: sum ECASH buy-ins by receivedById, minus ECASH cash-outs, staff eCash payouts, and settlement payments
+// E-Cash on Hand per receiver: sum ECASH buy-ins + eCash marker PAY INs by receivedById,
+// minus ECASH cash-outs, staff eCash payouts, and settlement payments.
+// Skip ANY txn with voided===true (voided buy-ins / marker payments must not count).
 function calcEcashByReceiver() {
   var map = {};
   G.txnLog.forEach(function(t) {
+    if (!t || t.voided === true) return;
     if (t.type === 'ECASH_BUYIN' && t.receivedById) {
+      if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0, owes: 0 };
+      map[t.receivedById].balance += (t.amount || 0);
+    }
+    if (t.type === 'MARKER_PAYMENT' && String(t.method || '').toUpperCase() === 'ECASH' && t.receivedById) {
       if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0, owes: 0 };
       map[t.receivedById].balance += (t.amount || 0);
     }
