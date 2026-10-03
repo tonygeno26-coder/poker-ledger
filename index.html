@@ -1018,11 +1018,50 @@ var G = {
 // ══════════════════════════════════════════════════════════════════════════════
 // ACCOUNTING
 // ══════════════════════════════════════════════════════════════════════════════
-/** Sum CHIP_TURN_IN from txnLog for this player (legacy sessions without chipTurnIns[]). */
+/** True when a txn should be ignored by balance / display (voided flag or legacy VOID_* counter). */
+function txnIsActive(t) {
+  if (!t) return false;
+  if (t.voided === true) return false;
+  var typ = String(t.type || '').toUpperCase();
+  if (typ.indexOf('VOID') !== -1) return false;
+  return true;
+}
+
+/** Mark the first matching active txn as voided:true (no phantom VOID_* counter rows). */
+function markTxnVoided(matchFn) {
+  var log = G.txnLog || [];
+  for (var i = 0; i < log.length; i++) {
+    var t = log[i];
+    if (!txnIsActive(t)) continue;
+    if (matchFn(t, i)) {
+      t.voided = true;
+      return t;
+    }
+  }
+  return null;
+}
+
+/** Mark a player's txn of a given type/amount voided (most recent match). */
+function markPlayerTxnVoided(playerId, playerName, type, amount) {
+  var want = String(type || '').toUpperCase();
+  var amt = Number(amount) || 0;
+  return markTxnVoided(function(t) {
+    if (String(t.type || '').toUpperCase() !== want) return false;
+    if (Math.abs((Number(t.amount) || 0) - amt) > 1e-9) return false;
+    var pidMatch = String(t.playerId || '') === String(playerId);
+    var nameMatch = t.playerName && playerName
+      && String(t.playerName).toUpperCase() === String(playerName).toUpperCase();
+    return pidMatch || nameMatch;
+  });
+}
+
+/** Sum active (non-voided) txnLog amounts of a kind for this player. Never sums VOID_* types. */
 function playerTxnKindTotal(p, kind) {
   var want = String(kind || '').toUpperCase();
+  if (want.indexOf('VOID') !== -1) return 0;
   return (G.txnLog || []).reduce(function(s, t) {
-    if (!t || String(t.type || '').toUpperCase() !== want) return s;
+    if (!txnIsActive(t)) return s;
+    if (String(t.type || '').toUpperCase() !== want) return s;
     var pidMatch = String(t.playerId || '') === String(p.id);
     var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
     if (!pidMatch && !nameMatch) return s;
@@ -1030,15 +1069,27 @@ function playerTxnKindTotal(p, kind) {
   }, 0);
 }
 
-/** Persisted chip turn-in total — sum ALL turn-ins (never last-only). */
+/** Legacy VOID_CHIP_TURN_IN counters still in localStorage — net against CHIP_TURN_IN. */
+function playerLegacyVoidChipTurnIns(p) {
+  return (G.txnLog || []).reduce(function(s, t) {
+    if (!t || t.voided === true) return s;
+    if (String(t.type || '').toUpperCase() !== 'VOID_CHIP_TURN_IN') return s;
+    var pidMatch = String(t.playerId || '') === String(p.id);
+    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
+    if (!pidMatch && !nameMatch) return s;
+    return s + (Number(t.amount) || 0);
+  }, 0);
+}
+
+/** Persisted chip turn-in total — sum ALL non-voided turn-ins (never last-only). */
 function playerChipTurnInsTotal(p) {
   var hist = (p.chipTurnIns || []).reduce(function(s, t) {
-    return s + (Number(t && t.amount) || 0);
+    if (!t || t.voided === true) return s;
+    return s + (Number(t.amount) || 0);
   }, 0);
-  // All CHIP_TURN_IN txnLog rows for this player, net of voids
+  // Active CHIP_TURN_IN rows; net legacy VOID_CHIP_TURN_IN counters from older builds
   var fromTxn = playerTxnKindTotal(p, 'CHIP_TURN_IN');
-  var voided = playerTxnKindTotal(p, 'VOID_CHIP_TURN_IN');
-  var txnNet = Math.max(0, fromTxn - voided);
+  var txnNet = Math.max(0, fromTxn - playerLegacyVoidChipTurnIns(p));
   var pending = Number(p.chipTurnIn) || 0;
   // Prefer the most complete source (incomplete array must not shadow full txnLog)
   return Math.max(hist, txnNet, pending);
@@ -1926,10 +1977,10 @@ function renderAll() {
   }
   renderExpenseList();
 
-  // Owes/owed — use display balance so pending turn-in projected nets update the lists
+  // Owes/owed — same playerBalance() as expanded roster row (no parallel formula)
   // Host/Player dual role is included (isPlayerSeat); pure staff excluded
-  var owingPlayers = G.players.filter(function(p){ return isPlayerSeat(p) && playerDisplayBalance(p) < -SETTLE_EPSILON; });
-  var owedPlayers  = G.players.filter(function(p){ return isPlayerSeat(p) && playerDisplayBalance(p) > SETTLE_EPSILON; });
+  var owingPlayers = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p) < -SETTLE_EPSILON; });
+  var owedPlayers  = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p) > SETTLE_EPSILON; });
   var ocEl = document.getElementById('owes-count');
   var odEl = document.getElementById('owed-count');
   if (ocEl) { ocEl.textContent=owingPlayers.length; ocEl.style.display=owingPlayers.length?'inline':'none'; }
@@ -1939,7 +1990,7 @@ function renderAll() {
   var owedListEl = document.getElementById('owed-list');
   owesListEl.innerHTML = owingPlayers.length
     ? owingPlayers.map(function(p){
-        var bal = playerDisplayBalance(p);
+        var bal = playerBalance(p);
         return '<div class="owed-row" onclick="showPage(\'players\');expandRosterTo('+p.id+')">'
           +'<span class="owed-name">'+p.name+'</span>'
           +'<span class="owed-amt">$'+fmt(Math.abs(bal))+'</span>'
@@ -1949,7 +2000,7 @@ function renderAll() {
 
   owedListEl.innerHTML = owedPlayers.length
     ? owedPlayers.map(function(p){
-        var bal = playerDisplayBalance(p);
+        var bal = playerBalance(p);
         return '<div class="green-row">'
           +'<span style="font-weight:700;font-size:13px">'+p.name+'</span>'
           +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(Math.abs(bal))+'</span>'
@@ -1988,8 +2039,9 @@ function renderAll() {
   var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1 };
 
   var txnEl = document.getElementById('txn-log');
-  txnEl.innerHTML = G.txnLog.length
-    ? G.txnLog.slice(0,60).map(function(t){
+  var activeTxns = (G.txnLog || []).filter(txnIsActive);
+  txnEl.innerHTML = activeTxns.length
+    ? activeTxns.slice(0,60).map(function(t){
         var ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
         var meta = TXN_TYPE_MAP[t.type] || { label:t.type, color:'var(--text-muted)', bg:'var(--bg3)' };
         var name = t.playerName || 'HOUSE';
@@ -2291,12 +2343,11 @@ function buildPlayerHistoryRows(p) {
   }
 
   (G.txnLog || []).forEach(function(t, txnIdx) {
-    if (!t) return;
+    if (!txnIsActive(t)) return;
     var pidMatch = String(t.playerId || '') === String(p.id);
     var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
     if (!pidMatch && !nameMatch) return;
     var typ = String(t.type || '').toUpperCase();
-    if (typ.indexOf('VOID_') === 0) return;
     var kind = null;
     var buyType = null;
     if (typ === 'CHIP_TURN_IN') kind = 'CHIP_TURN_IN';
@@ -2372,6 +2423,7 @@ function buildPlayerHistoryRows(p) {
   });
 
   (p.chipTurnIns || []).forEach(function(t, i) {
+    if (!t || t.voided === true) return;
     var amt = Number(t.amount) || 0;
     var timeLabel = t.time || '';
     attachOrPush(
@@ -2766,7 +2818,7 @@ function rosterResetTurnIn(id) {
     // Undo only the latest pending entry (prior turn-ins stay in history)
     if (last && lastAmt > 0 && lastAmt <= pending + 1e-9) {
       p.chipTurnIns.pop();
-      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: lastAmt, playerId: String(p.id), playerName: p.name });
+      markPlayerTxnVoided(p.id, p.name, 'CHIP_TURN_IN', lastAmt);
       p.chipTurnIn = Math.max(0, pending - lastAmt);
     } else {
       p.chipTurnIn = 0;
@@ -3421,14 +3473,9 @@ function voidRosterBuyIn(btn, playerId, index) {
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p || !p.buyIns || !p.buyIns[index]) return;
     var b = p.buyIns[index];
+    var buyType = String(b.type || 'CASH').toUpperCase();
     p.buyIns.splice(index, 1);
-    appendTxn({
-      type: 'VOID_' + String(b.type || 'CASH').toUpperCase() + '_BUYIN',
-      amount: b.amount,
-      playerId: String(p.id),
-      playerName: p.name,
-      method: b.type
-    });
+    markPlayerTxnVoided(p.id, p.name, buyType + '_BUYIN', b.amount);
     rosterKeepExpanded(playerId);
     calcAll(); renderAll(); autoSave();
     toast('Buy-in voided');
@@ -3441,13 +3488,7 @@ function voidRosterCashOut(btn, playerId, index) {
     if (!p || !p.cashOuts || !p.cashOuts[index]) return;
     var c = p.cashOuts[index];
     p.cashOuts.splice(index, 1);
-    appendTxn({
-      type: 'VOID_CASH_OUT',
-      amount: c.amount,
-      playerId: String(p.id),
-      playerName: p.name,
-      method: c.method
-    });
+    markPlayerTxnVoided(p.id, p.name, 'CASH_OUT', c.amount);
     rosterKeepExpanded(playerId);
     calcAll(); renderAll(); autoSave();
     toast('Cash-out voided');
@@ -3465,12 +3506,8 @@ function voidRosterTurnIn(btn, playerId, index) {
     if ((Number(p.chipTurnIn) || 0) > 0 && amt > 0) {
       p.chipTurnIn = Math.max(0, (Number(p.chipTurnIn) || 0) - amt);
     }
-    appendTxn({
-      type: 'VOID_CHIP_TURN_IN',
-      amount: t.amount,
-      playerId: String(p.id),
-      playerName: p.name
-    });
+    // Remove/mark original CHIP_TURN_IN — do not append VOID_* phantom counter
+    markPlayerTxnVoided(p.id, p.name, 'CHIP_TURN_IN', amt);
     rosterKeepExpanded(playerId);
     calcAll(); renderAll(); autoSave();
     toast('Turn-in voided');
@@ -3484,13 +3521,13 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
     if (!p) return;
     var typ = String(kind || '').toUpperCase();
     var amt = Number(amount) || 0;
-    var txnIdx = (G.txnLog || []).findIndex(function(t){ return t && t.id === txnId; });
-    if (txnIdx >= 0) G.txnLog.splice(txnIdx, 1);
+    // Mark original voided — never append VOID_* phantom counters
+    var txn = (G.txnLog || []).find(function(t){ return t && t.id === txnId; });
+    if (txn) txn.voided = true;
 
     if (typ === 'BUY_IN' && p.buyIns) {
       var bi = p.buyIns.findIndex(function(b){ return Number(b.amount) === amt; });
       if (bi >= 0) p.buyIns.splice(bi, 1);
-      appendTxn({ type: 'VOID_CASH_BUYIN', amount: amt, playerId: String(p.id), playerName: p.name });
     } else if (typ === 'CHIP_TURN_IN') {
       if (p.chipTurnIns && p.chipTurnIns.length) {
         var ti = p.chipTurnIns.findIndex(function(t){ return Number(t.amount) === amt; });
@@ -3499,19 +3536,16 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
       if ((Number(p.chipTurnIn) || 0) > 0 && amt > 0) {
         p.chipTurnIn = Math.max(0, (Number(p.chipTurnIn) || 0) - amt);
       }
-      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: amt, playerId: String(p.id), playerName: p.name });
     } else if (typ === 'CASH_OUT' || typ === 'PAYOUT') {
       if (p.cashOuts && p.cashOuts.length) {
         var ci = p.cashOuts.findIndex(function(c){ return Number(c.amount) === amt; });
         if (ci >= 0) p.cashOuts.splice(ci, 1);
       }
-      appendTxn({ type: 'VOID_CASH_OUT', amount: amt, playerId: String(p.id), playerName: p.name });
     } else if (typ === 'CREDIT' || typ === 'PLAYER_CREDIT') {
       if (p.credits && p.credits.length) {
         var cri = p.credits.findIndex(function(c){ return Number(c.amount) === amt; });
         if (cri >= 0) p.credits.splice(cri, 1);
       }
-      appendTxn({ type: 'VOID_PLAYER_CREDIT', amount: amt, playerId: String(p.id), playerName: p.name });
     }
 
     rosterKeepExpanded(playerId);
@@ -3560,22 +3594,13 @@ function voidRosterCredit(btn, playerId, index) {
     if (!p || !p.credits || index < 0 || index >= p.credits.length) return;
     var c = p.credits[index];
     p.credits.splice(index, 1);
-    appendTxn({
-      type: 'VOID_PLAYER_CREDIT',
-      amount: c.amount,
-      description: c.description || c.desc,
-      desc: c.description || c.desc,
-      playerId: String(p.id),
-      playerName: p.name
-    });
-    // Also drop matching PLAYER_CREDIT txn if present
-    var txnIdx = (G.txnLog || []).findIndex(function(t){
-      return t && t.type === 'PLAYER_CREDIT'
+    // Mark original PLAYER_CREDIT voided — no VOID_PLAYER_CREDIT phantom counter
+    markTxnVoided(function(t) {
+      return t && String(t.type || '').toUpperCase() === 'PLAYER_CREDIT'
         && String(t.playerId) === String(p.id)
         && Number(t.amount) === Number(c.amount)
         && String(t.desc || t.description || '') === String(c.description || c.desc || '');
     });
-    if (txnIdx >= 0) G.txnLog.splice(txnIdx, 1);
     rosterKeepExpanded(playerId);
     calcAll(); renderAll(); autoSave();
     toast('Credit voided');
@@ -3998,7 +4023,7 @@ function resetTurnIn(id) {
     var lastAmt = last ? (Number(last.amount) || 0) : 0;
     if (last && lastAmt > 0 && lastAmt <= pending + 1e-9) {
       p.chipTurnIns.pop();
-      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: lastAmt, playerId: String(p.id), playerName: p.name });
+      markPlayerTxnVoided(p.id, p.name, 'CHIP_TURN_IN', lastAmt);
       p.chipTurnIn = Math.max(0, pending - lastAmt);
     } else {
       p.chipTurnIn = 0;
