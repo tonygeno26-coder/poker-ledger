@@ -1239,7 +1239,7 @@ function playerBalance(p) {
   //   credits     = p.credits[]; paidOut = p.cashOuts[] (actual cash paid — no reimbursements)
   //   balanceBuyIns = BALANCE buy-ins (rebuy vs house-owes; chips out, no cash/eCash/expense)
   //   + = house owes / − = player owes
-  //   Early still-playing→0 only when chips, marker, AND prior are all zero
+  //   Early still-playing→0 only when chips, marker, prior, AND balanceBuyIns are all zero
   //   CASH / ECASH / BONUS / DROP / PRIOR_BALANCE / PRIOR_PAYMENT never affect chipsExpected
   var markerDebt = playerOutstandingMarker(p);
   var chipTurnIns = playerChipTurnInsTotal(p);
@@ -1251,7 +1251,8 @@ function playerBalance(p) {
   if (chipTurnIns <= SETTLE_EPSILON
       && markerDebt <= SETTLE_EPSILON
       && priorOwed <= SETTLE_EPSILON
-      && priorCredit <= SETTLE_EPSILON) {
+      && priorCredit <= SETTLE_EPSILON
+      && balanceBuyIns <= SETTLE_EPSILON) {
     return 0;
   }
   return chipTurnIns - markerDebt - priorOwed + priorCredit + credits - paidOut - balanceBuyIns;
@@ -1887,10 +1888,11 @@ function buildAuditSnapshot() {
 
   var cm = calculateChipMovements();
   var lastCount = (G.chipCounts && G.chipCounts.length) ? G.chipCounts[0] : null;
-  var lastCounted = lastCount ? chipCountActual(lastCount) : null;
-  var lastVariance = lastCount != null
-    ? (lastCounted - cm.chipsOnHand)
-    : null;
+  // last counted = table chips only (actualTotal − bankTotal), matching chip-count modal
+  var lastCounted = lastCount ? chipCountTableChips(lastCount) : null;
+  var lastInBanks = lastCount ? chipCountBankTotal(lastCount) : null;
+  // variance = count entry's stored variance (same as modal), not recomputed vs live expected
+  var lastVariance = lastCount != null ? chipCountVariance(lastCount) : null;
 
   return {
     players: players,
@@ -1942,6 +1944,7 @@ function buildAuditSnapshot() {
       banks: cm.chipsOut.banksPulled,
       expected: cm.chipsOnHand,
       lastCounted: lastCounted,
+      inBanks: lastInBanks,
       variance: lastVariance
     },
     staff: staff,
@@ -2065,6 +2068,7 @@ function formatAuditPlainText(snap) {
   lines.push('banks:            ' + formatAuditMoney(cm.banks));
   lines.push('expected:         ' + formatAuditMoney(cm.expected));
   lines.push('last counted:     ' + (cm.lastCounted == null ? '(none)' : formatAuditMoney(cm.lastCounted)));
+  lines.push('in banks:         ' + (cm.inBanks == null ? '(none)' : formatAuditMoney(cm.inBanks)));
   lines.push('variance:         ' + (cm.variance == null ? '(n/a)' : formatAuditMoney(cm.variance)));
   lines.push('');
 
@@ -2218,6 +2222,7 @@ function renderAuditPanelBody(snap) {
   html += auditRowHtml('banks', formatAuditMoney(cmH.banks));
   html += auditRowHtml('expected', formatAuditMoney(cmH.expected), { total: true, color: 'var(--gold)' });
   html += auditRowHtml('last counted', cmH.lastCounted == null ? '(none)' : formatAuditMoney(cmH.lastCounted));
+  html += auditRowHtml('in banks', cmH.inBanks == null ? '(none)' : formatAuditMoney(cmH.inBanks));
   html += auditRowHtml('variance', cmH.variance == null ? '(n/a)' : formatAuditMoney(cmH.variance), {
     color: cmH.variance == null ? '' : (Math.abs(cmH.variance) < 1 ? 'var(--green)' : 'var(--red)')
   });
@@ -4714,12 +4719,40 @@ function voidRosterCashOut(btn, playerId, index) {
   });
 }
 
+/** Block void of chip turn-in / player credit when BALANCE buy-ins would leave balance negative. */
+function voidCreditOrTurnInBlocked(p, amount) {
+  if (!p) return false;
+  if (playerBalanceBuyInsTotal(p) <= SETTLE_EPSILON) return false;
+  var newBal = playerBalance(p) - (Number(amount) || 0);
+  return newBal < -SETTLE_EPSILON;
+}
+
+/** Block void of player-owes PREV BAL when priorPayments would exceed remaining player-owes gross. */
+function voidPriorOwedBalanceBlocked(p, entry) {
+  if (!p || !entry) return false;
+  var dir = String(entry.direction || '').toLowerCase().replace(/_/g, '-');
+  if (dir !== 'player-owes' && dir !== 'owes') return false;
+  var remainingGross = playerPriorOwedGross(p) - (Number(entry.amount) || 0);
+  return (playerPriorPaymentsTotal(p) - remainingGross) > SETTLE_EPSILON;
+}
+
 function voidRosterTurnIn(btn, playerId, index) {
+  var p0 = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p0 || !p0.chipTurnIns || !p0.chipTurnIns[index]) return;
+  var amt0 = Number(p0.chipTurnIns[index].amount) || 0;
+  if (voidCreditOrTurnInBlocked(p0, amt0)) {
+    toast('Void the Balance buy-in first');
+    return;
+  }
   confirmAction(btn, 'Click again to void this turn-in', function(){
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p || !p.chipTurnIns || !p.chipTurnIns[index]) return;
     var t = p.chipTurnIns[index];
     var amt = Number(t.amount) || 0;
+    if (voidCreditOrTurnInBlocked(p, amt)) {
+      toast('Void the Balance buy-in first');
+      return;
+    }
     p.chipTurnIns.splice(index, 1);
     // Subtract from pending scalar (supports cumulative multi turn-ins)
     if ((Number(p.chipTurnIn) || 0) > 0 && amt > 0) {
@@ -4735,6 +4768,23 @@ function voidRosterTurnIn(btn, playerId, index) {
 
 /** Void a history row that only exists on txnLog (or sync-remove matching array row). */
 function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
+  var pGuard = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!pGuard) return;
+  var typGuard = String(kind || '').toUpperCase();
+  var amtGuard = Number(amount) || 0;
+  var txnGuard = (G.txnLog || []).find(function(t){ return t && t.id === txnId; });
+  if (typGuard === 'CHIP_TURN_IN' || typGuard === 'CREDIT' || typGuard === 'PLAYER_CREDIT') {
+    if (voidCreditOrTurnInBlocked(pGuard, amtGuard)) {
+      toast('Void the Balance buy-in first');
+      return;
+    }
+  } else if (typGuard === 'PRIOR_BALANCE') {
+    var dirGuard = txnGuard && txnGuard.direction ? String(txnGuard.direction) : 'player-owes';
+    if (voidPriorOwedBalanceBlocked(pGuard, { amount: amtGuard, direction: dirGuard })) {
+      toast('Void the prior payment first');
+      return;
+    }
+  }
   confirmAction(btn, 'Click again to void this entry', function(){
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p) return;
@@ -4742,6 +4792,18 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
     var amt = Number(amount) || 0;
     // Mark original voided — never append VOID_* phantom counters
     var txn = (G.txnLog || []).find(function(t){ return t && t.id === txnId; });
+    if (typ === 'CHIP_TURN_IN' || typ === 'CREDIT' || typ === 'PLAYER_CREDIT') {
+      if (voidCreditOrTurnInBlocked(p, amt)) {
+        toast('Void the Balance buy-in first');
+        return;
+      }
+    } else if (typ === 'PRIOR_BALANCE') {
+      var dirCb = txn && txn.direction ? String(txn.direction) : 'player-owes';
+      if (voidPriorOwedBalanceBlocked(p, { amount: amt, direction: dirCb })) {
+        toast('Void the prior payment first');
+        return;
+      }
+    }
     if (txn) txn.voided = true;
 
     if (typ === 'BUY_IN' && p.buyIns) {
@@ -4913,10 +4975,20 @@ function rosterAddPriorBalance(btn, id) {
 }
 
 function voidRosterPriorBalance(btn, playerId, index) {
+  var p0 = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p0 || !p0.priorBalances || index < 0 || index >= p0.priorBalances.length) return;
+  if (voidPriorOwedBalanceBlocked(p0, p0.priorBalances[index])) {
+    toast('Void the prior payment first');
+    return;
+  }
   confirmAction(btn, 'Click again to void this prior balance', function(){
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p || !p.priorBalances || index < 0 || index >= p.priorBalances.length) return;
     var b = p.priorBalances[index];
+    if (voidPriorOwedBalanceBlocked(p, b)) {
+      toast('Void the prior payment first');
+      return;
+    }
     p.priorBalances.splice(index, 1);
     markTxnVoided(function(t) {
       return t && String(t.type || '').toUpperCase() === 'PRIOR_BALANCE'
@@ -4949,10 +5021,22 @@ function voidRosterPriorPayment(btn, playerId, index) {
 }
 
 function voidRosterCredit(btn, playerId, index) {
+  var p0 = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p0 || !p0.credits || index < 0 || index >= p0.credits.length) return;
+  var amt0 = Number(p0.credits[index].amount) || 0;
+  if (voidCreditOrTurnInBlocked(p0, amt0)) {
+    toast('Void the Balance buy-in first');
+    return;
+  }
   confirmAction(btn, 'Click again to void this credit', function(){
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p || !p.credits || index < 0 || index >= p.credits.length) return;
     var c = p.credits[index];
+    var amt = Number(c.amount) || 0;
+    if (voidCreditOrTurnInBlocked(p, amt)) {
+      toast('Void the Balance buy-in first');
+      return;
+    }
     p.credits.splice(index, 1);
     // Mark original PLAYER_CREDIT voided — no VOID_PLAYER_CREDIT phantom counter
     markTxnVoided(function(t) {
@@ -6633,6 +6717,17 @@ function chipCountActual(c) {
   if (c.total != null) return c.total;
   return 0;
 }
+function chipCountBankTotal(c) {
+  if (!c) return 0;
+  if (c.bankTotal != null) return Number(c.bankTotal) || 0;
+  return 0;
+}
+/** Table chips only = actualTotal − bankTotal (or stored denominationTotal). */
+function chipCountTableChips(c) {
+  if (!c) return 0;
+  if (c.denominationTotal != null) return Number(c.denominationTotal) || 0;
+  return chipCountActual(c) - chipCountBankTotal(c);
+}
 function chipCountExpected(c) {
   if (c.expectedTotal != null) return c.expectedTotal;
   if (c.expected != null) return c.expected;
@@ -6640,7 +6735,8 @@ function chipCountExpected(c) {
 }
 function chipCountVariance(c) {
   if (c.variance != null) return c.variance;
-  return chipCountActual(c) - chipCountExpected(c);
+  // Fallback: table chips vs expected (matches chip-count modal: denomTotal − exp)
+  return chipCountTableChips(c) - chipCountExpected(c);
 }
 function chipCountTime(c) {
   if (c.time) return c.time;
