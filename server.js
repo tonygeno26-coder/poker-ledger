@@ -899,6 +899,285 @@ app.post('/game/save', async function (req, res) {
   }
 });
 
+// ── Persistent player book (people) ───────────────────────────────────────────
+function normalizePersonName(v) {
+  return String(v || '').trim().toUpperCase();
+}
+function normalizePersonTag(v) {
+  const t = String(v == null ? '' : v).trim();
+  return t ? t.toUpperCase() : null;
+}
+function personDisplayLabel(row) {
+  const name = normalizePersonName(row && row.name);
+  const tag = row && row.tag ? String(row.tag).trim() : '';
+  return tag ? name + ' · ' + tag.toUpperCase() : name;
+}
+async function canAccessOwnerBook(user, ownerUserId) {
+  if (String(user.id) === String(ownerUserId)) return { ok: true, readOnly: user.role === 'host_viewer' };
+  const linkedOk =
+    user.role === 'host_viewer' && String(user.linked_owner_id || '') === String(ownerUserId);
+  if (linkedOk) return { ok: true, readOnly: true };
+
+  const viewerEmail = normalizeEmail(user.email);
+  const { data: byUserId, error: byUserErr } = await supabase
+    .from('host_viewers')
+    .select('id')
+    .eq('owner_user_id', ownerUserId)
+    .eq('status', 'active')
+    .eq('viewer_user_id', user.id)
+    .maybeSingle();
+  if (byUserErr) throw byUserErr;
+  if (byUserId) return { ok: true, readOnly: true };
+
+  const { data: byEmail, error: byEmailErr } = await supabase
+    .from('host_viewers')
+    .select('id')
+    .eq('owner_user_id', ownerUserId)
+    .eq('status', 'active')
+    .eq('viewer_email', viewerEmail)
+    .maybeSingle();
+  if (byEmailErr) throw byEmailErr;
+  if (byEmail) return { ok: true, readOnly: true };
+
+  return { ok: false, readOnly: true };
+}
+
+app.get('/people/:ownerUserId', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const ownerUserId = String(req.params.ownerUserId || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+
+    const access = await canAccessOwnerBook(user, ownerUserId);
+    if (!access.ok) {
+      return res.status(403).json({ error: 'Not authorized to read this player book' });
+    }
+
+    const includeArchived = String(req.query.includeArchived || '') === '1';
+    let q = supabase
+      .from('people')
+      .select(
+        'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, created_at, updated_at'
+      )
+      .eq('owner_user_id', ownerUserId)
+      .order('name', { ascending: true })
+      .order('tag', { ascending: true, nullsFirst: true });
+    if (!includeArchived) q = q.eq('archived', false);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    res.json({ people: data || [], readOnly: !!access.readOnly });
+  } catch (err) {
+    console.error('[people GET]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to list people' });
+  }
+});
+
+app.post('/people', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    if (user.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers have read-only access to the player book' });
+    }
+
+    const body = req.body || {};
+    const ownerUserId = String(body.ownerUserId || user.id || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+    if (String(user.id) !== ownerUserId) {
+      return res.status(403).json({ error: 'Only the owner can write their player book' });
+    }
+
+    const name = normalizePersonName(body.name);
+    if (!name) return res.status(400).json({ error: 'name required' });
+    const tag = normalizePersonTag(body.tag);
+    const notes = body.notes == null ? null : String(body.notes);
+    const lastRole = body.last_role == null && body.lastRole == null
+      ? null
+      : String(body.last_role || body.lastRole || '').trim() || null;
+    const lastPlayedAt = body.last_played_at || body.lastPlayedAt || null;
+    const archived = body.archived === true;
+    const now = new Date().toISOString();
+    const id = String(body.id || '').trim() || undefined;
+
+    // Upsert by id when provided; otherwise insert (unique index guards name+tag)
+    if (id) {
+      const { data: existing, error: findErr } = await supabase
+        .from('people')
+        .select('*')
+        .eq('id', id)
+        .eq('owner_user_id', ownerUserId)
+        .maybeSingle();
+      if (findErr) throw findErr;
+      if (existing) {
+        const patch = {
+          name,
+          tag,
+          notes: notes == null ? existing.notes : notes,
+          last_role: lastRole == null ? existing.last_role : lastRole,
+          last_played_at: lastPlayedAt == null ? existing.last_played_at : lastPlayedAt,
+          archived: body.archived == null ? existing.archived : archived,
+          updated_at: now
+        };
+        const { data: updated, error: updErr } = await supabase
+          .from('people')
+          .update(patch)
+          .eq('id', id)
+          .eq('owner_user_id', ownerUserId)
+          .select('*')
+          .single();
+        if (updErr) {
+          if (updErr.code === '23505') {
+            return res.status(409).json({
+              error:
+                'A person named "' +
+                personDisplayLabel({ name, tag }) +
+                '" already exists in your book. Use a different tag to tell them apart.'
+            });
+          }
+          throw updErr;
+        }
+        return res.json({ person: updated, upserted: true });
+      }
+    }
+
+    const insertRow = {
+      owner_user_id: ownerUserId,
+      name,
+      tag,
+      notes,
+      last_role: lastRole,
+      last_played_at: lastPlayedAt,
+      archived,
+      created_at: now,
+      updated_at: now
+    };
+    if (id) insertRow.id = id;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from('people')
+      .insert(insertRow)
+      .select('*')
+      .single();
+    if (insErr) {
+      if (insErr.code === '23505') {
+        // Idempotent upsert on unique (owner, name, tag)
+        let q = supabase
+          .from('people')
+          .select('*')
+          .eq('owner_user_id', ownerUserId)
+          .eq('name', name);
+        if (tag) q = q.eq('tag', tag);
+        else q = q.is('tag', null);
+        const { data: dup, error: dupErr } = await q.maybeSingle();
+        if (dupErr) throw dupErr;
+        if (dup) {
+          const patch = {
+            notes: notes == null ? dup.notes : notes,
+            last_role: lastRole == null ? dup.last_role : lastRole,
+            last_played_at: lastPlayedAt == null ? dup.last_played_at : lastPlayedAt,
+            archived: body.archived == null ? dup.archived : archived,
+            updated_at: now
+          };
+          const { data: updated, error: updErr } = await supabase
+            .from('people')
+            .update(patch)
+            .eq('id', dup.id)
+            .select('*')
+            .single();
+          if (updErr) throw updErr;
+          return res.json({ person: updated, upserted: true });
+        }
+        return res.status(409).json({
+          error:
+            'A person named "' +
+            personDisplayLabel({ name, tag }) +
+            '" already exists in your book. Use a different tag to tell them apart.'
+        });
+      }
+      throw insErr;
+    }
+
+    res.json({ person: inserted, upserted: false });
+  } catch (err) {
+    console.error('[people POST]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to save person' });
+  }
+});
+
+app.patch('/people/:id', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    if (user.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers have read-only access to the player book' });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    const { data: row, error: fetchErr } = await supabase
+      .from('people')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!row) return res.status(404).json({ error: 'Person not found' });
+    if (String(row.owner_user_id) !== String(user.id)) {
+      return res.status(403).json({ error: 'Only the owner can edit their player book' });
+    }
+
+    const body = req.body || {};
+    const patch = { updated_at: new Date().toISOString() };
+    if (body.name != null) {
+      const name = normalizePersonName(body.name);
+      if (!name) return res.status(400).json({ error: 'name required' });
+      patch.name = name;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'tag')) {
+      patch.tag = normalizePersonTag(body.tag);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'notes')) {
+      patch.notes = body.notes == null ? null : String(body.notes);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'archived')) {
+      patch.archived = !!body.archived;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'last_role') || Object.prototype.hasOwnProperty.call(body, 'lastRole')) {
+      patch.last_role = String(body.last_role || body.lastRole || '').trim() || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'last_played_at') || Object.prototype.hasOwnProperty.call(body, 'lastPlayedAt')) {
+      patch.last_played_at = body.last_played_at || body.lastPlayedAt || null;
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from('people')
+      .update(patch)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (updErr) {
+      if (updErr.code === '23505') {
+        return res.status(409).json({
+          error:
+            'A person with that name and tag already exists in your book. Choose a different tag.'
+        });
+      }
+      throw updErr;
+    }
+
+    res.json({ person: updated });
+  } catch (err) {
+    console.error('[people PATCH]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to update person' });
+  }
+});
+
 app.listen(PORT, function () {
   console.log(`[pocketbooks] subscription server listening on :${PORT}`);
   console.log(`[pocketbooks] BASE_URL=${BASE_URL}`);

@@ -170,6 +170,47 @@ body.host-view-mode .nav-btn,
 body.host-view-mode .hdr-menu-btn,
 body.host-view-mode .hdr-menu-item.hv-allow,
 body.host-view-mode button.hv-allow{pointer-events:auto;opacity:1}
+body.host-view-mode #hdr-menu-item-book{display:flex!important}
+body.host-view-mode #page-players-book .book-edit-controls{display:none!important}
+body.host-view-mode #page-players-book input,
+body.host-view-mode #page-players-book select,
+body.host-view-mode #page-players-book textarea{pointer-events:none;opacity:0.65}
+body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:1}
+
+/* Player book */
+.people-match-list{
+  margin-top:8px;border:1px solid var(--border);border-radius:10px;
+  background:var(--bg3);max-height:180px;overflow:auto;display:none;
+}
+.people-match-list.show{display:block}
+.people-match-row{
+  display:flex;flex-direction:column;gap:2px;width:100%;
+  padding:10px 12px;border:none;border-bottom:1px solid var(--border);
+  background:transparent;color:var(--text);text-align:left;cursor:pointer;
+  font-size:13px;font-weight:700;
+}
+.people-match-row:last-child{border-bottom:none}
+.people-match-row:hover{background:var(--surface2)}
+.people-match-row:disabled,.people-match-row.in-game{
+  opacity:0.45;cursor:not-allowed;pointer-events:none;
+}
+.people-match-meta{font-size:11px;font-weight:600;color:var(--text-muted)}
+.people-match-new{color:var(--gold)}
+.link-person-chip{
+  display:inline-flex;align-items:center;gap:4px;margin-left:6px;
+  padding:2px 8px;border-radius:99px;border:1px solid var(--gold);
+  background:var(--gold-dim);color:var(--gold);font-size:10px;font-weight:800;
+  cursor:pointer;vertical-align:middle;
+}
+.book-row{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  padding:12px 0;border-bottom:1px solid var(--border);
+}
+.book-row:last-child{border-bottom:none}
+.book-row-main{min-width:0;flex:1}
+.book-row-name{font-weight:800;font-size:14px}
+.book-row-meta{font-size:11px;color:var(--text-muted);margin-top:3px}
+.book-row-actions{display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0}
 
 /* BOTTOM TAB BAR */
 .nav{
@@ -632,6 +673,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="layers" aria-hidden="true"></i></span>New Game</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="save" aria-hidden="true"></i></span>Save</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="user" aria-hidden="true"></i></span>Account</button>
+  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-book" onclick="headerMenuPlayersBook()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="book-user" aria-hidden="true"></i></span>Players book</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-audit" onclick="headerMenuAudit()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="clipboard-list" aria-hidden="true"></i></span>Audit</button>
   <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="lock" aria-hidden="true"></i></span>Log Out</button>
 </div>
@@ -760,7 +802,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 
   <div class="card host-hide" style="padding:12px;margin-bottom:16px">
     <div class="flex-row" style="gap:8px">
-      <input class="inp" id="quick-add-name" placeholder="NAME" style="text-transform:uppercase;flex:2" onkeydown="if(event.key==='Enter')quickAddPerson()">
+      <input class="inp" id="quick-add-name" placeholder="NAME" style="text-transform:uppercase;flex:2" onkeydown="if(event.key==='Enter'){event.preventDefault();openAddPersonModal();}">
       <select class="inp" id="quick-add-role" style="flex:1;min-width:120px">
         <option value="player">Player</option>
         <option value="dealer">Dealer</option>
@@ -771,7 +813,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         <option value="books">Books</option>
         <option value="misc">Misc Staff</option>
       </select>
-      <button class="btn btn-purple" style="flex-shrink:0" onclick="quickAddPerson()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
+      <button class="btn btn-purple" style="flex-shrink:0" onclick="openAddPersonModal()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
     </div>
   </div>
 
@@ -807,6 +849,23 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   </div>
 </div>
 
+<!-- ===== PLAYERS BOOK ===== -->
+<div id="page-players-book" class="page">
+  <div class="card">
+    <div class="card-title">
+      <i data-lucide="book-user" aria-hidden="true"></i> Players book
+      <button class="btn btn-outline btn-xs ml-auto hv-allow" type="button" onclick="showPage('players')"><i data-lucide="arrow-left" class="action-ico" aria-hidden="true"></i> Back</button>
+    </div>
+    <div class="inp-group" style="margin-bottom:12px">
+      <input class="inp hv-allow" id="book-search" placeholder="Search name or tag" style="text-transform:uppercase" oninput="renderPlayersBook()">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:12px">
+      <input type="checkbox" id="book-show-archived" class="hv-allow" onchange="renderPlayersBook()"> Show archived
+    </label>
+    <div id="players-book-list"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <!-- TOAST -->
@@ -818,7 +877,13 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     <div class="modal-title"><i data-lucide="plus-circle" aria-hidden="true"></i> Add Person <button class="modal-close" onclick="closeModal('modal-add-player')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <div class="inp-group" style="margin-bottom:12px">
       <div class="inp-label">Name</div>
-      <input class="inp" id="new-player-name" placeholder="Name" style="text-transform:uppercase">
+      <input class="inp" id="new-player-name" placeholder="Name" style="text-transform:uppercase" autocomplete="off" oninput="onNewPlayerNameInput()">
+      <div id="people-match-list" class="people-match-list" role="listbox" aria-label="Matching people"></div>
+    </div>
+    <input type="hidden" id="new-player-person-id" value="">
+    <div class="inp-group" id="new-player-tag-group" style="margin-bottom:12px;display:none">
+      <div class="inp-label">Tag <span style="font-weight:500;color:var(--text-muted)">(required when name already exists)</span></div>
+      <input class="inp" id="new-player-tag" placeholder="e.g. TALL · NYC" style="text-transform:uppercase" autocomplete="off">
     </div>
     <!-- Hidden role value -->
     <input type="hidden" id="new-player-role" value="player">
@@ -1778,11 +1843,11 @@ function buildAuditSnapshot() {
       var amt = Number(b.amount) || 0;
       if (b.type === 'CASH') {
         cashBuyIns += amt;
-        cashBuyInLines.push({ name: p.name || 'Player', amount: amt });
+        cashBuyInLines.push({ name: personDisplayName(p) || 'Player', amount: amt });
       }
       if (b.type === 'ECASH') {
         eCashBuyIns += amt;
-        eCashBuyInLines.push({ name: p.name || 'Player', amount: amt });
+        eCashBuyInLines.push({ name: personDisplayName(p) || 'Player', amount: amt });
       }
     });
     (p.cashOuts || []).forEach(function(c) {
@@ -1805,7 +1870,7 @@ function buildAuditSnapshot() {
         markerPaidEcash += mAmt;
         var recv = String(c.receivedByName || c.receivedBy || '').trim();
         markerPaidEcashLines.push({
-          name: p.name || 'Player',
+          name: personDisplayName(p) || 'Player',
           amount: mAmt,
           receivedBy: recv
         });
@@ -1821,7 +1886,7 @@ function buildAuditSnapshot() {
         priorPaidEcash += pAmt;
         var precv = String(c.receivedByName || c.receivedBy || '').trim();
         priorPaidEcashLines.push({
-          name: p.name || 'Player',
+          name: personDisplayName(p) || 'Player',
           amount: pAmt,
           receivedBy: precv
         });
@@ -1839,7 +1904,7 @@ function buildAuditSnapshot() {
       var paidOut = playerCashOutsTotal(p);
       var balanceBuyIns = playerBalanceBuyInsTotal(p);
       players.push({
-        name: p.name || 'Player',
+        name: personDisplayName(p) || 'Player',
         chipTurnIns: chipTurnIns,
         markerDebt: markerDebt,
         priorOwed: priorOwed,
@@ -1860,7 +1925,7 @@ function buildAuditSnapshot() {
       var staffPaid = staffPayoutsTotal(p);
       var ecashUsed = staffEcashUsed(p);
       staff.push({
-        name: p.name || 'Staff',
+        name: personDisplayName(p) || 'Staff',
         role: staffRoleLabel(p.staffRole || p.role),
         grossTips: grossTips,
         tax: taxPaid,
@@ -2744,6 +2809,10 @@ function headerMenuAccount() {
   closeHeaderMenu();
   pbOpenAccount();
 }
+function headerMenuPlayersBook() {
+  closeHeaderMenu();
+  openPlayersBookScreen();
+}
 function headerMenuLogout() {
   closeHeaderMenu();
   pbLogout();
@@ -2854,7 +2923,7 @@ function renderAll() {
     ? owingPlayers.map(function(p){
         var bal = playerBalance(p);
         return '<div class="owed-row" onclick="showPage(\'players\');expandRosterTo('+p.id+')">'
-          +'<span class="owed-name">'+p.name+'</span>'
+          +'<span class="owed-name">'+personDisplayName(p)+'</span>'
           +'<span class="owed-amt">$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
       }).join('')
@@ -2864,7 +2933,7 @@ function renderAll() {
     ? owedPlayers.map(function(p){
         var bal = playerBalance(p);
         return '<div class="green-row">'
-          +'<span style="font-weight:700;font-size:13px">'+p.name+'</span>'
+          +'<span style="font-weight:700;font-size:13px">'+personDisplayName(p)+'</span>'
           +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(Math.abs(bal))+'</span>'
           +'</div>';
       }).join('')
@@ -2974,11 +3043,26 @@ function filterRosterByRole(val) {
 }
 
 function quickAddPerson() {
-  setVal('new-player-name', getVal('quick-add-name'));
-  setVal('new-player-role', getVal('quick-add-role'));
+  openAddPersonModal();
+}
+
+function openAddPersonModal() {
+  var qName = getVal('quick-add-name');
+  var qRole = getVal('quick-add-role') || 'player';
+  setVal('new-player-name', qName);
+  setVal('new-player-role', qRole);
   setVal('new-player-notes', '');
-  addPerson();
-  setVal('quick-add-name', '');
+  setVal('new-player-tag', '');
+  setVal('new-player-person-id', '');
+  selectRole(qRole);
+  updateNewPlayerTagVisibility();
+  renderPeopleMatchList();
+  openModal('modal-add-player');
+  refreshLucideIcons();
+  var nameEl = document.getElementById('new-player-name');
+  if (nameEl) {
+    try { nameEl.focus(); nameEl.select(); } catch (_e) {}
+  }
 }
 
 function buyInsTotal(p) {
@@ -3127,7 +3211,7 @@ function rosterTurnInAction(id) {
 function rosterSettleAction(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
-  openSettleUpModal(p.id, p.name, playerBalance(p), 'BALANCE');
+  openSettleUpModal(p.id, personDisplayName(p), playerBalance(p), 'BALANCE');
 }
 
 function rosterStaffTipsAction(id) {
@@ -3816,7 +3900,7 @@ function getStaffPayoutReceiverOptions(selectedId) {
   var sid = String(selectedId || '');
   return G.players.filter(function(p){ return !!p.staffRole; }).map(function(p){
     var sel = String(p.id) === sid ? ' selected' : '';
-    return '<option value="' + p.id + '"' + sel + '>' + p.name + '</option>';
+    return '<option value="' + p.id + '"' + sel + '>' + personDisplayName(p) + '</option>';
   }).join('');
 }
 
@@ -4423,7 +4507,7 @@ function rosterAddStaffExpense(id) {
   clearReceiptStatus('staff:' + id);
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
-  toast('Expense $' + fmt(amount) + ' logged for ' + p.name + (photo ? ' 📷' : '') + ' ✅');
+  toast('Expense $' + fmt(amount) + ' logged for ' + personDisplayName(p) + (photo ? ' 📷' : '') + ' ✅');
 }
 
 function rosterVoidStaffExpense(btn, staffId, expenseId) {
@@ -4914,7 +4998,7 @@ function rosterAddCredit(id) {
   if (amtEl) amtEl.value = '';
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
-  toast('Credit $' + fmt(amount) + ' added for ' + p.name + ' ✅');
+  toast('Credit $' + fmt(amount) + ' added for ' + personDisplayName(p) + ' ✅');
 }
 
 function rosterSetPriorDirection(id, dir) {
@@ -5063,9 +5147,13 @@ function rosterPlayerRow(p) {
   var roleSub = dual
     ? '<div class="roster-role" style="color:' + staffRoleColor('host-player') + '">Host/Player</div>'
     : '';
+  var linkChip = (!p.personId && !_hostViewMode)
+    ? '<button type="button" class="link-person-chip host-hide" onclick="event.stopPropagation();openLinkPersonPicker(' + p.id + ')">Link</button>'
+    : '';
+  var disp = personDisplayName(p) || p.name;
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
-    + '<td><span class="roster-avatar" style="background:' + avatarBg + '">' + p.name.charAt(0) + '</span></td>'
-    + '<td><div class="roster-name">' + p.name + markerWarnIco + '</div>' + roleSub + '</td>'
+    + '<td><span class="roster-avatar" style="background:' + avatarBg + '">' + (disp.charAt(0) || '?') + '</span></td>'
+    + '<td><div class="roster-name">' + disp + markerWarnIco + linkChip + '</div>' + roleSub + '</td>'
     + '<td>' + rosterPlayerBalCell(p) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
     + '</tr>';
@@ -5086,9 +5174,13 @@ function rosterStaffRow(p) {
   var active = p.id === _activeStaffId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
+  var linkChip = (!p.personId && !_hostViewMode)
+    ? '<button type="button" class="link-person-chip host-hide" onclick="event.stopPropagation();openLinkPersonPicker(' + p.id + ')">Link</button>'
+    : '';
+  var disp = personDisplayName(p) || p.name;
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
-    + '<td><span class="roster-avatar" style="background:' + staffRoleColor(roleKey) + '">' + p.name.charAt(0) + '</span></td>'
-    + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role" style="color:' + staffRoleColor(roleKey) + '">' + staffRoleLabel(roleKey) + '</div></td>'
+    + '<td><span class="roster-avatar" style="background:' + staffRoleColor(roleKey) + '">' + (disp.charAt(0) || '?') + '</span></td>'
+    + '<td><div class="roster-name">' + disp + linkChip + '</div><div class="roster-role" style="color:' + staffRoleColor(roleKey) + '">' + staffRoleLabel(roleKey) + '</div></td>'
     + '<td>' + rosterStaffBalCell(p) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
     + '</tr>';
@@ -5110,10 +5202,16 @@ function renderPlayerGrid() {
   var showStaff   = _rosterRoleFilter === 'all' || _rosterRoleFilter === 'staff';
 
   var players = allPlayers.filter(function(p) {
-    return !search || p.name.indexOf(search) !== -1;
+    if (!search) return true;
+    var disp = personDisplayName(p).toUpperCase();
+    return disp.indexOf(search) !== -1 || String(p.name || '').indexOf(search) !== -1
+      || String(p.tag || '').toUpperCase().indexOf(search) !== -1;
   });
   var staff = allStaff.filter(function(p) {
-    return !search || p.name.indexOf(search) !== -1;
+    if (!search) return true;
+    var disp = personDisplayName(p).toUpperCase();
+    return disp.indexOf(search) !== -1 || String(p.name || '').indexOf(search) !== -1
+      || String(p.tag || '').toUpperCase().indexOf(search) !== -1;
   });
 
   var el = document.getElementById('roster-table');
@@ -5204,7 +5302,7 @@ function renderSettlement() {
   var settleOwesRows = owes.map(function(p){
     var bal = playerBalance(p);
     return settleRowHtml({
-      playerId: p.id, name: p.name, netBalance: bal, kind: 'BALANCE',
+      playerId: p.id, name: personDisplayName(p), netBalance: bal, kind: 'BALANCE',
       rowClass: 'owed-row', tag: 'MARKER', tagColor: 'var(--text-muted)',
       amtStyle: 'color:var(--red)'
     });
@@ -5227,7 +5325,7 @@ function renderSettlement() {
     ? owed.map(function(p){
         var bal = playerBalance(p);
         return settleRowHtml({
-          playerId: p.id, name: p.name, netBalance: bal, kind: 'BALANCE',
+          playerId: p.id, name: personDisplayName(p), netBalance: bal, kind: 'BALANCE',
           rowClass: 'green-row', tag: '', tagColor: '',
           amtStyle: 'color:var(--green)'
         });
@@ -5323,21 +5421,653 @@ function selectRole(role) {
 }
 function updateAddPersonUI() { selectRole(getVal('new-player-role') || 'player'); }
 
+function personDisplayName(p) {
+  if (!p) return '';
+  var name = String(p.name || '').trim().toUpperCase();
+  var tag = String(p.tag || '').trim();
+  if (tag) return name + ' · ' + tag.toUpperCase();
+  return name;
+}
+
+function bookPersonLabel(row) {
+  if (!row) return '';
+  var name = String(row.name || '').trim().toUpperCase();
+  var tag = String(row.tag || '').trim();
+  return tag ? (name + ' · ' + tag.toUpperCase()) : name;
+}
+
+function pbNewUuid() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (_e) {}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0;
+    var v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+var PB_PEOPLE_KEY = 'pb_people_v1';
+var PB_PEOPLE_QUEUE_KEY = 'pb_people_queue_v1';
+var _peopleCache = null;
+var _peopleReadOnly = false;
+var _peopleFlushTimer = null;
+var _linkingPlayerId = null;
+
+function pbPeopleOwnerId() {
+  if (pbIsHostViewer()) return pbGetLinkedOwnerId() || '';
+  var auth = pbGetAuth();
+  return (auth && auth.userId) || '';
+}
+
+function loadPeopleCacheLocal() {
+  try {
+    var raw = localStorage.getItem(PB_PEOPLE_KEY);
+    var arr = raw ? JSON.parse(raw) : [];
+    _peopleCache = Array.isArray(arr) ? arr : [];
+  } catch (_e) {
+    _peopleCache = [];
+  }
+  return _peopleCache;
+}
+
+function savePeopleCacheLocal(list) {
+  _peopleCache = Array.isArray(list) ? list : [];
+  try { localStorage.setItem(PB_PEOPLE_KEY, JSON.stringify(_peopleCache)); } catch (_e) {}
+}
+
+function getPeopleBook(includeArchived) {
+  if (!_peopleCache) loadPeopleCacheLocal();
+  var list = _peopleCache || [];
+  if (includeArchived) return list.slice();
+  return list.filter(function(p){ return !p.archived; });
+}
+
+function upsertPeopleCacheRow(row) {
+  if (!row || !row.id) return;
+  if (!_peopleCache) loadPeopleCacheLocal();
+  var i = _peopleCache.findIndex(function(p){ return String(p.id) === String(row.id); });
+  if (i >= 0) _peopleCache[i] = Object.assign({}, _peopleCache[i], row);
+  else _peopleCache.push(row);
+  savePeopleCacheLocal(_peopleCache);
+}
+
+function loadPeopleQueue() {
+  try {
+    var raw = localStorage.getItem(PB_PEOPLE_QUEUE_KEY);
+    var arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (_e) { return []; }
+}
+
+function savePeopleQueue(q) {
+  try { localStorage.setItem(PB_PEOPLE_QUEUE_KEY, JSON.stringify(q || [])); } catch (_e) {}
+}
+
+function enqueuePeopleMutation(op) {
+  var q = loadPeopleQueue();
+  q.push(Object.assign({ enqueuedAt: Date.now() }, op));
+  savePeopleQueue(q);
+  schedulePeopleQueueFlush();
+}
+
+function schedulePeopleQueueFlush() {
+  clearTimeout(_peopleFlushTimer);
+  _peopleFlushTimer = setTimeout(function(){ flushPeopleQueue(); }, 400);
+}
+
+async function flushPeopleQueue() {
+  if (_peopleReadOnly || pbIsHostViewer()) return;
+  var ownerId = pbPeopleOwnerId();
+  if (!ownerId || !pbAccessToken()) return;
+  var q = loadPeopleQueue();
+  if (!q.length) return;
+  var remain = [];
+  for (var i = 0; i < q.length; i++) {
+    var op = q[i];
+    try {
+      if (op.method === 'POST') {
+        var body = Object.assign({}, op.body || {}, { ownerUserId: ownerId });
+        var res = await pbApi('/people', { method: 'POST', body: JSON.stringify(body) });
+        if (res && res.person) upsertPeopleCacheRow(res.person);
+      } else if (op.method === 'PATCH' && op.id) {
+        var res2 = await pbApi('/people/' + encodeURIComponent(op.id), {
+          method: 'PATCH',
+          body: JSON.stringify(op.body || {})
+        });
+        if (res2 && res2.person) upsertPeopleCacheRow(res2.person);
+      } else {
+        remain.push(op);
+      }
+    } catch (err) {
+      remain.push(op);
+      if (err && err.status === 401) break;
+    }
+  }
+  savePeopleQueue(remain);
+}
+
+async function refreshPeopleBook(opts) {
+  opts = opts || {};
+  loadPeopleCacheLocal();
+  var ownerId = pbPeopleOwnerId();
+  if (!ownerId || !pbAccessToken()) {
+    if (opts.render) renderPlayersBook();
+    return getPeopleBook(true);
+  }
+  try {
+    var data = await pbApi(
+      '/people/' + encodeURIComponent(ownerId) + '?includeArchived=1',
+      { method: 'GET' }
+    );
+    _peopleReadOnly = !!(data && data.readOnly) || pbIsHostViewer();
+    savePeopleCacheLocal((data && data.people) || []);
+    await flushPeopleQueue();
+  } catch (_e) {
+    // offline — keep local cache
+  }
+  if (opts.render) renderPlayersBook();
+  return getPeopleBook(true);
+}
+
+function inGamePersonIds() {
+  var set = {};
+  (G.players || []).forEach(function(p){
+    if (p && p.personId) set[String(p.personId)] = true;
+  });
+  return set;
+}
+
+function formatBookLastPlayed(iso) {
+  if (!iso) return 'Never';
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return 'Never';
+    return d.toLocaleDateString();
+  } catch (_e) { return 'Never'; }
+}
+
+function onNewPlayerNameInput() {
+  setVal('new-player-person-id', '');
+  updateNewPlayerTagVisibility();
+  renderPeopleMatchList();
+}
+
+function updateNewPlayerTagVisibility() {
+  var name = getVal('new-player-name').trim().toUpperCase();
+  var selectedId = getVal('new-player-person-id');
+  var group = document.getElementById('new-player-tag-group');
+  if (!group) return;
+  if (selectedId) {
+    group.style.display = 'none';
+    return;
+  }
+  var matches = getPeopleBook(false).filter(function(p){
+    return String(p.name || '').toUpperCase() === name;
+  });
+  group.style.display = (name && matches.length) ? 'block' : 'none';
+}
+
+function renderPeopleMatchList() {
+  var el = document.getElementById('people-match-list');
+  if (!el) return;
+  var q = getVal('new-player-name').trim().toUpperCase();
+  if (!q) {
+    el.classList.remove('show');
+    el.innerHTML = '';
+    return;
+  }
+  var inGame = inGamePersonIds();
+  var matches = getPeopleBook(false).filter(function(p){
+    var label = bookPersonLabel(p);
+    return label.indexOf(q) === 0 || String(p.name || '').toUpperCase().indexOf(q) === 0;
+  }).slice(0, 8);
+
+  var html = '';
+  matches.forEach(function(p){
+    var disabled = !!inGame[String(p.id)];
+    var meta = 'Last played ' + formatBookLastPlayed(p.last_played_at)
+      + (p.last_role ? (' · ' + String(p.last_role)) : '');
+    html += '<button type="button" class="people-match-row' + (disabled ? ' in-game' : '') + '"'
+      + (disabled ? ' disabled' : '')
+      + ' onclick="selectBookPerson(\'' + String(p.id).replace(/'/g, '') + '\')">'
+      + '<span>' + bookPersonLabel(p) + (disabled ? ' · In game' : '') + '</span>'
+      + '<span class="people-match-meta">' + meta + '</span>'
+      + '</button>';
+  });
+  html += '<button type="button" class="people-match-row people-match-new" onclick="selectNewBookPerson()">'
+    + '<span>+ New player' + (q ? (': ' + q) : '') + '</span>'
+    + '<span class="people-match-meta">Create a new book entry</span>'
+    + '</button>';
+  el.innerHTML = html;
+  el.classList.add('show');
+}
+
+function selectBookPerson(personId) {
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(personId); });
+  if (!row) return;
+  if (inGamePersonIds()[String(row.id)]) {
+    toast('Already in this game');
+    return;
+  }
+  setVal('new-player-name', String(row.name || '').toUpperCase());
+  setVal('new-player-tag', row.tag || '');
+  setVal('new-player-person-id', row.id);
+  if (row.notes) setVal('new-player-notes', row.notes);
+  if (row.last_role) {
+    var role = String(row.last_role);
+    if (role === 'player' || role === 'host-player' || STAFF_ROLE_KEYS.indexOf(role) >= 0) {
+      selectRole(role);
+    }
+  }
+  updateNewPlayerTagVisibility();
+  renderPeopleMatchList();
+  toast('Selected ' + bookPersonLabel(row));
+}
+
+function selectNewBookPerson() {
+  setVal('new-player-person-id', '');
+  updateNewPlayerTagVisibility();
+  renderPeopleMatchList();
+  var tagGroup = document.getElementById('new-player-tag-group');
+  if (tagGroup && tagGroup.style.display !== 'none') {
+    var tagEl = document.getElementById('new-player-tag');
+    if (tagEl) try { tagEl.focus(); } catch (_e) {}
+  }
+}
+
+async function persistBookPerson(payload) {
+  var ownerId = pbPeopleOwnerId();
+  var row = {
+    id: payload.id || pbNewUuid(),
+    owner_user_id: ownerId || null,
+    name: String(payload.name || '').trim().toUpperCase(),
+    tag: payload.tag ? String(payload.tag).trim().toUpperCase() : null,
+    notes: payload.notes == null ? null : String(payload.notes),
+    last_role: payload.last_role || null,
+    last_played_at: payload.last_played_at || new Date().toISOString(),
+    archived: !!payload.archived,
+    updated_at: new Date().toISOString()
+  };
+  upsertPeopleCacheRow(row);
+
+  if (_peopleReadOnly || pbIsHostViewer() || !ownerId || !pbAccessToken()) {
+    if (ownerId) {
+      enqueuePeopleMutation({
+        method: 'POST',
+        body: {
+          id: row.id,
+          ownerUserId: ownerId,
+          name: row.name,
+          tag: row.tag,
+          notes: row.notes,
+          last_role: row.last_role,
+          last_played_at: row.last_played_at,
+          archived: row.archived
+        }
+      });
+    }
+    return row;
+  }
+
+  try {
+    var res = await pbApi('/people', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: row.id,
+        ownerUserId: ownerId,
+        name: row.name,
+        tag: row.tag,
+        notes: row.notes,
+        last_role: row.last_role,
+        last_played_at: row.last_played_at,
+        archived: row.archived
+      })
+    });
+    if (res && res.person) {
+      upsertPeopleCacheRow(res.person);
+      return res.person;
+    }
+  } catch (err) {
+    if (err && err.status === 409) throw err;
+    enqueuePeopleMutation({
+      method: 'POST',
+      body: {
+        id: row.id,
+        ownerUserId: ownerId,
+        name: row.name,
+        tag: row.tag,
+        notes: row.notes,
+        last_role: row.last_role,
+        last_played_at: row.last_played_at,
+        archived: row.archived
+      }
+    });
+  }
+  return row;
+}
+
+async function migratePlayersToBook() {
+  if (!G || !Array.isArray(G.players) || !G.players.length) return;
+  var book = getPeopleBook(true);
+  var changed = false;
+  for (var i = 0; i < G.players.length; i++) {
+    var p = G.players[i];
+    if (!p) continue;
+    if (p.personId) {
+      if (p.tag == null) {
+        var linked = book.find(function(b){ return String(b.id) === String(p.personId); });
+        if (linked && linked.tag && !p.tag) { p.tag = linked.tag; changed = true; }
+      }
+      continue;
+    }
+    var name = String(p.name || '').trim().toUpperCase();
+    if (!name) continue;
+    var matches = book.filter(function(b){
+      return !b.archived && String(b.name || '').toUpperCase() === name;
+    });
+    if (matches.length === 1) {
+      p.personId = matches[0].id;
+      if (matches[0].tag) p.tag = matches[0].tag;
+      changed = true;
+    } else if (matches.length === 0) {
+      var role = isHostPlayer(p) ? 'host-player' : (p.staffRole || 'player');
+      try {
+        var created = await persistBookPerson({
+          name: name,
+          tag: p.tag || null,
+          notes: p.notes || null,
+          last_role: role,
+          last_played_at: new Date().toISOString()
+        });
+        p.personId = created.id;
+        if (created.tag) p.tag = created.tag;
+        book = getPeopleBook(true);
+        changed = true;
+      } catch (_e) {}
+    } else {
+      // multi-match — leave personId empty; Link chip shown in roster
+      p.personId = '';
+      changed = true;
+    }
+  }
+  if (changed) autoSave();
+}
+
+function openPlayersBookScreen() {
+  showPage('players-book');
+  refreshPeopleBook({ render: true });
+  renderPlayersBook();
+}
+
+function renderPlayersBook() {
+  var el = document.getElementById('players-book-list');
+  if (!el) return;
+  var q = (document.getElementById('book-search') && document.getElementById('book-search').value || '')
+    .trim().toUpperCase();
+  var showArchived = !!(document.getElementById('book-show-archived')
+    && document.getElementById('book-show-archived').checked);
+  var list = getPeopleBook(true).filter(function(p){
+    if (!showArchived && p.archived) return false;
+    if (!q) return true;
+    return bookPersonLabel(p).indexOf(q) !== -1
+      || String(p.name || '').toUpperCase().indexOf(q) !== -1
+      || String(p.tag || '').toUpperCase().indexOf(q) !== -1;
+  }).sort(function(a, b){
+    return bookPersonLabel(a).localeCompare(bookPersonLabel(b));
+  });
+
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
+      + (q ? 'No matches' : 'No people in your book yet')
+      + '</div>';
+    return;
+  }
+
+  var readOnly = _peopleReadOnly || pbIsHostViewer() || _hostViewMode;
+  el.innerHTML = list.map(function(p){
+    var meta = (p.last_role ? String(p.last_role) : '—')
+      + ' · Last played ' + formatBookLastPlayed(p.last_played_at)
+      + (p.archived ? ' · Archived' : '');
+    var actions = '';
+    if (!readOnly) {
+      actions = '<div class="book-row-actions book-edit-controls">'
+        + '<button type="button" class="btn btn-outline btn-xs" onclick="editBookPerson(\'' + p.id + '\')">Edit</button>'
+        + '<button type="button" class="btn btn-outline btn-xs" onclick="toggleArchiveBookPerson(this,\'' + p.id + '\')">'
+        + (p.archived ? 'Unarchive' : 'Archive') + '</button>'
+        + '</div>';
+    }
+    return '<div class="book-row">'
+      + '<div class="book-row-main">'
+      + '<div class="book-row-name">' + bookPersonLabel(p) + '</div>'
+      + '<div class="book-row-meta">' + meta + (p.notes ? (' · ' + String(p.notes)) : '') + '</div>'
+      + '</div>'
+      + actions
+      + '</div>';
+  }).join('');
+  refreshLucideIcons();
+}
+
+function editBookPerson(id) {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (!row) return;
+  openBookEditModal(row);
+}
+
+function openBookEditModal(row) {
+  var existing = document.getElementById('modal-book-edit');
+  if (!existing) {
+    var wrap = document.createElement('div');
+    wrap.className = 'modal-bg';
+    wrap.id = 'modal-book-edit';
+    wrap.innerHTML = '<div class="modal">'
+      + '<div class="modal-title"><i data-lucide="pencil" aria-hidden="true"></i> Edit person'
+      + '<button class="modal-close" onclick="closeModal(\'modal-book-edit\')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>'
+      + '<input type="hidden" id="book-edit-id">'
+      + '<div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Name</div>'
+      + '<input class="inp" id="book-edit-name" style="text-transform:uppercase"></div>'
+      + '<div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Tag</div>'
+      + '<input class="inp" id="book-edit-tag" style="text-transform:uppercase" placeholder="Optional"></div>'
+      + '<div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Notes</div>'
+      + '<input class="inp" id="book-edit-notes" placeholder="Optional notes"></div>'
+      + '<button class="btn btn-purple" style="width:100%" onclick="saveBookEdit()">Save</button>'
+      + '</div>';
+    document.body.appendChild(wrap);
+  }
+  setVal('book-edit-id', row.id);
+  setVal('book-edit-name', row.name || '');
+  setVal('book-edit-tag', row.tag || '');
+  setVal('book-edit-notes', row.notes || '');
+  openModal('modal-book-edit');
+  refreshLucideIcons();
+}
+
+async function saveBookEdit() {
+  var id = getVal('book-edit-id');
+  var name = getVal('book-edit-name').trim().toUpperCase();
+  var tag = getVal('book-edit-tag').trim().toUpperCase() || null;
+  var notes = getVal('book-edit-notes').trim();
+  if (!id || !name) { toast('Name required'); return; }
+  var patch = { name: name, tag: tag, notes: notes };
+  upsertPeopleCacheRow(Object.assign({}, getPeopleBook(true).find(function(p){ return String(p.id) === String(id); }) || { id: id }, patch, {
+    updated_at: new Date().toISOString()
+  }));
+  // Keep in-game seats in sync for display
+  (G.players || []).forEach(function(p){
+    if (p && String(p.personId) === String(id)) {
+      p.name = name;
+      p.tag = tag || '';
+      if (notes) p.notes = notes;
+    }
+  });
+  closeModal('modal-book-edit');
+  renderPlayersBook();
+  calcAll(); renderAll(); autoSave();
+
+  if (_peopleReadOnly || pbIsHostViewer() || !pbPeopleOwnerId() || !pbAccessToken()) {
+    enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+    toast('Saved locally — will sync when online');
+    return;
+  }
+  try {
+    var res = await pbApi('/people/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    });
+    if (res && res.person) upsertPeopleCacheRow(res.person);
+    toast('Person updated ✅');
+  } catch (err) {
+    if (err && err.status === 409) {
+      toast(err.message || 'Duplicate name + tag');
+      return;
+    }
+    enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+    toast('Saved locally — will sync when online');
+  }
+  renderPlayersBook();
+}
+
+function toggleArchiveBookPerson(btn, id) {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (!row) return;
+  var next = !row.archived;
+  confirmAction(btn, next ? 'Click again to archive' : 'Click again to unarchive', function(){
+    upsertPeopleCacheRow(Object.assign({}, row, { archived: next, updated_at: new Date().toISOString() }));
+    renderPlayersBook();
+    var patch = { archived: next };
+    if (_peopleReadOnly || !pbPeopleOwnerId() || !pbAccessToken()) {
+      enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+      toast(next ? 'Archived locally' : 'Unarchived locally');
+      return;
+    }
+    pbApi('/people/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    }).then(function(res){
+      if (res && res.person) upsertPeopleCacheRow(res.person);
+      renderPlayersBook();
+      toast(next ? 'Archived ✅' : 'Unarchived ✅');
+    }).catch(function(){
+      enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+      toast(next ? 'Archived locally' : 'Unarchived locally');
+    });
+  });
+}
+
+function openLinkPersonPicker(playerId) {
+  if (_hostViewMode || pbIsHostViewer()) {
+    toast('Read-only in host view');
+    return;
+  }
+  var p = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p) return;
+  _linkingPlayerId = playerId;
+  var name = String(p.name || '').trim().toUpperCase();
+  var matches = getPeopleBook(false).filter(function(b){
+    return String(b.name || '').toUpperCase() === name;
+  });
+  var existing = document.getElementById('modal-link-person');
+  if (!existing) {
+    var wrap = document.createElement('div');
+    wrap.className = 'modal-bg';
+    wrap.id = 'modal-link-person';
+    wrap.innerHTML = '<div class="modal">'
+      + '<div class="modal-title"><i data-lucide="link" aria-hidden="true"></i> Link person'
+      + '<button class="modal-close" onclick="closeModal(\'modal-link-person\')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>'
+      + '<div id="link-person-list"></div>'
+      + '</div>';
+    document.body.appendChild(wrap);
+  }
+  var list = document.getElementById('link-person-list');
+  if (!matches.length) {
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No book matches for ' + name + '</div>';
+  } else {
+    list.innerHTML = matches.map(function(b){
+      return '<button type="button" class="people-match-row" onclick="confirmLinkPerson(\'' + b.id + '\')">'
+        + '<span>' + bookPersonLabel(b) + '</span>'
+        + '<span class="people-match-meta">Last played ' + formatBookLastPlayed(b.last_played_at)
+        + (b.last_role ? (' · ' + b.last_role) : '') + '</span>'
+        + '</button>';
+    }).join('');
+  }
+  openModal('modal-link-person');
+  refreshLucideIcons();
+}
+
+function confirmLinkPerson(personId) {
+  var p = G.players.find(function(pl){ return pl.id === _linkingPlayerId; });
+  var row = getPeopleBook(true).find(function(b){ return String(b.id) === String(personId); });
+  if (!p || !row) return;
+  p.personId = row.id;
+  if (row.tag) p.tag = row.tag;
+  _linkingPlayerId = null;
+  closeModal('modal-link-person');
+  calcAll(); renderAll(); autoSave();
+  toast('Linked to ' + bookPersonLabel(row) + ' ✅');
+}
+
 function addPerson() {
   var name = getVal('new-player-name').trim().toUpperCase();
   var role = getVal('new-player-role') || 'player';
   var notes = getVal('new-player-notes').trim();
+  var selectedPersonId = getVal('new-player-person-id').trim();
+  var tagRaw = getVal('new-player-tag').trim().toUpperCase();
   if (!name) { toast('Enter name'); return; }
+
+  var book = getPeopleBook(false);
+  var sameName = book.filter(function(b){
+    return String(b.name || '').toUpperCase() === name;
+  });
+
+  if (!selectedPersonId && sameName.length) {
+    var tagTaken = sameName.some(function(b){
+      return String(b.tag || '').toUpperCase() === tagRaw;
+    });
+    if (!tagRaw) {
+      updateNewPlayerTagVisibility();
+      toast('Name already in book — add a tag to tell them apart');
+      var tagEl = document.getElementById('new-player-tag');
+      if (tagEl) try { tagEl.focus(); } catch (_e) {}
+      return;
+    }
+    if (tagTaken) {
+      toast('That name + tag already exists — select them from the list');
+      return;
+    }
+  }
+
+  if (selectedPersonId && inGamePersonIds()[selectedPersonId]) {
+    toast('Already in this game');
+    return;
+  }
+
   var isPlayer = role === 'player';
   var isDual = role === 'host-player';
   var staffRole = isPlayer ? '' : normalizeStaffRole(role);
   var plays = isPlayer || isDual;
+  var selectedRow = selectedPersonId
+    ? book.find(function(b){ return String(b.id) === selectedPersonId; })
+    : null;
+  var tag = selectedRow ? (selectedRow.tag || '') : tagRaw;
+
   var newP = {
     id: Date.now(),
+    personId: selectedPersonId || '',
     name: name,
+    tag: tag || '',
     role: isPlayer ? 'player' : staffRole,
     staffRole: staffRole,
-    notes: notes,
+    notes: notes || (selectedRow && selectedRow.notes) || '',
     capabilities: {
       canBuyIn:        plays,
       canCashOut:      plays,
@@ -5350,13 +6080,37 @@ function addPerson() {
   if (staffRole === 'chef') newP.basePay = 0;
   if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
   G.players.push(newP);
+
+  // Fire-and-forget book create/update (last_role / last_played_at)
+  persistBookPerson({
+    id: selectedPersonId || undefined,
+    name: name,
+    tag: tag || null,
+    notes: newP.notes || null,
+    last_role: isPlayer ? 'player' : (isDual ? 'host-player' : staffRole),
+    last_played_at: new Date().toISOString()
+  }).then(function(row){
+    if (row && row.id) {
+      newP.personId = row.id;
+      if (row.tag) newP.tag = row.tag;
+      autoSave();
+      renderAll();
+    }
+  }).catch(function(err){
+    if (err && err.status === 409) toast(err.message || 'Duplicate name + tag in book');
+  });
+
   setVal('new-player-name',''); setVal('new-player-notes','');
+  setVal('new-player-tag',''); setVal('new-player-person-id','');
+  setVal('quick-add-name','');
+  var matchEl = document.getElementById('people-match-list');
+  if (matchEl) { matchEl.classList.remove('show'); matchEl.innerHTML = ''; }
   selectRole('player');
   closeModal('modal-add-player');
   if (plays) { _activePlayerId = newP.id; } else { _activeStaffId = newP.id; }
   calcAll(); renderAll(); autoSave();
   if (plays) { renderPlayerDetail(newP.id); } else { renderStaffDetail(newP.id); }
-  toast(name + ' (' + (isPlayer ? 'Player' : staffRoleLabel(staffRole)) + ') added ✅');
+  toast(personDisplayName(newP) + ' (' + (isPlayer ? 'Player' : staffRoleLabel(staffRole)) + ') added ✅');
 }
 
 // Legacy aliases kept for any old calls
@@ -5836,7 +6590,7 @@ function renderExpenseList() {
         var desc = row.c.description || row.c.desc || '';
         return '<div class="buyin-log-item" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.28);flex-wrap:wrap;gap:6px">'
           + '<span class="badge badge-blue" style="flex-shrink:0">CREDIT</span>'
-          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (row.p.name || 'Player') + '</span>'
+          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (personDisplayName(row.p) || 'Player') + '</span>'
           + '<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:80px">' + desc + '</span>'
           + '<span style="font-weight:800;color:#3b82f6;margin-right:4px">$' + fmt(row.amount) + '</span>'
           + '<button type="button" onclick="event.stopPropagation();voidRosterCredit(this,' + row.p.id + ',' + row.idx + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void credit">' + lucideIcon('x','action-ico') + '</button>'
@@ -5853,7 +6607,7 @@ function renderExpenseList() {
           : '';
         return '<div class="buyin-log-item" style="background:rgba(47,158,68,0.08);border-color:rgba(47,158,68,0.28);flex-wrap:wrap;gap:6px">'
           + '<span class="badge badge-green" style="flex-shrink:0">REIMB</span>'
-          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (row.p.name || 'Staff') + '</span>'
+          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (personDisplayName(row.p) || 'Staff') + '</span>'
           + '<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:80px">' + desc + '</span>'
           + receiptBtn
           + '<span style="font-weight:800;color:var(--green);margin-right:4px">$' + fmt(row.amount) + '</span>'
@@ -5933,6 +6687,7 @@ function showPage(name) {
   if (navBtn) navBtn.classList.add('active');
   if (name === 'settlement') renderSettlement();
   if (name === 'history')    renderHistory();
+  if (name === 'players-book') renderPlayersBook();
 }
 
 function switchPlayerTab(tab) {
@@ -5980,7 +6735,7 @@ function openMarkerSignModal(playerId, buyInIndex) {
   if (b.type !== 'MARKER') { toast('Only markers can be signed'); return; }
   _markerSignTarget = { playerId: p.id, buyInIndex: buyInIndex };
   setText('marker-sign-title', 'MARKER AGREEMENT');
-  setText('marker-sign-sub', p.name + ' · $' + fmt(b.amount) + ' marker');
+  setText('marker-sign-sub', personDisplayName(p) + ' · $' + fmt(b.amount) + ' marker');
   openModal('modal-marker-sign');
   setTimeout(function(){
     initMarkerSignCanvas();
@@ -6124,7 +6879,7 @@ function viewMarkerSignature(playerId, buyInIndex) {
     return;
   }
   var b = p.buyIns[buyInIndex];
-  setText('marker-view-title', p.name + ' · $' + fmt(b.amount));
+  setText('marker-view-title', personDisplayName(p) + ' · $' + fmt(b.amount));
   var signedLabel = b.signedAt ? new Date(b.signedAt).toLocaleString() : (b.time || '');
   setText('marker-view-sub', 'Signed ' + signedLabel);
   var img = document.getElementById('marker-view-img');
@@ -6196,19 +6951,19 @@ function buildHistorySummary(h) {
   var dash = historyWithG(g, function(){ return calcDashboard(); });
   var owes = historyWithG(g, function(){
     return players.map(function(p){
-      return { name: p.name, bal: playerDisplayBalance(p) };
+      return { name: personDisplayName(p), bal: playerDisplayBalance(p) };
     }).filter(function(x){ return x.bal < -SETTLE_EPSILON; })
       .sort(function(a,b){ return a.bal - b.bal; });
   });
   var playerLines = historyWithG(g, function(){
     return players.map(function(p){
       var bal = playerDisplayBalance(p);
-      return { name: p.name, bal: bal };
+      return { name: personDisplayName(p), bal: bal };
     });
   });
   var staffLines = staff.map(function(p){
     return {
-      name: p.name,
+      name: personDisplayName(p),
       role: (typeof staffRoleLabel === 'function') ? staffRoleLabel(normalizeStaffRole(p.staffRole)) : (p.staffRole || 'Staff')
     };
   });
@@ -6386,6 +7141,9 @@ function loadGame(btn, id) {
     calcAll(); renderAll();
     showPage('dashboard');
     toast('Game loaded ✅');
+    refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
+      calcAll(); renderAll();
+    }).catch(function(){});
   });
 }
 
@@ -6421,6 +7179,7 @@ function setStartingBank() {
 // INIT
 // ══════════════════════════════════════════════════════════════════════════════
 function init() {
+  loadPeopleCacheLocal();
   var saved = ls('pb-current');
   if (saved) {
     try {
@@ -6449,6 +7208,9 @@ function init() {
   renderHistory();
   renderChipCountLog();
   renderDealerBanks();
+  refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
+    calcAll(); renderAll();
+  }).catch(function(){});
 }
 
 
@@ -6457,7 +7219,7 @@ function getEcashReceiverOptions() {
   var receivers = [{ id:'house', name:'House / Bookkeeper' }];
   // Add staff/dealers as receivers
   G.players.filter(function(p){ return !!p.staffRole; }).forEach(function(p){
-    receivers.push({ id:String(p.id), name:p.name + ' (' + staffRoleLabel(p.staffRole) + ')' });
+    receivers.push({ id:String(p.id), name:personDisplayName(p) + ' (' + staffRoleLabel(p.staffRole) + ')' });
   });
   return receivers.map(function(r){
     return '<option value="'+r.id+'">'+r.name+'</option>';
