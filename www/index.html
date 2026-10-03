@@ -1097,12 +1097,15 @@ function playerChipTurnInsTotal(p) {
 
 /**
  * Buy-ins that create settlement debt (subtract in playerBalance).
- * MARKER = unpaid chips (debt). CASH/ECASH = prepaid (not debt). BONUS = house expense (not debt).
- * Including CASH/ECASH here would falsely put cash buyers on "Owes House" and break post-payout even.
+ * CASH = debt (nets against chip turn-in / cash payout).
+ * MARKER = unpaid chips (debt).
+ * ECASH = NOT debt — tracked in E-Cash on Hand separately; full chip turn-in is house-owes.
+ * BONUS = house expense (not debt).
  */
 function playerDebtBuyInsTotal(p) {
   return (p.buyIns || []).filter(function(b) {
-    return b.type === 'MARKER';
+    var t = String(b.type || '').toUpperCase();
+    return t === 'CASH' || t === 'MARKER';
   }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
 }
 
@@ -1128,11 +1131,10 @@ function playerCreditsTotal(p) {
 
 function playerBalance(p) {
   // positive = house owes player   negative = player owes house
-  // MARKER buy-ins: subtract (player owes). BONUS: skip (house expense).
-  // CASH/ECASH: skip (already paid — not player debt).
-  // chipTurnIns: add (chips returned). cashOuts/payouts: subtract (house paid player).
+  // CASH + MARKER buy-ins: subtract (debt). ECASH: skip (E-Cash on Hand). BONUS: skip.
+  // chipTurnIns + credits: add. cashOuts/payouts: subtract.
   // markerCredits (tax-toward-marker) still reduce marker owe.
-  // player credits (hourly play, brought cards, etc.): reduce what player owes / increase house owes.
+  // Formula: turnIns + credits − cashBuyIns − markerBuyIns − cashOuts (+ reimbursed + markerCredits).
   var debtIn = playerDebtBuyInsTotal(p);
   var turnIns = playerChipTurnInsTotal(p);
   var paidOut = playerCashOutsTotal(p);
@@ -1151,8 +1153,10 @@ function playerBalance(p) {
     markerCredits: markerCredits,
     credits: credits,
     bonusSkipped: playerBonusTotal(p),
+    eCashSkipped: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'ECASH'; }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0),
     buyInCount: (p.buyIns || []).length,
-    markerBuyIns: (p.buyIns || []).filter(function(b) { return b.type === 'MARKER'; }).length
+    cashBuyIns: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'CASH'; }).length,
+    markerBuyIns: (p.buyIns || []).filter(function(b) { return String(b.type || '').toUpperCase() === 'MARKER'; }).length
   });
   return result;
 }
