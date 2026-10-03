@@ -1347,7 +1347,8 @@ function calcDashboard() {
   G.players.forEach(function(p){
     (p.expenses||[]).forEach(function(e){ staffCashExpenses += e.amount || 0; });
   });
-  expenses = houseUnpaid + otherCashExpenses + staffCashExpenses; // unpaid house + staff/other
+  // Expenses cell: unpaid house + staff/other + BONUS buy-ins (house cost; not player debt)
+  expenses = houseUnpaid + otherCashExpenses + staffCashExpenses + bonusChips;
   var allHouseExpenses = houseUnpaid + houseCashPaid + houseECashPaid;
   return {
     // cashOnHand: paid house CASH + staff/other immediate outflows (unpaid house not yet paid)
@@ -1361,7 +1362,7 @@ function calcDashboard() {
     expenses: expenses,
     bonusChips: bonusChips,
     staffTax: staffTax,
-    // profit still subtracts all house expenses (paid + unpaid) + staff/other
+    // profit: drop + staffTax − all house (paid+unpaid) − staff/other − BONUS chips issued
     profit: drop + staffTax - (allHouseExpenses + otherCashExpenses + staffCashExpenses) - bonusChips
   };
 }
@@ -4017,7 +4018,7 @@ function renderExpenseList() {
   var el = document.getElementById('expense-list');
   if (!el) return;
   var list = (G.expenses || []).filter(function(e){ return e.type === 'HOUSE' || !e.playerId; });
-  el.innerHTML = list.length
+  var html = list.length
     ? list.slice().reverse().map(function(e){
         var receiptBtn = e.receiptPhoto
           ? '<button type="button" title="View receipt" onclick="viewExpenseReceiptPhoto(\'house:' + e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">' + lucideIcon('camera','action-ico') + '</button>'
@@ -4050,6 +4051,18 @@ function renderExpenseList() {
           +'</div>';
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div>';
+  var bonusIssued = 0;
+  (G.players || []).forEach(function(p) {
+    (p.buyIns || []).forEach(function(b) {
+      if (b.type === 'BONUS') bonusIssued += Number(b.amount) || 0;
+    });
+  });
+  if (bonusIssued > 0) {
+    html += '<div style="margin-top:10px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--gold);border-top:1px solid var(--border)">'
+      + 'Bonus chips issued: $' + fmt(bonusIssued)
+      + '</div>';
+  }
+  el.innerHTML = html;
   refreshLucideIcons();
 }
 
