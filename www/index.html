@@ -1157,17 +1157,29 @@ function markTxnVoided(matchFn) {
   return null;
 }
 
+/**
+ * Player ↔ txn match: ID-first.
+ * If txn has playerId, match ONLY that id (same first name + different tags stay separate).
+ * Name fallback only for legacy rows with empty playerId.
+ */
+function txnBelongsToPlayer(t, p) {
+  if (!t || !p) return false;
+  var txnPid = t.playerId == null || t.playerId === '' ? '' : String(t.playerId);
+  if (txnPid) return txnPid === String(p.id);
+  var tName = String(t.playerName || '').toUpperCase();
+  var pName = String(p.name || '').toUpperCase();
+  return !!(tName && pName && tName === pName);
+}
+
 /** Mark a player's txn of a given type/amount voided (most recent match). */
 function markPlayerTxnVoided(playerId, playerName, type, amount) {
   var want = String(type || '').toUpperCase();
   var amt = Number(amount) || 0;
+  var p = { id: playerId, name: playerName };
   return markTxnVoided(function(t) {
     if (String(t.type || '').toUpperCase() !== want) return false;
     if (Math.abs((Number(t.amount) || 0) - amt) > 1e-9) return false;
-    var pidMatch = String(t.playerId || '') === String(playerId);
-    var nameMatch = t.playerName && playerName
-      && String(t.playerName).toUpperCase() === String(playerName).toUpperCase();
-    return pidMatch || nameMatch;
+    return txnBelongsToPlayer(t, p);
   });
 }
 
@@ -1178,9 +1190,7 @@ function playerTxnKindTotal(p, kind) {
   return (G.txnLog || []).reduce(function(s, t) {
     if (!txnIsActive(t)) return s;
     if (String(t.type || '').toUpperCase() !== want) return s;
-    var pidMatch = String(t.playerId || '') === String(p.id);
-    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
-    if (!pidMatch && !nameMatch) return s;
+    if (!txnBelongsToPlayer(t, p)) return s;
     return s + (Number(t.amount) || 0);
   }, 0);
 }
@@ -1190,9 +1200,7 @@ function playerLegacyVoidChipTurnIns(p) {
   return (G.txnLog || []).reduce(function(s, t) {
     if (!t || t.voided === true) return s;
     if (String(t.type || '').toUpperCase() !== 'VOID_CHIP_TURN_IN') return s;
-    var pidMatch = String(t.playerId || '') === String(p.id);
-    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
-    if (!pidMatch && !nameMatch) return s;
+    if (!txnBelongsToPlayer(t, p)) return s;
     return s + (Number(t.amount) || 0);
   }, 0);
 }
@@ -1473,15 +1481,19 @@ function staffTipBalance(p) {
 }
 function calcStaffBalance(p) { return staffTipBalance(p); }
 
-/** Match txnLog row to staff by playerId/playerName or staffId/staffName. */
+/** Match txnLog row to staff by playerId/staffId first; name only if both ids empty (legacy). */
 function staffTxnMatches(t, p) {
   if (!t || !p) return false;
   var pid = String(p.id);
+  var hasPid = t.playerId != null && String(t.playerId) !== '';
+  var hasSid = t.staffId != null && String(t.staffId) !== '';
+  if (hasPid || hasSid) {
+    return (hasPid && String(t.playerId) === pid) || (hasSid && String(t.staffId) === pid);
+  }
   var pname = String(p.name || '').toUpperCase();
-  if (String(t.playerId || '') === pid) return true;
-  if (String(t.staffId || '') === pid) return true;
-  if (t.playerName && pname && String(t.playerName).toUpperCase() === pname) return true;
-  if (t.staffName && pname && String(t.staffName).toUpperCase() === pname) return true;
+  if (!pname) return false;
+  if (t.playerName && String(t.playerName).toUpperCase() === pname) return true;
+  if (t.staffName && String(t.staffName).toUpperCase() === pname) return true;
   return false;
 }
 
@@ -3291,9 +3303,7 @@ function buildPlayerHistoryRows(p) {
 
   (G.txnLog || []).forEach(function(t, txnIdx) {
     if (!txnIsActive(t)) return;
-    var pidMatch = String(t.playerId || '') === String(p.id);
-    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
-    if (!pidMatch && !nameMatch) return;
+    if (!txnBelongsToPlayer(t, p)) return;
     var typ = String(t.type || '').toUpperCase();
     var kind = null;
     var buyType = null;
@@ -3751,7 +3761,7 @@ function rosterPayHouseOwes(btn, id) {
       type: 'CASH_OUT',
       amount: amount,
       playerId: String(p.id),
-      playerName: p.name,
+      playerName: personDisplayName(p),
       method: method,
       timestamp: ts
     });
@@ -3831,7 +3841,7 @@ function rosterCollectPlayerOwes(btn, id) {
         type: 'PRIOR_PAYMENT',
         amount: priorApply,
         playerId: String(p.id),
-        playerName: p.name,
+        playerName: personDisplayName(p),
         method: method,
         timestamp: ts,
         receivedById: receivedById || undefined,
@@ -3854,7 +3864,7 @@ function rosterCollectPlayerOwes(btn, id) {
         type: 'MARKER_PAYMENT',
         amount: remaining,
         playerId: String(p.id),
-        playerName: p.name,
+        playerName: personDisplayName(p),
         method: method,
         timestamp: ts,
         receivedById: receivedById || undefined,
@@ -3993,7 +4003,7 @@ function rosterAddBuyIn(id) {
     type: buyType + '_BUYIN',
     amount: amount,
     playerId: String(p.id),
-    playerName: p.name,
+    playerName: personDisplayName(p),
     method: buyType,
     receivedById: receivedById,
     receivedByName: receivedByName
@@ -4017,7 +4027,7 @@ function rosterLogTurnIn(id) {
   // Always push — never replace the array / prior turn-ins
   p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = (Number(p.chipTurnIn) || 0) + amount;
-  appendTxn({ type: 'CHIP_TURN_IN', amount: amount, playerId: String(p.id), playerName: p.name });
+  appendTxn({ type: 'CHIP_TURN_IN', amount: amount, playerId: String(p.id), playerName: personDisplayName(p) });
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
   toast('Chips turned in: $' + fmt(playerChipTurnInsTotal(p)) + ' — awaiting payout');
@@ -4065,7 +4075,7 @@ function rosterAddCashOut(id) {
     seq: (G._seq || 0) + 1,
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   });
-  appendTxn({ type: 'CASH_OUT', amount: amount, playerId: String(p.id), playerName: p.name, method: method });
+  appendTxn({ type: 'CASH_OUT', amount: amount, playerId: String(p.id), playerName: personDisplayName(p), method: method });
   p.chipTurnIn = 0;
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
@@ -4084,7 +4094,7 @@ function rosterAddTips(id) {
     seq: (G._seq || 0) + 1,
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   });
-  appendTxn({ type: 'TIPS', amount: amount, playerId: String(p.id), playerName: p.name });
+  appendTxn({ type: 'TIPS', amount: amount, playerId: String(p.id), playerName: personDisplayName(p) });
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
   toast('Tips $' + fmt(amount) + ' logged ✅');
@@ -4102,7 +4112,7 @@ function rosterAddDrop(id) {
     seq: (G._seq || 0) + 1,
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   });
-  appendTxn({ type: 'DROP', amount: amount, playerId: String(p.id), playerName: p.name });
+  appendTxn({ type: 'DROP', amount: amount, playerId: String(p.id), playerName: personDisplayName(p) });
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
   toast('Drop $' + fmt(amount) + ' logged ✅');
@@ -4163,7 +4173,7 @@ function rosterApplyStaffTax(btn, staffId) {
         staffId: String(p.id),
         staffName: p.name,
         playerId: String(p.id),
-        playerName: p.name,
+        playerName: personDisplayName(p),
         grossTips: preview.grossTips,
         taxPercent: pct,
         netAmount: preview.netAmount,
@@ -4233,7 +4243,7 @@ function rosterAddStaffPayout(id) {
     receivedBy: receivedBy || null,
     receivedById: receivedById || null,
     playerId: String(p.id),
-    playerName: p.name,
+    playerName: personDisplayName(p),
     staffRole: p.staffRole || p.role || null
   });
   rosterKeepExpanded(id);
@@ -4499,7 +4509,7 @@ function rosterAddStaffExpense(id) {
     description: description,
     desc: description,
     playerId: String(p.id),
-    playerName: p.name,
+    playerName: personDisplayName(p),
     hasReceipt: !!photo
   });
   if (descEl) descEl.value = '';
@@ -4524,7 +4534,7 @@ function rosterVoidStaffExpense(btn, staffId, expenseId) {
       description: e.description,
       desc: e.description,
       playerId: String(p.id),
-      playerName: p.name
+      playerName: personDisplayName(p)
     });
     rosterKeepExpanded(staffId);
     calcAll(); renderAll(); autoSave();
@@ -4992,7 +5002,7 @@ function rosterAddCredit(id) {
     description: description,
     desc: description,
     playerId: String(p.id),
-    playerName: p.name
+    playerName: personDisplayName(p)
   });
   if (descEl) descEl.value = '';
   if (amtEl) amtEl.value = '';
@@ -5047,7 +5057,7 @@ function rosterAddPriorBalance(btn, id) {
       note: note || undefined,
       desc: note || undefined,
       playerId: String(p.id),
-      playerName: p.name,
+      playerName: personDisplayName(p),
       timestamp: ts
     });
     if (amtEl) amtEl.value = '';
@@ -5494,6 +5504,32 @@ function upsertPeopleCacheRow(row) {
   savePeopleCacheLocal(_peopleCache);
 }
 
+/**
+ * POST /people may return an existing row with a different id (unique name+tag upsert).
+ * Drop the local provisional cache row and retarget in-game personId links.
+ */
+function adoptPeopleServerPerson(requestedId, serverPerson) {
+  if (!serverPerson || !serverPerson.id) return false;
+  if (!_peopleCache) loadPeopleCacheLocal();
+  var oldId = requestedId == null || requestedId === '' ? '' : String(requestedId);
+  var newId = String(serverPerson.id);
+  var retargeted = false;
+  if (oldId && oldId !== newId) {
+    _peopleCache = (_peopleCache || []).filter(function(row) {
+      return String(row.id) !== oldId;
+    });
+    (G.players || []).forEach(function(p) {
+      if (p && String(p.personId) === oldId) {
+        p.personId = newId;
+        if (serverPerson.tag && !p.tag) p.tag = serverPerson.tag;
+        retargeted = true;
+      }
+    });
+  }
+  upsertPeopleCacheRow(serverPerson);
+  return retargeted;
+}
+
 function loadPeopleQueue() {
   try {
     var raw = localStorage.getItem(PB_PEOPLE_QUEUE_KEY);
@@ -5525,13 +5561,18 @@ async function flushPeopleQueue() {
   var q = loadPeopleQueue();
   if (!q.length) return;
   var remain = [];
+  var droppedToastShown = false;
+  var playersRetargeted = false;
   for (var i = 0; i < q.length; i++) {
     var op = q[i];
     try {
       if (op.method === 'POST') {
         var body = Object.assign({}, op.body || {}, { ownerUserId: ownerId });
+        var requestedId = body.id;
         var res = await pbApi('/people', { method: 'POST', body: JSON.stringify(body) });
-        if (res && res.person) upsertPeopleCacheRow(res.person);
+        if (res && res.person) {
+          if (adoptPeopleServerPerson(requestedId, res.person)) playersRetargeted = true;
+        }
       } else if (op.method === 'PATCH' && op.id) {
         var res2 = await pbApi('/people/' + encodeURIComponent(op.id), {
           method: 'PATCH',
@@ -5542,11 +5583,21 @@ async function flushPeopleQueue() {
         remain.push(op);
       }
     } catch (err) {
-      remain.push(op);
-      if (err && err.status === 401) break;
+      var st = err && err.status;
+      if (st === 400 || st === 409) {
+        // Permanent client/conflict error — drop op; do not re-queue
+        if (!droppedToastShown) {
+          toast((err && err.message) || (st === 409 ? 'Duplicate name + tag' : 'People sync rejected'));
+          droppedToastShown = true;
+        }
+      } else {
+        remain.push(op);
+        if (st === 401) break;
+      }
     }
   }
   savePeopleQueue(remain);
+  if (playersRetargeted) autoSave();
 }
 
 async function refreshPeopleBook(opts) {
@@ -5727,7 +5778,8 @@ async function persistBookPerson(payload) {
       })
     });
     if (res && res.person) {
-      upsertPeopleCacheRow(res.person);
+      var retargeted = adoptPeopleServerPerson(row.id, res.person);
+      if (retargeted) autoSave();
       return res.person;
     }
   } catch (err) {
@@ -6150,7 +6202,7 @@ function addBuyIn(id) {
   if (!p.buyIns) p.buyIns = [];
   p.buyIns.push({ type:buyType, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}), receivedById:receivedById, receivedByName:receivedByName });
   var buyInIndex = p.buyIns.length - 1;
-  appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:p.name, method:buyType, receivedById:receivedById, receivedByName:receivedByName });
+  appendTxn({ type:buyType+'_BUYIN', amount:amount, playerId:String(p.id), playerName:personDisplayName(p), method:buyType, receivedById:receivedById, receivedByName:receivedByName });
 
   if (el) el.value = '';
   calcAll(); renderAll();
@@ -6177,7 +6229,7 @@ function addCashOut(id) {
   if (!amount || amount <= 0) { toast('Enter payout amount'); return; }
   if (!p.cashOuts) p.cashOuts = [];
   p.cashOuts.push({ method:method, amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type:'CASH_OUT', amount:amount, playerId:String(p.id), playerName:p.name, method:method });
+  appendTxn({ type:'CASH_OUT', amount:amount, playerId:String(p.id), playerName:personDisplayName(p), method:method });
   p.chipTurnIn = 0; // payout resolves this turn-in cycle — next render shows the turn-in box again
   if (el) el.value = '';
   calcAll(); renderAll();
@@ -6211,7 +6263,7 @@ function logTurnIn(id) {
   // Always push — never replace the array / prior turn-ins
   p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = (Number(p.chipTurnIn) || 0) + amount;
-  appendTxn({ type:'CHIP_TURN_IN', amount:amount, playerId:String(p.id), playerName:p.name });
+  appendTxn({ type:'CHIP_TURN_IN', amount:amount, playerId:String(p.id), playerName:personDisplayName(p) });
   calcAll(); renderAll();
   if (isPlayerSeat(p)) renderPlayerDetail(id); else renderStaffDetail(id);
   autoSave();
@@ -6249,7 +6301,7 @@ function addTips(id) {
   if (!amount || amount <= 0) { toast('Enter tips amount'); return; }
   if (!p.tips) p.tips = [];
   p.tips.push({ amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type:'TIPS', amount:amount, playerId:String(p.id), playerName:p.name });
+  appendTxn({ type:'TIPS', amount:amount, playerId:String(p.id), playerName:personDisplayName(p) });
   if (el) el.value = '';
   calcAll(); renderAll(); renderStaffDetail(id); autoSave();
   toast('Tips $' + fmt(amount) + ' logged ✅');
@@ -6263,7 +6315,7 @@ function addDrop(id) {
   if (!amount || amount <= 0) { toast('Enter drop amount'); return; }
   if (!p.drops) p.drops = [];
   p.drops.push({ amount:amount, seq:(G._seq||0)+1, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  appendTxn({ type:'DROP', amount:amount, playerId:String(p.id), playerName:p.name });
+  appendTxn({ type:'DROP', amount:amount, playerId:String(p.id), playerName:personDisplayName(p) });
   if (el) el.value = '';
   calcAll(); renderAll(); renderStaffDetail(id); autoSave();
   toast('Drop $' + fmt(amount) + ' logged ✅');
