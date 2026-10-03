@@ -1615,6 +1615,7 @@ function calcDashboard() {
   var cashBuyIns = 0, eCashBuyIns = 0, cashPaidOut = 0, eCashPaidOut = 0;
   var staffPaidOutCash = 0, staffPaidOutEcash = 0;
   var drop = 0, tips = 0, staffTax = 0;
+  var markerPaidCash = 0, markerPaidEcash = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
       if (b.type==='CASH')  cashBuyIns  += b.amount;
@@ -1629,6 +1630,15 @@ function calcDashboard() {
       var sm = String(sp.method || sp.payMethod || 'CASH').toUpperCase();
       if (sm === 'ECASH') staffPaidOutEcash += sp.amount || 0;
       else staffPaidOutCash += sp.amount || 0;
+    });
+    // Marker PAY IN (MARKER_PAYMENT / markerCredits source payment) → cash/eCash on hand
+    (p.markerCredits || []).forEach(function(c) {
+      if (!c) return;
+      var src = String(c.source || '').toLowerCase();
+      if (src !== 'payment' && src !== 'collect' && src !== 'pay_in') return;
+      var mm = String(c.method || 'CASH').toUpperCase();
+      if (mm === 'ECASH') markerPaidEcash += Number(c.amount) || 0;
+      else markerPaidCash += Number(c.amount) || 0;
     });
     tips += tipsTotal(p); // dashboard tips total only — chips via getExpectedChips once
     // STAFF TAX = sum staffTaxLog.taxAmount (towardMarker excluded — not house cash income)
@@ -1646,10 +1656,10 @@ function calcDashboard() {
   var cashExpensesPaid = eb.houseCashPaid;   // paid G.expenses via CASH (paidMethod/method)
   var eCashExpensesPaid = eb.houseECashPaid; // paid G.expenses via ECASH
   return {
-    // CASH ON HAND = bankStart + cashBuyIns − cashPaidOut − cashExpensesPaid − staffPaidOutCash
-    cashOnHand:   bankStart + cashBuyIns - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
-    // ECASH ON HAND = eCashBuyIns − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
-    eCashOnHand:  eCashBuyIns - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
+    // CASH ON HAND = bankStart + cashBuyIns + markerPaidCash − cashPaidOut − cashExpensesPaid − staffPaidOutCash
+    cashOnHand:   bankStart + cashBuyIns + markerPaidCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
+    // ECASH ON HAND = eCashBuyIns + markerPaidEcash − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
+    eCashOnHand:  eCashBuyIns + markerPaidEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
     // chipsOnHand = FORMULA 4 getExpectedChips()
     chipsOnHand:  getExpectedChips(),
     drop: drop,
@@ -1674,6 +1684,7 @@ function buildAuditSnapshot() {
   var bankStart = (G.sessionSettings && G.sessionSettings.bankStart) || 0;
   var cashBuyIns = 0, eCashBuyIns = 0, cashPaidOut = 0, eCashPaidOut = 0;
   var staffPaidOutCash = 0, staffPaidOutEcash = 0;
+  var markerPaidCash = 0, markerPaidEcash = 0;
   var cashBuyInLines = [];
   var eCashBuyInLines = [];
   var players = [];
@@ -1700,6 +1711,15 @@ function buildAuditSnapshot() {
       var sm = String(sp.method || sp.payMethod || 'CASH').toUpperCase();
       if (sm === 'ECASH') staffPaidOutEcash += sp.amount || 0;
       else staffPaidOutCash += sp.amount || 0;
+    });
+    (p.markerCredits || []).forEach(function(c) {
+      if (!c) return;
+      var src = String(c.source || '').toLowerCase();
+      if (src !== 'payment' && src !== 'collect' && src !== 'pay_in') return;
+      var mm = String(c.method || 'CASH').toUpperCase();
+      var mAmt = Number(c.amount) || 0;
+      if (mm === 'ECASH') markerPaidEcash += mAmt;
+      else markerPaidCash += mAmt;
     });
 
     if (isPlayerSeat(p)) {
@@ -1758,6 +1778,7 @@ function buildAuditSnapshot() {
       bankStart: bankStart,
       buyIns: cashBuyInLines,
       buyInsTotal: cashBuyIns,
+      markerPaid: markerPaidCash,
       paidOut: cashPaidOut,
       expenses: cashExpensesPaid,
       staffPaid: staffPaidOutCash,
@@ -1766,6 +1787,7 @@ function buildAuditSnapshot() {
     ecash: {
       buyIns: eCashBuyInLines,
       buyInsTotal: eCashBuyIns,
+      markerPaid: markerPaidEcash,
       paidOut: eCashPaidOut,
       expenses: eCashExpensesPaid,
       staffPaid: staffPaidOutEcash,
@@ -1831,6 +1853,7 @@ function formatAuditPlainText(snap) {
     });
     lines.push('  total: ' + formatAuditMoney(snap.cash.buyInsTotal));
   }
+  lines.push('marker paid in:   ' + formatAuditMoney(snap.cash.markerPaid || 0));
   lines.push('cash paid out:    ' + formatAuditMoney(snap.cash.paidOut));
   lines.push('cash expenses:    ' + formatAuditMoney(snap.cash.expenses));
   lines.push('staff cash paid:  ' + formatAuditMoney(snap.cash.staffPaid));
@@ -1847,6 +1870,7 @@ function formatAuditPlainText(snap) {
     });
     lines.push('  total: ' + formatAuditMoney(snap.ecash.buyInsTotal));
   }
+  lines.push('marker paid in:   ' + formatAuditMoney(snap.ecash.markerPaid || 0));
   lines.push('eCash paid out:   ' + formatAuditMoney(snap.ecash.paidOut));
   lines.push('eCash expenses:   ' + formatAuditMoney(snap.ecash.expenses));
   lines.push('staff eCash paid: ' + formatAuditMoney(snap.ecash.staffPaid));
@@ -1937,6 +1961,7 @@ function renderAuditPanelBody(snap) {
       html += auditRowHtml(b.name, formatAuditMoney(b.amount), { sub: true });
     });
   }
+  html += auditRowHtml('marker paid in', formatAuditMoney(snap.cash.markerPaid || 0));
   html += auditRowHtml('cash paid out', formatAuditMoney(snap.cash.paidOut));
   html += auditRowHtml('cash expenses', formatAuditMoney(snap.cash.expenses));
   html += auditRowHtml('staff cash paid', formatAuditMoney(snap.cash.staffPaid));
@@ -1955,6 +1980,7 @@ function renderAuditPanelBody(snap) {
       html += auditRowHtml(b.name, formatAuditMoney(b.amount), { sub: true });
     });
   }
+  html += auditRowHtml('marker paid in', formatAuditMoney(snap.ecash.markerPaid || 0));
   html += auditRowHtml('eCash paid out', formatAuditMoney(snap.ecash.paidOut));
   html += auditRowHtml('eCash expenses', formatAuditMoney(snap.ecash.expenses));
   html += auditRowHtml('staff eCash paid', formatAuditMoney(snap.ecash.staffPaid));
@@ -2152,6 +2178,10 @@ function txnReasonLabel(t) {
     }
     case 'PLAYER_CREDIT':
       return note ? ('Credit · ' + note) : 'Player credit';
+    case 'MARKER_PAYMENT': {
+      var mpM = String(t.method || 'CASH').toUpperCase() === 'ECASH' ? 'eCash' : 'Cash';
+      return withNote('Marker payment · ' + mpM);
+    }
     case 'SETTLEMENT_PAYMENT':
       // MARKER_PAID: player settling balance owed to house
       if (String(t.settlementKind || '').toUpperCase() === 'ECASH') {
@@ -2613,6 +2643,7 @@ function renderAll() {
     PLAYER_CREDIT:       { label:'CREDIT',    color:'#3b82f6',            bg:'rgba(59,130,246,0.18)' },
     STAFF_TAX:           { label:'TAX',       color:'var(--red)',         bg:'var(--red-dim)' },
     TAX_TO_MARKER:       { label:'TAX→MARK',  color:'var(--orange)',      bg:'var(--orange-dim)' },
+    MARKER_PAYMENT:      { label:'PAY IN',    color:'var(--green)',       bg:'var(--green-dim)' },
     STAFF_PAYOUT:        { label:'STAFF OUT', color:'var(--gold)',        bg:'var(--gold-dim)' },
     SETTLEMENT_PAYMENT:  { label:'SETTLED',   color:'var(--green)',       bg:'var(--green-dim)' },
     VOID_CASH_BUYIN:     { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
@@ -2624,7 +2655,7 @@ function renderAll() {
     VOID_EXPENSE:        { label:'VOID EXP',  color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_PLAYER_CREDIT:  { label:'VOID CR',   color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
-  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1 };
+  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1 };
   var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1 };
 
   var txnEl = document.getElementById('txn-log');
@@ -3184,9 +3215,10 @@ function rosterSetCashOutMethod(id, method) {
   }
 }
 
-/** Brief green PAID flash after house-owes balance payout. */
+/** Brief flash after balance PAY OUT / PAY IN. */
 var _balPayoutFlashId = null;
 var _balPayoutFlashUntil = 0;
+var _balPayoutFlashKind = null; // 'paid' | 'collect'
 
 function rosterSetBalPayoutMethod(id, method) {
   var hid = document.getElementById('rx-bal-payout-method-' + id);
@@ -3201,19 +3233,26 @@ function rosterSetBalPayoutMethod(id, method) {
 }
 
 /**
- * House-owes balance PAY OUT (after credits / completed turn-ins).
+ * Balance settle section below summary:
+ *   bal > 0 → PAYOUT / green PAY OUT
+ *   bal < 0 → COLLECT / red PAY IN (marker payment)
+ *   bal ≈ 0 → Settled ✓ (after settlement-relevant activity)
  * Separate from chip turn-in Pay Out — does not clear pending chipTurnIn.
+ * Still-playing (no turn-ins, no marker): hidden.
  */
 function rosterHouseOwesPayoutHtml(p) {
   // Pending chip turn-in cycle uses rosterTurnInSectionHtml Pay Out instead
   if (rosterChipTurnInLogged(p)) return '';
-  // Still playing — no house-owes payout from cash/eCash/bonus estimates
+  // Still playing — no COLLECT/PAYOUT from cash/eCash/bonus estimates
   if (playerIsStillPlaying(p)) return '';
   var bal = playerBalance(p);
   var flash = (_balPayoutFlashId === p.id && Date.now() < _balPayoutFlashUntil);
   if (flash) {
+    var flashLabel = _balPayoutFlashKind === 'collect'
+      ? 'Collected ✓'
+      : ('PAID ' + lucideIcon('check','action-ico'));
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
-      + '<div class="roster-form-label" style="color:var(--green);margin:0">PAID ' + lucideIcon('check','action-ico') + '</div>'
+      + '<div class="roster-form-label" style="color:var(--green);margin:0">' + flashLabel + '</div>'
     + '</div>';
   }
   if (Math.abs(bal) <= SETTLE_EPSILON) {
@@ -3221,16 +3260,32 @@ function rosterHouseOwesPayoutHtml(p) {
     var hasActivity = playerCashOutsTotal(p) > 0
       || playerCreditsTotal(p) > 0
       || playerChipTurnInsTotal(p) > 0
-      || playerDebtBuyInsTotal(p) > 0;
+      || playerDebtBuyInsTotal(p) > 0
+      || playerMarkerCreditsTotal(p) > 0;
     if (!hasActivity) return '';
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
       + '<div class="roster-expand-summary" style="margin:0;color:var(--green);font-weight:800">Settled ✓</div>'
     + '</div>';
   }
-  if (bal <= SETTLE_EPSILON) return ''; // player owes — collect via Settle, not PAY OUT
+  if (bal < -SETTLE_EPSILON) {
+    var oweAmt = Math.round(Math.abs(bal) * 100) / 100;
+    return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
+      + '<div class="roster-form-label">COLLECT</div>'
+      + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--red)">Owes $' + fmt(oweAmt) + ' — collect from player</div>'
+      + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="CASH">'
+      + '<div class="roster-inline-row">'
+        + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + oweAmt + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
+        + '<div class="roster-pill-row" id="rx-bal-payout-method-pills-' + p.id + '" style="margin:0;flex-shrink:0">'
+          + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+          + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+        + '</div>'
+        + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);flex-shrink:0" onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN</button>'
+      + '</div>'
+    + '</div>';
+  }
   var prefill = Math.round(bal * 100) / 100;
   return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
-    + '<div class="roster-form-label">PAY OUT</div>'
+    + '<div class="roster-form-label">PAYOUT</div>'
     + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="CASH">'
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + prefill + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
@@ -3238,7 +3293,7 @@ function rosterHouseOwesPayoutHtml(p) {
         + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
         + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
       + '</div>'
-      + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);flex-shrink:0" onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY</button>'
+      + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);flex-shrink:0" onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT</button>'
     + '</div>'
   + '</div>';
 }
@@ -3285,12 +3340,76 @@ function rosterPayHouseOwes(btn, id) {
     // Do NOT clear p.chipTurnIn — chip→cash conversion stays in rosterAddCashOut
     _balPayoutFlashId = id;
     _balPayoutFlashUntil = Date.now() + 2500;
+    _balPayoutFlashKind = 'paid';
     rosterKeepExpanded(id);
     calcAll(); renderAll(); autoSave();
     toast('Paid out $' + fmt(amount) + ' (' + method + ') ✅');
     setTimeout(function(){
       if (_balPayoutFlashId === id && Date.now() >= _balPayoutFlashUntil - 50) {
         _balPayoutFlashId = null;
+        _balPayoutFlashKind = null;
+        rosterKeepExpanded(id);
+        renderAll();
+      }
+    }, 2600);
+  });
+}
+
+/** Player-owes COLLECT / PAY IN — reduces marker debt via markerCredits + cash/eCash on hand. */
+function rosterCollectPlayerOwes(btn, id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) { toast('Player not found'); return; }
+  if (rosterChipTurnInLogged(p)) {
+    toast('Finish chip turn-in first');
+    return;
+  }
+  var bal = playerBalance(p);
+  if (bal >= -SETTLE_EPSILON) { toast('Nothing to collect'); return; }
+  var oweAmt = Math.abs(bal);
+  var outstanding = playerOutstandingMarker(p);
+  if (outstanding <= SETTLE_EPSILON) {
+    toast('No outstanding marker to collect');
+    return;
+  }
+  var el = document.getElementById('rx-bal-payout-amount-' + id);
+  var mEl = document.getElementById('rx-bal-payout-method-' + id);
+  var amount = el ? (Number(el.value) || 0) : 0;
+  var method = mEl ? String(mEl.value || 'CASH').toUpperCase() : 'CASH';
+  if (method !== 'ECASH') method = 'CASH';
+  if (!amount || amount <= 0) { toast('Enter collect amount'); return; }
+  var maxCollect = Math.min(oweAmt, outstanding);
+  if (amount > maxCollect + SETTLE_EPSILON) {
+    toast('Amount exceeds collectable ($' + fmt(maxCollect) + ')');
+    return;
+  }
+  confirmAction(btn, 'Click again to collect $' + fmt(amount) + ' via ' + method, function(){
+    var ts = new Date().toISOString();
+    if (!p.markerCredits) p.markerCredits = [];
+    p.markerCredits.push({
+      amount: amount,
+      source: 'payment',
+      method: method,
+      timestamp: ts
+    });
+    // Primary txn: MARKER_PAYMENT (method cash/eCash). Reduces markerDebt via markerCredits.
+    appendTxn({
+      type: 'MARKER_PAYMENT',
+      amount: amount,
+      playerId: String(p.id),
+      playerName: p.name,
+      method: method,
+      timestamp: ts
+    });
+    _balPayoutFlashId = id;
+    _balPayoutFlashUntil = Date.now() + 2500;
+    _balPayoutFlashKind = 'collect';
+    rosterKeepExpanded(id);
+    calcAll(); renderAll(); autoSave();
+    toast('Collected $' + fmt(amount) + ' (' + method + ') ✅');
+    setTimeout(function(){
+      if (_balPayoutFlashId === id && Date.now() >= _balPayoutFlashUntil - 50) {
+        _balPayoutFlashId = null;
+        _balPayoutFlashKind = null;
         rosterKeepExpanded(id);
         renderAll();
       }
@@ -3753,7 +3872,7 @@ function rosterPlayerExpandedHtml(p) {
       + '</div>';
   }
 
-  // House-owes PAY OUT sits directly below balance summary (not chip turn-in Pay Out)
+  // PAYOUT / COLLECT sits directly below balance summary (not chip turn-in Pay Out)
   var houseOwesPayout = rosterHouseOwesPayoutHtml(p);
 
   var buyInForm = '<div class="roster-form-block" id="rx-buyin-block-' + p.id + '">'
