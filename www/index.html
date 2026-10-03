@@ -590,6 +590,7 @@ select.inp{appearance:none;-webkit-appearance:none}
         <option value="dealer">🃏 Dealer</option>
         <option value="hostess">💃 Hostess</option>
         <option value="host">🏠 Host</option>
+        <option value="host-player">🏠🎰 Host/Player</option>
         <option value="chef">👨‍🍳 Chef</option>
         <option value="books">📒 Books</option>
         <option value="misc">👔 Misc Staff</option>
@@ -954,17 +955,25 @@ function staffRoleColor(role) {
 
 /** Dual-role Host/Player — plays (Players tab) and works staff (Staff tab). */
 function isHostPlayer(p) {
-  return !!(p && normalizeStaffRole(p.staffRole) === 'host-player');
+  if (!p) return false;
+  var raw = p.staffRole || p.role || '';
+  return normalizeStaffRole(raw) === 'host-player';
 }
 
 /** Appears in Players tab / settle lists (pure players + host-player). */
 function isPlayerSeat(p) {
-  return !!(p && (!p.staffRole || isHostPlayer(p)));
+  if (!p) return false;
+  // Empty/null staffRole = pure player; host-player is dual-listed
+  if (!p.staffRole) return true;
+  return isHostPlayer(p);
 }
 
-/** Appears in Staff tab (any staffRole including host-player). */
+/** Appears in Staff tab (any truthy staffRole including host-player). */
 function isStaffSeat(p) {
-  return !!(p && p.staffRole);
+  if (!p) return false;
+  if (p.staffRole) return true;
+  // Recover dual-seat if only role was saved as host-player
+  return isHostPlayer(p);
 }
 
 function staffIsDealer(p) {
@@ -996,7 +1005,12 @@ function staffTipBalance(p) {
 
 function migrateStaffRoles() {
   (G.players || []).forEach(function(p) {
-    if (!p || !p.staffRole) return;
+    if (!p) return;
+    // Recover Host/Player when role is dual but staffRole was cleared/missing
+    if (!p.staffRole && p.role && normalizeStaffRole(p.role) === 'host-player') {
+      p.staffRole = 'host-player';
+    }
+    if (!p.staffRole) return;
     var next = normalizeStaffRole(p.staffRole);
     p.staffRole = next;
     if (p.role && p.role !== 'player') p.role = next;
@@ -1005,13 +1019,25 @@ function migrateStaffRoles() {
       if (p.hourlyRate == null) p.hourlyRate = 0;
       if (p.hoursWorked == null) p.hoursWorked = 0;
     }
-    if (p.capabilities) {
+    if (!p.capabilities) {
+      var plays = next === 'host-player';
+      p.capabilities = {
+        canBuyIn: plays,
+        canCashOut: plays,
+        canLogTips: true,
+        canLogDrop: next === 'dealer',
+        canReceiveECash: true
+      };
+    } else {
       p.capabilities.canLogDrop = next === 'dealer';
       var dual = next === 'host-player';
-      p.capabilities.canBuyIn = dual;
-      p.capabilities.canCashOut = dual;
+      if (dual) {
+        p.capabilities.canBuyIn = true;
+        p.capabilities.canCashOut = true;
+      }
       p.capabilities.canLogTips = true;
     }
+    if (!p.markerCredits) p.markerCredits = [];
   });
 }
 
@@ -1549,6 +1575,8 @@ function filterRoster(val) {
 
 function filterRosterByRole(val) {
   _rosterRoleFilter = val || 'all';
+  var sel = document.getElementById('roster-role-filter');
+  if (sel && sel.value !== _rosterRoleFilter) sel.value = _rosterRoleFilter;
   renderPlayerGrid();
 }
 
@@ -2159,6 +2187,16 @@ function rosterPlayerExpandedHtml(p) {
   if (bonusTotal > 0) {
     summary += '<div class="roster-expand-summary">🎁 Bonus: <strong style="color:var(--gold)">$' + fmt(bonusTotal) + '</strong> (house expense)</div>';
   }
+  // Host/Player: keep full player expand + compact staff snapshot
+  if (isHostPlayer(p)) {
+    var tipsEarned = tipsTotal(p);
+    var tipBal = staffTipBalance(p);
+    summary += '<div class="roster-expand-summary" style="color:' + staffRoleColor('host-player') + '">'
+      + 'Tips earned: <strong>$' + fmt(tipsEarned) + '</strong>'
+      + ' <span style="color:var(--text-muted)">|</span> '
+      + 'Staff balance: <strong>$' + fmt(tipBal) + '</strong>'
+      + '</div>';
+  }
 
   var buyInForm = '<div class="roster-form-block" id="rx-buyin-block-' + p.id + '">'
     + '<div class="roster-form-label">Buy-In</div>'
@@ -2543,9 +2581,14 @@ function rosterStaffRow(p) {
 }
 
 function renderPlayerGrid() {
-  // Host/Player dual role appears in BOTH Players (buy-in/turn-in/cash-out) and Staff (tips/tax/expenses/payout)
-  var allPlayers = G.players.filter(isPlayerSeat);
-  var allStaff   = G.players.filter(isStaffSeat);
+  // Host/Player dual role appears in BOTH:
+  //   Players → buy-in / turn-in / cash-out (playerBalance, orange avatar)
+  //   Staff   → tips / tax / expenses / payout (staffTipBalance, orange avatar)
+  var allPlayers = G.players.filter(function(p) {
+    // Pure players (no staffRole) + Host/Player dual
+    return !p.staffRole || isHostPlayer(p);
+  });
+  var allStaff = G.players.filter(isStaffSeat);
   var search = _rosterSearch;
   var showPlayers = _rosterRoleFilter === 'all' || _rosterRoleFilter === 'players';
   var showStaff   = _rosterRoleFilter === 'all' || _rosterRoleFilter === 'staff';
