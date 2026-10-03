@@ -1105,24 +1105,24 @@ function playerDebtBuyInsTotal(p) {
   }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
 }
 
-/** Soft chip-proxy estimate while still playing (no turn-ins, no marker debt). */
-function playerStillPlayingEstimate(p) {
-  var chipProxy = (p.buyIns || []).filter(function(b) {
-    var t = String(b.type || '').toUpperCase();
-    return t === 'CASH' || t === 'ECASH' || t === 'BONUS';
-  }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
-  var paidOut = playerCashOutsTotal(p);
-  var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
-  var credits = playerCreditsTotal(p);
-  return chipProxy + credits - paidOut + reimbursed;
+/**
+ * Still playing: no chip turn-ins and no marker debt.
+ * Cash / eCash / bonus buy-ins alone do NOT create a house-owes amount.
+ */
+function playerIsStillPlaying(p) {
+  if (!p) return false;
+  return playerChipTurnInsTotal(p) <= SETTLE_EPSILON
+    && playerOutstandingMarker(p) <= SETTLE_EPSILON;
 }
 
-/** Tilde (~) only before any chip turn-in and with no marker debt (still playing). */
+/**
+ * Tilde (~) only when no chip turn-ins yet but marker debt is known (player-owes estimate).
+ * Never tilde from cash / eCash / bonus chip-proxy estimates.
+ */
 function rosterBalanceIsTilde(p) {
   if (!p) return false;
   if (playerChipTurnInsTotal(p) > SETTLE_EPSILON) return false;
-  if (playerOutstandingMarker(p) > SETTLE_EPSILON) return false;
-  return playerStillPlayingEstimate(p) > SETTLE_EPSILON || playerTotalInDisplay(p) > SETTLE_EPSILON;
+  return playerOutstandingMarker(p) > SETTLE_EPSILON;
 }
 
 function playerCashOutsTotal(p) {
@@ -1157,9 +1157,24 @@ function playerBalance(p) {
   var paidOut = playerCashOutsTotal(p);
   var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
   var credits = playerCreditsTotal(p);
+  // Still playing (no turn-ins, no marker): house owes nothing — not cash/eCash/bonus estimates.
+  if (chipTurnIns <= SETTLE_EPSILON && markerDebt <= SETTLE_EPSILON) {
+    console.table({
+      '[profile balance render]': '',
+      player: p.name,
+      playerBalanceResult: 0,
+      stillPlaying: true,
+      markerDebt: markerDebt,
+      chipTurnIns: chipTurnIns,
+      paidOut: paidOut,
+      reimbursed: reimbursed,
+      credits: credits
+    });
+    return 0;
+  }
   // Unified: chipTurnIns − markerDebt + credits − paidOut (+ reimbursed).
   // chipTurnIns >= markerDebt → house owes; chipTurnIns < markerDebt → player owes (credits net).
-  // chipTurnIns === 0 && markerDebt === 0 → still playing (display uses ~ estimate; numeric = credits − paidOut).
+  // chipTurnIns === 0 && markerDebt > 0 → ~ player owes (tilde display).
   var result = chipTurnIns - markerDebt + credits - paidOut + reimbursed;
   console.table({
     '[profile balance render]': '',
@@ -1184,9 +1199,8 @@ function playerProjectedBalance(p) {
   return playerBalance(p);
 }
 
-/** Display amount: still-playing tilde uses buy-in chip proxy; else exact playerBalance. */
+/** Display amount: exact playerBalance (0 while still playing; tilde cases use same signed amount). */
 function playerDisplayBalance(p) {
-  if (rosterBalanceIsTilde(p)) return playerStillPlayingEstimate(p);
   return playerBalance(p);
 }
 
@@ -2002,8 +2016,13 @@ function renderAll() {
 
   // Owes/owed — same playerBalance() as expanded roster row (no parallel formula)
   // Host/Player dual role is included (isPlayerSeat); pure staff excluded
-  var owingPlayers = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p) < -SETTLE_EPSILON; });
-  var owedPlayers  = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p) > SETTLE_EPSILON; });
+  // Still-playing cash/eCash/bonus never enter House Owes (playerBalance === 0 + explicit gate)
+  var owingPlayers = G.players.filter(function(p){
+    return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p) < -SETTLE_EPSILON;
+  });
+  var owedPlayers  = G.players.filter(function(p){
+    return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p) > SETTLE_EPSILON;
+  });
   var ocEl = document.getElementById('owes-count');
   var odEl = document.getElementById('owed-count');
   if (ocEl) { ocEl.textContent=owingPlayers.length; ocEl.style.display=owingPlayers.length?'inline':'none'; }
@@ -2146,9 +2165,15 @@ function tipsTotal(p) {
 }
 
 function rosterPlayerStatusBadge(p) {
+  // Still playing (cash/eCash/bonus only): neutral Even — never Owed/Owes from estimates
+  if (playerIsStillPlaying(p)) {
+    if (playerTotalInDisplay(p) > SETTLE_EPSILON || playerCreditsTotal(p) > SETTLE_EPSILON) {
+      return '<span class="badge badge-gray">Even</span>';
+    }
+  }
   var tilde = rosterBalanceIsTilde(p);
-  var bal = tilde ? playerDisplayBalance(p) : playerBalance(p);
-  if (!tilde) {
+  var bal = playerBalance(p);
+  if (!tilde && !playerIsStillPlaying(p)) {
     var info = calcSettlementInfo(bal, p.id, 'BALANCE');
     if (info.status === 'SETTLED') return '<span class="badge badge-green">Settled</span>';
     if (info.status === 'PARTIAL') return '<span class="badge badge-yellow">Partial</span>';
@@ -2178,17 +2203,15 @@ function rosterBalAmt(bal) {
   return '<span class="roster-amt pos">$' + fmt(bal) + '</span>';
 }
 
-/** Roster header balance: gold ~ only while still playing (no turn-ins yet); never after a turn-in. */
+/** Roster header balance: $0 while still playing; gold ~ only for outstanding marker (no turn-ins). */
 function rosterPlayerBalCell(p) {
+  if (playerIsStillPlaying(p)) {
+    return '<span class="roster-amt zero" title="Still playing">$0</span>';
+  }
   if (rosterBalanceIsTilde(p)) {
-    var bal = playerDisplayBalance(p);
-    if (Math.abs(bal) <= SETTLE_EPSILON) {
-      return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$0</span>';
-    }
-    if (bal < 0) {
-      return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$' + fmt(Math.abs(bal)) + '</span>';
-    }
-    return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — estimate">~$' + fmt(bal) + '</span>';
+    var bal = playerBalance(p);
+    // Marker outstanding, no chips yet → ~ player owes
+    return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — marker outstanding">~$' + fmt(Math.abs(bal)) + '</span>';
   }
   return rosterBalAmt(playerBalance(p));
 }
@@ -2636,6 +2659,8 @@ function rosterSetBalPayoutMethod(id, method) {
 function rosterHouseOwesPayoutHtml(p) {
   // Pending chip turn-in cycle uses rosterTurnInSectionHtml Pay Out instead
   if (rosterChipTurnInLogged(p)) return '';
+  // Still playing — no house-owes payout from cash/eCash/bonus estimates
+  if (playerIsStillPlaying(p)) return '';
   var bal = playerBalance(p);
   var flash = (_balPayoutFlashId === p.id && Date.now() < _balPayoutFlashUntil);
   if (flash) {
@@ -2648,8 +2673,7 @@ function rosterHouseOwesPayoutHtml(p) {
     var hasActivity = playerCashOutsTotal(p) > 0
       || playerCreditsTotal(p) > 0
       || playerChipTurnInsTotal(p) > 0
-      || playerDebtBuyInsTotal(p) > 0
-      || playerTotalInDisplay(p) > 0;
+      || playerDebtBuyInsTotal(p) > 0;
     if (!hasActivity) return '';
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
       + '<div class="roster-expand-summary" style="margin:0;color:var(--green);font-weight:800">Settled ✓</div>'
@@ -3139,19 +3163,31 @@ function rosterPlayerExpandedHtml(p) {
   var chipsIn = playerChipTurnInsTotal(p);
   var markerDebt = playerOutstandingMarker(p);
   var creditsTotal = playerCreditsTotal(p);
+  var stillPlaying = playerIsStillPlaying(p);
   var tilde = rosterBalanceIsTilde(p);
   var dispBal = playerDisplayBalance(p);
   var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
     : (dispBal < 0 ? 'var(--red)' : (tilde ? 'var(--gold)' : 'var(--green)'));
   var balPrefix = tilde ? '~' : '';
   var balAbs = '$' + fmt(Math.abs(dispBal));
-  var balLabel = Math.abs(dispBal) <= SETTLE_EPSILON ? balAbs
-    : (dispBal < 0 ? balPrefix + balAbs + ' (player owes)' : balPrefix + balAbs + ' (house owes)');
+  var balLabel;
+  if (stillPlaying) {
+    balLabel = '$0';
+  } else if (Math.abs(dispBal) <= SETTLE_EPSILON) {
+    balLabel = balAbs;
+  } else if (dispBal < 0) {
+    balLabel = balPrefix + balAbs + ' (player owes)';
+  } else {
+    balLabel = balPrefix + balAbs + ' (house owes)';
+  }
+  var stillPlayingHint = (stillPlaying || tilde)
+    ? ' <span style="color:var(--gold);font-size:11px">(still playing)</span>'
+    : '';
   summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(chipsIn) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Marker debt: <strong style="color:' + (markerDebt > 0 ? 'var(--orange)' : 'var(--text-muted)') + '">$' + fmt(markerDebt) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Credits: <strong style="color:' + (creditsTotal > 0 ? '#3b82f6' : 'var(--text-muted)') + '">$' + fmt(creditsTotal) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong>'
-    + (tilde ? ' <span style="color:var(--gold);font-size:11px">(still playing)</span>' : '')
+    + stillPlayingHint
     + '</div>';
   var markerTotal = playerMarkerTotal(p);
   var bonusTotal = playerBonusTotal(p);
@@ -3767,8 +3803,8 @@ function renderSettlement() {
         +'</div>';
     }).join('');
   }
-  var owes = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p)<0; });
-  var owed = G.players.filter(function(p){ return isPlayerSeat(p) && playerBalance(p)>0; });
+  var owes = G.players.filter(function(p){ return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p)<0; });
+  var owed = G.players.filter(function(p){ return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p)>0; });
   var soEl = document.getElementById('settle-owes');
   var sdEl = document.getElementById('settle-owed');
   var ecashMapS = calcEcashByReceiver();
