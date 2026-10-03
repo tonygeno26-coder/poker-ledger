@@ -958,7 +958,7 @@ app.get('/people/:ownerUserId', async function (req, res) {
     let q = supabase
       .from('people')
       .select(
-        'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, created_at, updated_at'
+        'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, created_at, updated_at, standing_balance, balance_updated_at'
       )
       .eq('owner_user_id', ownerUserId)
       .order('name', { ascending: true })
@@ -973,6 +973,221 @@ app.get('/people/:ownerUserId', async function (req, res) {
     console.error('[people GET]', err);
     const status = err.status || 500;
     res.status(status).json({ error: err.message || 'Failed to list people' });
+  }
+});
+
+app.get('/people/:id/balance-history', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    const { data: person, error: personErr } = await supabase
+      .from('people')
+      .select('id, owner_user_id, name, tag, standing_balance, balance_updated_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (personErr) throw personErr;
+    if (!person) return res.status(404).json({ error: 'Person not found' });
+
+    const access = await canAccessOwnerBook(user, person.owner_user_id);
+    if (!access.ok) {
+      return res.status(403).json({ error: 'Not authorized to read this player book' });
+    }
+
+    const { data: entries, error: entErr } = await supabase
+      .from('person_balance_entries')
+      .select(
+        'id, person_id, owner_user_id, game_id, opening_balance, closing_balance, delta, posted_at, created_at'
+      )
+      .eq('person_id', id)
+      .order('posted_at', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (entErr) throw entErr;
+
+    res.json({
+      person,
+      entries: entries || [],
+      readOnly: !!access.readOnly
+    });
+  } catch (err) {
+    console.error('[people balance-history GET]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to load balance history' });
+  }
+});
+
+function roundMoney(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+async function recomputeStandingBalance(personId) {
+  const { data: rows, error } = await supabase
+    .from('person_balance_entries')
+    .select('delta')
+    .eq('person_id', personId);
+  if (error) throw error;
+  const standing = roundMoney(
+    (rows || []).reduce(function (s, r) {
+      return s + (Number(r.delta) || 0);
+    }, 0)
+  );
+  const now = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from('people')
+    .update({ standing_balance: standing, balance_updated_at: now, updated_at: now })
+    .eq('id', personId)
+    .select(
+      'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, created_at, updated_at, standing_balance, balance_updated_at'
+    )
+    .single();
+  if (updErr) throw updErr;
+  return updated;
+}
+
+app.post('/games/:gameId/post-balances', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    if (user.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers have read-only access to the player book' });
+    }
+
+    const gameId = String(req.params.gameId || '').trim();
+    if (!gameId) return res.status(400).json({ error: 'gameId required' });
+
+    const body = req.body || {};
+    const ownerUserId = String(body.ownerUserId || user.id || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+    if (String(user.id) !== ownerUserId) {
+      return res.status(403).json({ error: 'Only the owner can post balances' });
+    }
+
+    const rawEntries = Array.isArray(body.entries) ? body.entries : [];
+    const byPerson = {};
+    for (let i = 0; i < rawEntries.length; i++) {
+      const e = rawEntries[i] || {};
+      const personId = String(e.personId || e.person_id || '').trim();
+      if (!personId) continue;
+      byPerson[personId] = {
+        personId,
+        opening: roundMoney(e.opening != null ? e.opening : e.opening_balance),
+        closing: roundMoney(e.closing != null ? e.closing : e.closing_balance)
+      };
+    }
+    const personIds = Object.keys(byPerson);
+    const now = new Date().toISOString();
+
+    // Validate all people belong to this owner
+    if (personIds.length) {
+      const { data: owned, error: ownedErr } = await supabase
+        .from('people')
+        .select('id')
+        .eq('owner_user_id', ownerUserId)
+        .in('id', personIds);
+      if (ownedErr) throw ownedErr;
+      const ownedSet = {};
+      (owned || []).forEach(function (r) {
+        ownedSet[String(r.id)] = true;
+      });
+      for (let j = 0; j < personIds.length; j++) {
+        if (!ownedSet[personIds[j]]) {
+          return res.status(403).json({ error: 'Person not in your player book: ' + personIds[j] });
+        }
+      }
+    }
+
+    // Upsert rows for posted people
+    for (let k = 0; k < personIds.length; k++) {
+      const ent = byPerson[personIds[k]];
+      const delta = roundMoney(ent.closing - ent.opening);
+      const { data: existing, error: findErr } = await supabase
+        .from('person_balance_entries')
+        .select('id')
+        .eq('person_id', ent.personId)
+        .eq('game_id', gameId)
+        .maybeSingle();
+      if (findErr) throw findErr;
+
+      if (existing) {
+        const { error: updErr } = await supabase
+          .from('person_balance_entries')
+          .update({
+            opening_balance: ent.opening,
+            closing_balance: ent.closing,
+            delta,
+            posted_at: now
+          })
+          .eq('id', existing.id);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase.from('person_balance_entries').insert({
+          person_id: ent.personId,
+          owner_user_id: ownerUserId,
+          game_id: gameId,
+          opening_balance: ent.opening,
+          closing_balance: ent.closing,
+          delta,
+          posted_at: now,
+          created_at: now
+        });
+        if (insErr) throw insErr;
+      }
+    }
+
+    // Delete entries for people removed from this game's post set
+    const { data: gameRows, error: gameErr } = await supabase
+      .from('person_balance_entries')
+      .select('id, person_id')
+      .eq('game_id', gameId)
+      .eq('owner_user_id', ownerUserId);
+    if (gameErr) throw gameErr;
+
+    const keep = {};
+    personIds.forEach(function (id) {
+      keep[id] = true;
+    });
+    const removedPersonIds = {};
+    const deleteIds = [];
+    (gameRows || []).forEach(function (r) {
+      if (!keep[String(r.person_id)]) {
+        deleteIds.push(r.id);
+        removedPersonIds[String(r.person_id)] = true;
+      }
+    });
+    if (deleteIds.length) {
+      const { error: delErr } = await supabase
+        .from('person_balance_entries')
+        .delete()
+        .in('id', deleteIds);
+      if (delErr) throw delErr;
+    }
+
+    // Recompute standing_balance = sum(deltas) for affected people
+    const recomputeIds = {};
+    personIds.forEach(function (id) {
+      recomputeIds[id] = true;
+    });
+    Object.keys(removedPersonIds).forEach(function (id) {
+      recomputeIds[id] = true;
+    });
+    const updatedPeople = [];
+    const ids = Object.keys(recomputeIds);
+    for (let m = 0; m < ids.length; m++) {
+      updatedPeople.push(await recomputeStandingBalance(ids[m]));
+    }
+
+    res.json({
+      gameId,
+      posted: personIds.length,
+      removed: deleteIds.length,
+      people: updatedPeople
+    });
+  } catch (err) {
+    console.error('[post-balances]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to post balances' });
   }
 });
 

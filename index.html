@@ -1128,7 +1128,9 @@ var G = {
   _seq: 0,
   sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
   location: '', date: '',
-  dealerBanks: []
+  dealerBanks: [],
+  gameId: '',
+  balancesPostedAt: null
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2488,9 +2490,12 @@ function txnReasonLabel(t) {
     }
     case 'PRIOR_BALANCE': {
       var pbDir = String(t.direction || '').toLowerCase().replace(/_/g, '-');
+      var isCarry = String(t.source || t.note || t.desc || '').toLowerCase() === 'carryover'
+        || String(t.note || '').toUpperCase() === 'CARRYOVER'
+        || String(t.desc || '').toUpperCase() === 'CARRYOVER';
       var pbLbl = (pbDir === 'house-owes' || pbDir === 'owed' || pbDir === 'credit')
-        ? 'Previous balance · House owes'
-        : 'Previous balance · Player owes';
+        ? (isCarry ? 'Carryover · House owes' : 'Previous balance · House owes')
+        : (isCarry ? 'Carryover · Player owes' : 'Previous balance · Player owes');
       return withNote(pbLbl);
     }
     case 'PRIOR_PAYMENT': {
@@ -2971,6 +2976,8 @@ function renderAll() {
     MARKER_PAYMENT:      { label:'PAY IN',    color:'var(--green)',       bg:'var(--green-dim)' },
     PRIOR_BALANCE:       { label:'PREV BAL',  color:'var(--orange)',      bg:'var(--orange-dim)' },
     PRIOR_PAYMENT:       { label:'PREV PAID', color:'var(--green)',       bg:'var(--green-dim)' },
+    // CARRYOVER uses type PRIOR_BALANCE; label overridden at render when source=carryover
+
     STAFF_PAYOUT:        { label:'STAFF OUT', color:'var(--gold)',        bg:'var(--gold-dim)' },
     SETTLEMENT_PAYMENT:  { label:'SETTLED',   color:'var(--green)',       bg:'var(--green-dim)' },
     VOID_CASH_BUYIN:     { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
@@ -2992,6 +2999,13 @@ function renderAll() {
     ? activeTxns.slice(0,60).map(function(t){
         var ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
         var meta = TXN_TYPE_MAP[t.type] || { label:t.type, color:'var(--text-muted)', bg:'var(--bg3)' };
+        if (t.type === 'PRIOR_BALANCE' && (
+          String(t.source || '').toLowerCase() === 'carryover'
+          || String(t.note || '').toUpperCase() === 'CARRYOVER'
+          || String(t.desc || '').toUpperCase() === 'CARRYOVER'
+        )) {
+          meta = { label: 'CARRYOVER', color: 'var(--orange)', bg: 'var(--orange-dim)' };
+        }
         var name = t.playerName || 'HOUSE';
         if (t.type === 'STAFF_PAYOUT' && String(t.method || '').toUpperCase() === 'ECASH' && t.receivedBy && t.receivedBy !== t.playerName) {
           name = (t.playerName || 'Staff') + ' → ' + t.receivedBy;
@@ -3249,7 +3263,7 @@ function rosterBuyInTypeBadge(type) {
 }
 
 /** History badge for expanded player row (buy-ins + chips in + cash out). */
-function rosterHistoryTypeBadge(kind, buyType) {
+function rosterHistoryTypeBadge(kind, buyType, source) {
   var k = String(kind || '').toUpperCase();
   if (k === 'CHIP_TURN_IN' || k === 'CHIPS_IN') {
     return '<span class="badge badge-green">CHIPS IN</span>';
@@ -3267,6 +3281,9 @@ function rosterHistoryTypeBadge(kind, buyType) {
     return '<span class="badge badge-green">PAY IN</span>';
   }
   if (k === 'PRIOR_BALANCE') {
+    if (String(source || '').toLowerCase() === 'carryover') {
+      return '<span class="badge badge-orange">CARRYOVER</span>';
+    }
     return '<span class="badge badge-orange">PREV BAL</span>';
   }
   if (k === 'PRIOR_PAYMENT') {
@@ -3327,6 +3344,14 @@ function buildPlayerHistoryRows(p) {
       : (t.time || '');
     var k = keyOf(kind, amt, timeLabel || ts);
     seen[k] = true;
+    var priorSrc = '';
+    if (kind === 'PRIOR_BALANCE') {
+      priorSrc = String(t.source || '').toLowerCase();
+      if (!priorSrc && (String(t.note || '').toUpperCase() === 'CARRYOVER'
+        || String(t.desc || '').toUpperCase() === 'CARRYOVER')) {
+        priorSrc = 'carryover';
+      }
+    }
     rows.push({
       kind: kind,
       buyType: buyType,
@@ -3339,6 +3364,7 @@ function buildPlayerHistoryRows(p) {
       receivedByName: t.receivedByName || t.receivedBy || '',
       desc: t.desc || t.description || t.note || '',
       note: t.note || '',
+      priorSource: priorSrc,
       source: 'txn',
       txnIdx: txnIdx,
       txnId: t.id || null
@@ -3353,6 +3379,7 @@ function buildPlayerHistoryRows(p) {
         if (newRow.signatureData) rows[r].signatureData = newRow.signatureData;
         if (newRow.buyType) rows[r].buyType = newRow.buyType;
         if (newRow.method) rows[r].method = newRow.method;
+        if (newRow.priorSource) rows[r].priorSource = newRow.priorSource;
         if (!rows[r].time && newRow.time) rows[r].time = newRow.time;
         return;
       }
@@ -3475,6 +3502,7 @@ function buildPlayerHistoryRows(p) {
       try { timeLabel = new Date(b.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); } catch (e) { timeLabel = ''; }
     }
     var dir = String(b.direction || 'player-owes');
+    var priorSrc = String(b.source || '').toLowerCase();
     attachOrPush(
       function(row) {
         return row.kind === 'PRIOR_BALANCE'
@@ -3491,6 +3519,7 @@ function buildPlayerHistoryRows(p) {
         direction: dir,
         note: b.note || '',
         desc: b.note || '',
+        priorSource: priorSrc,
         source: 'array',
         arrayIndex: i
       }
@@ -3536,7 +3565,7 @@ function renderPlayerHistoryLines(p) {
     return '<div class="roster-expand-meta" style="padding:2px 0 4px">No buy-ins, turn-ins, cash-outs, or credits yet</div>';
   }
   return rows.map(function(row) {
-    var badge = rosterHistoryTypeBadge(row.kind, row.buyType);
+    var badge = rosterHistoryTypeBadge(row.kind, row.buyType, row.priorSource || row.sourceLabel || '');
     var pbDir = String(row.direction || '').toLowerCase().replace(/_/g, '-');
     var amtColor = (row.kind === 'CHIP_TURN_IN' || row.kind === 'CASH_OUT' || row.kind === 'PAYOUT' || row.kind === 'MARKER_PAYMENT' || row.kind === 'PRIOR_PAYMENT')
       ? 'color:var(--green)'
@@ -5459,12 +5488,88 @@ function pbNewUuid() {
   });
 }
 
+/** Ensure current game has a stable UUID for balance posting. */
+function ensureGameId() {
+  if (!G.gameId) {
+    G.gameId = pbNewUuid();
+  }
+  return G.gameId;
+}
+
+function personStandingBalance(row) {
+  return Math.round((Number(row && row.standing_balance) || 0) * 100) / 100;
+}
+
+function formatStandingLabel(standing) {
+  var s = Math.round((Number(standing) || 0) * 100) / 100;
+  if (Math.abs(s) <= SETTLE_EPSILON) return 'Even';
+  if (s < 0) return 'Owes $' + fmt(Math.abs(s));
+  return 'Owed $' + fmt(s);
+}
+
+/**
+ * Signed opening from non-voided CARRYOVER priors only.
+ * + house-owes, − player-owes (same sign as playerBalance / standing).
+ */
+function signedCarryoverOpening(p) {
+  return Math.round((p.priorBalances || []).reduce(function(s, b) {
+    if (!b || b.voided === true) return s;
+    if (String(b.source || '').toLowerCase() !== 'carryover') return s;
+    var amt = Number(b.amount) || 0;
+    var dir = String(b.direction || '').toLowerCase().replace(/_/g, '-');
+    if (dir === 'house-owes' || dir === 'owed' || dir === 'credit') return s + amt;
+    return s - amt;
+  }, 0) * 100) / 100;
+}
+
+/** Auto-pull standing into priorBalances as CARRYOVER (behaves like manual Previous balance). */
+function applyCarryoverPrior(p, standing) {
+  standing = Math.round((Number(standing) || 0) * 100) / 100;
+  if (!p || !isPlayerSeat(p)) return false;
+  if (Math.abs(standing) <= SETTLE_EPSILON) return false;
+  var already = (p.priorBalances || []).some(function(b) {
+    return b && b.voided !== true && String(b.source || '').toLowerCase() === 'carryover';
+  });
+  if (already) return false;
+  if (!p.priorBalances) p.priorBalances = [];
+  var direction = standing > 0 ? 'house-owes' : 'player-owes';
+  var amount = Math.abs(standing);
+  var ts = new Date().toISOString();
+  var timeLbl = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  var seq = (G._seq || 0) + 1;
+  G._seq = seq;
+  p.priorBalances.push({
+    amount: amount,
+    direction: direction,
+    note: 'CARRYOVER',
+    source: 'carryover',
+    time: timeLbl,
+    timestamp: ts,
+    seq: seq
+  });
+  appendTxn({
+    type: 'PRIOR_BALANCE',
+    amount: amount,
+    direction: direction,
+    note: 'CARRYOVER',
+    source: 'carryover',
+    desc: 'CARRYOVER',
+    playerId: String(p.id),
+    playerName: personDisplayName(p),
+    timestamp: ts
+  });
+  return true;
+}
+
 var PB_PEOPLE_KEY = 'pb_people_v1';
 var PB_PEOPLE_QUEUE_KEY = 'pb_people_queue_v1';
+var PB_BALANCES_QUEUE_KEY = 'pb_balances_queue_v1';
 var _peopleCache = null;
 var _peopleReadOnly = false;
 var _peopleFlushTimer = null;
 var _linkingPlayerId = null;
+var _bookHistoryExpanded = {};
+var _endGameContinueFn = null;
 
 function pbPeopleOwnerId() {
   if (pbIsHostViewer()) return pbGetLinkedOwnerId() || '';
@@ -5679,8 +5784,13 @@ function renderPeopleMatchList() {
   var html = '';
   matches.forEach(function(p){
     var disabled = !!inGame[String(p.id)];
+    var standing = personStandingBalance(p);
+    var standingBit = Math.abs(standing) > SETTLE_EPSILON
+      ? (' · ' + formatStandingLabel(standing))
+      : '';
     var meta = 'Last played ' + formatBookLastPlayed(p.last_played_at)
-      + (p.last_role ? (' · ' + String(p.last_role)) : '');
+      + (p.last_role ? (' · ' + String(p.last_role)) : '')
+      + standingBit;
     html += '<button type="button" class="people-match-row' + (disabled ? ' in-game' : '') + '"'
       + (disabled ? ' disabled' : '')
       + ' onclick="selectBookPerson(\'' + String(p.id).replace(/'/g, '') + '\')">'
@@ -5880,6 +5990,9 @@ function renderPlayersBook() {
 
   var readOnly = _peopleReadOnly || pbIsHostViewer() || _hostViewMode;
   el.innerHTML = list.map(function(p){
+    var standing = personStandingBalance(p);
+    var standColor = Math.abs(standing) <= SETTLE_EPSILON ? 'var(--text-muted)'
+      : (standing < 0 ? 'var(--red)' : 'var(--green)');
     var meta = (p.last_role ? String(p.last_role) : '—')
       + ' · Last played ' + formatBookLastPlayed(p.last_played_at)
       + (p.archived ? ' · Archived' : '');
@@ -5891,15 +6004,64 @@ function renderPlayersBook() {
         + (p.archived ? 'Unarchive' : 'Archive') + '</button>'
         + '</div>';
     }
+    var open = !!_bookHistoryExpanded[String(p.id)];
+    var histId = 'book-hist-' + String(p.id).replace(/[^a-zA-Z0-9_-]/g, '');
     return '<div class="book-row">'
-      + '<div class="book-row-main">'
+      + '<div class="book-row-main" style="flex:1;min-width:0">'
       + '<div class="book-row-name">' + bookPersonLabel(p) + '</div>'
       + '<div class="book-row-meta">' + meta + (p.notes ? (' · ' + String(p.notes)) : '') + '</div>'
+      + '<div style="margin-top:4px;font-size:12px;font-weight:800;color:' + standColor + '">Standing: '
+        + formatStandingLabel(standing) + '</div>'
+      + '<button type="button" class="btn btn-outline btn-xs" style="margin-top:6px" onclick="toggleBookBalanceHistory(\'' + p.id + '\')">'
+        + (open ? 'Hide history' : 'History') + '</button>'
+      + '<div id="' + histId + '" class="book-balance-history" style="margin-top:8px;'
+        + (open ? '' : 'display:none;') + '"></div>'
       + '</div>'
       + actions
       + '</div>';
   }).join('');
   refreshLucideIcons();
+  list.forEach(function(p){
+    if (_bookHistoryExpanded[String(p.id)]) loadBookBalanceHistory(p.id);
+  });
+}
+
+async function toggleBookBalanceHistory(personId) {
+  var key = String(personId);
+  _bookHistoryExpanded[key] = !_bookHistoryExpanded[key];
+  renderPlayersBook();
+}
+
+async function loadBookBalanceHistory(personId) {
+  var histId = 'book-hist-' + String(personId).replace(/[^a-zA-Z0-9_-]/g, '');
+  var el = document.getElementById(histId);
+  if (!el) return;
+  if (_peopleReadOnly || pbIsHostViewer()) {
+    // read-only OK — history is readable
+  }
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Loading…</div>';
+  try {
+    var data = await pbApi('/people/' + encodeURIComponent(personId) + '/balance-history', { method: 'GET' });
+    var entries = (data && data.entries) || [];
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No posted games yet</div>';
+      return;
+    }
+    el.innerHTML = entries.map(function(e){
+      var dlt = Math.round((Number(e.delta) || 0) * 100) / 100;
+      var dColor = Math.abs(dlt) <= SETTLE_EPSILON ? 'var(--text-muted)'
+        : (dlt < 0 ? 'var(--red)' : 'var(--green)');
+      var when = e.posted_at ? new Date(e.posted_at).toLocaleString() : '';
+      return '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--border)">'
+        + '<div style="color:var(--text-muted)">' + when + '</div>'
+        + '<div>Open <strong>$' + fmt(e.opening_balance) + '</strong> → Close <strong>$'
+        + fmt(e.closing_balance) + '</strong> · Δ <strong style="color:' + dColor + '">'
+        + (dlt > 0 ? '+' : '') + '$' + fmt(dlt) + '</strong></div>'
+        + '</div>';
+    }).join('');
+  } catch (_e) {
+    el.innerHTML = '<div style="color:var(--red);font-size:12px">Unable to load history</div>';
+  }
 }
 
 function editBookPerson(id) {
@@ -6045,10 +6207,12 @@ function openLinkPersonPicker(playerId) {
     list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No book matches for ' + name + '</div>';
   } else {
     list.innerHTML = matches.map(function(b){
+      var st = personStandingBalance(b);
+      var stBit = Math.abs(st) > SETTLE_EPSILON ? (' · ' + formatStandingLabel(st)) : '';
       return '<button type="button" class="people-match-row" onclick="confirmLinkPerson(\'' + b.id + '\')">'
         + '<span>' + bookPersonLabel(b) + '</span>'
         + '<span class="people-match-meta">Last played ' + formatBookLastPlayed(b.last_played_at)
-        + (b.last_role ? (' · ' + b.last_role) : '') + '</span>'
+        + (b.last_role ? (' · ' + b.last_role) : '') + stBit + '</span>'
         + '</button>';
     }).join('');
   }
@@ -6062,10 +6226,14 @@ function confirmLinkPerson(personId) {
   if (!p || !row) return;
   p.personId = row.id;
   if (row.tag) p.tag = row.tag;
+  if (isPlayerSeat(p) && applyCarryoverPrior(p, personStandingBalance(row))) {
+    toast('Linked · CARRYOVER ' + formatStandingLabel(personStandingBalance(row)));
+  } else {
+    toast('Linked to ' + bookPersonLabel(row) + ' ✅');
+  }
   _linkingPlayerId = null;
   closeModal('modal-link-person');
   calcAll(); renderAll(); autoSave();
-  toast('Linked to ' + bookPersonLabel(row) + ' ✅');
 }
 
 function addPerson() {
@@ -6132,6 +6300,15 @@ function addPerson() {
   if (staffRole === 'chef') newP.basePay = 0;
   if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
   G.players.push(newP);
+  ensureGameId();
+
+  // Auto CARRYOVER prior when book standing ≠ 0 (players / host-players only)
+  if (plays && selectedRow) {
+    var stand0 = personStandingBalance(selectedRow);
+    if (applyCarryoverPrior(newP, stand0)) {
+      toast('CARRYOVER ' + formatStandingLabel(stand0) + ' pulled in');
+    }
+  }
 
   // Fire-and-forget book create/update (last_role / last_played_at)
   persistBookPerson({
@@ -6145,6 +6322,12 @@ function addPerson() {
     if (row && row.id) {
       newP.personId = row.id;
       if (row.tag) newP.tag = row.tag;
+      if (plays) {
+        var stand1 = personStandingBalance(row);
+        if (applyCarryoverPrior(newP, stand1)) {
+          calcAll(); renderAll();
+        }
+      }
       autoSave();
       renderAll();
     }
@@ -6952,29 +7135,267 @@ function updateGameLabel() {
   autoSave();
 }
 
-function newGame(btn) {
-  confirmAction(btn, 'Click again to start a new game (unsaved data will be lost)', function(){
-    localStorage.removeItem('pb-current');
-    G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', dealerBanks:[], chipCounts:[], startingChipCount:null };
-    _activePlayerId = null; _activeStaffId = null;
-    setVal('g-location',''); setVal('g-date', todayLocalYMD());
-    G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
-    document.getElementById('player-detail-view').style.display='none';
-    document.getElementById('staff-detail-view').style.display='none';
-    updateGameLabel();
-    calcAll(); renderAll();
-    toast('New game started! 🃏');
+function gameHasActivity() {
+  if ((G.players || []).length) return true;
+  if ((G.txnLog || []).length) return true;
+  if ((G.expenses || []).length) return true;
+  return false;
+}
+
+function startFreshGame() {
+  localStorage.removeItem('pb-current');
+  G = {
+    players: [], txnLog: [], expenses: [], _seq: 0,
+    sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
+    location: '', date: '', dealerBanks: [], chipCounts: [], startingChipCount: null,
+    gameId: pbNewUuid(), balancesPostedAt: null
+  };
+  _activePlayerId = null; _activeStaffId = null;
+  setVal('g-location', ''); setVal('g-date', todayLocalYMD());
+  G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
+  var pd = document.getElementById('player-detail-view');
+  var sd = document.getElementById('staff-detail-view');
+  if (pd) pd.style.display = 'none';
+  if (sd) sd.style.display = 'none';
+  updateGameLabel();
+  calcAll(); renderAll();
+  toast('New game started! 🃏');
+}
+
+function openNewGameChoiceModal() {
+  var existing = document.getElementById('modal-new-game-choice');
+  if (!existing) {
+    var wrap = document.createElement('div');
+    wrap.className = 'modal-bg';
+    wrap.id = 'modal-new-game-choice';
+    wrap.innerHTML = '<div class="modal">'
+      + '<div class="modal-title"><i data-lucide="shuffle" aria-hidden="true"></i> New Game'
+      + '<button class="modal-close" onclick="closeModal(\'modal-new-game-choice\')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>'
+      + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">'
+      + 'End &amp; post player balances to the book, or discard this session without posting. Never silent wipe.'
+      + '</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="newGameEndAndPost()">End &amp; post, then new</button>'
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px;color:var(--red);border-color:var(--red)" onclick="newGameDiscardConfirm(this)">Discard without posting</button>'
+      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-new-game-choice\')">Cancel</button>'
+      + '</div>';
+    document.body.appendChild(wrap);
+  }
+  openModal('modal-new-game-choice');
+  refreshLucideIcons();
+}
+
+function newGameEndAndPost() {
+  closeModal('modal-new-game-choice');
+  runEndGameFlow(function(){ startFreshGame(); });
+}
+
+function newGameDiscardConfirm(btn) {
+  confirmAction(btn, 'Click again to discard without posting', function(){
+    closeModal('modal-new-game-choice');
+    startFreshGame();
+    toast('Discarded — balances not posted');
   });
 }
 
+function newGame(btn) {
+  if (_hostViewMode || pbIsHostViewer()) {
+    toast('Read-only in host view');
+    return;
+  }
+  if (!gameHasActivity()) {
+    startFreshGame();
+    return;
+  }
+  openNewGameChoiceModal();
+}
+
+function collectPostBalanceEntries() {
+  var entries = [];
+  (G.players || []).forEach(function(p){
+    if (!p || !isPlayerSeat(p) || !p.personId) return;
+    var opening = signedCarryoverOpening(p);
+    var closing = Math.round(playerBalance(p) * 100) / 100;
+    entries.push({
+      personId: String(p.personId),
+      opening: opening,
+      closing: closing
+    });
+  });
+  return entries;
+}
+
+function unlinkedPlayersWithBalance() {
+  return (G.players || []).filter(function(p){
+    return p && isPlayerSeat(p) && !p.personId
+      && Math.abs(playerBalance(p)) > SETTLE_EPSILON;
+  });
+}
+
+function openUnlinkedBalanceWarn(unlinked, continueFn) {
+  _endGameContinueFn = continueFn;
+  var existing = document.getElementById('modal-unlinked-balances');
+  if (!existing) {
+    var wrap = document.createElement('div');
+    wrap.className = 'modal-bg';
+    wrap.id = 'modal-unlinked-balances';
+    wrap.innerHTML = '<div class="modal">'
+      + '<div class="modal-title"><i data-lucide="link" aria-hidden="true"></i> Unlinked players'
+      + '<button class="modal-close" onclick="closeModal(\'modal-unlinked-balances\')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>'
+      + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">'
+      + 'These players have a non-zero balance but are not linked to the book. Link them to post, or continue without posting their balances.'
+      + '</div>'
+      + '<div id="unlinked-balance-list"></div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-top:14px" onclick="continueEndGameDespiteUnlinked()">Continue without linking</button>'
+      + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-unlinked-balances\')">Cancel</button>'
+      + '</div>';
+    document.body.appendChild(wrap);
+  }
+  var list = document.getElementById('unlinked-balance-list');
+  list.innerHTML = unlinked.map(function(p){
+    var bal = playerBalance(p);
+    var color = bal < 0 ? 'var(--red)' : 'var(--green)';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:8px">'
+      + '<div><div style="font-weight:800">' + personDisplayName(p) + '</div>'
+      + '<div style="font-size:12px;color:' + color + '">' + formatStandingLabel(bal) + '</div></div>'
+      + '<button type="button" class="btn btn-outline btn-xs" onclick="closeModal(\'modal-unlinked-balances\');openLinkPersonPicker(' + p.id + ')">Link</button>'
+      + '</div>';
+  }).join('');
+  openModal('modal-unlinked-balances');
+  refreshLucideIcons();
+}
+
+function continueEndGameDespiteUnlinked() {
+  closeModal('modal-unlinked-balances');
+  var fn = _endGameContinueFn;
+  _endGameContinueFn = null;
+  if (typeof fn === 'function') fn();
+}
+
+function loadBalancesQueue() {
+  try {
+    var raw = localStorage.getItem(PB_BALANCES_QUEUE_KEY);
+    var arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (_e) { return []; }
+}
+
+function saveBalancesQueue(q) {
+  try { localStorage.setItem(PB_BALANCES_QUEUE_KEY, JSON.stringify(q || [])); } catch (_e) {}
+}
+
+function enqueueBalancePost(payload) {
+  var q = loadBalancesQueue().filter(function(item){
+    return String(item.gameId) !== String(payload.gameId);
+  });
+  q.push(Object.assign({ enqueuedAt: Date.now() }, payload));
+  saveBalancesQueue(q);
+}
+
+async function flushBalancesQueue() {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) return;
+  var ownerId = pbPeopleOwnerId();
+  if (!ownerId || !pbAccessToken()) return;
+  var q = loadBalancesQueue();
+  if (!q.length) return;
+  var remain = [];
+  for (var i = 0; i < q.length; i++) {
+    var op = q[i];
+    try {
+      var res = await pbApi('/games/' + encodeURIComponent(op.gameId) + '/post-balances', {
+        method: 'POST',
+        body: JSON.stringify({
+          ownerUserId: ownerId,
+          entries: op.entries || []
+        })
+      });
+      if (res && Array.isArray(res.people)) {
+        res.people.forEach(function(person){ upsertPeopleCacheRow(person); });
+      }
+    } catch (err) {
+      var st = err && err.status;
+      if (st === 400 || st === 403 || st === 409) {
+        // drop permanent failures
+      } else {
+        remain.push(op);
+        if (st === 401) break;
+      }
+    }
+  }
+  saveBalancesQueue(remain);
+}
+
+async function postGameBalances(opts) {
+  opts = opts || {};
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    if (opts.toastOnSkip) toast('Read-only — balances not posted');
+    return { skipped: true };
+  }
+  ensureGameId();
+  var ownerId = pbPeopleOwnerId();
+  var entries = collectPostBalanceEntries();
+  var payload = { gameId: G.gameId, entries: entries, ownerUserId: ownerId };
+  if (!ownerId || !pbAccessToken()) {
+    enqueueBalancePost(payload);
+    G.balancesPostedAt = new Date().toISOString();
+    autoSave();
+    toast('Balances queued offline (' + entries.length + ')');
+    return { queued: true, count: entries.length };
+  }
+  try {
+    var res = await pbApi('/games/' + encodeURIComponent(G.gameId) + '/post-balances', {
+      method: 'POST',
+      body: JSON.stringify({ ownerUserId: ownerId, entries: entries })
+    });
+    if (res && Array.isArray(res.people)) {
+      res.people.forEach(function(person){ upsertPeopleCacheRow(person); });
+    }
+    G.balancesPostedAt = new Date().toISOString();
+    autoSave();
+    toast('Balances posted ✅ (' + entries.length + ' players)');
+    return { ok: true, count: entries.length, people: (res && res.people) || [] };
+  } catch (err) {
+    enqueueBalancePost(payload);
+    G.balancesPostedAt = new Date().toISOString();
+    autoSave();
+    toast('Balances queued — will sync when online');
+    return { queued: true, count: entries.length, error: err };
+  }
+}
+
+function saveGameToHistory() {
+  ensureGameId();
+  var history = JSON.parse(ls('pb-history') || '[]');
+  history.unshift({ id: Date.now(), date: new Date().toISOString(), G: JSON.parse(JSON.stringify(G)) });
+  if (history.length > 50) history = history.slice(0, 50);
+  lsSet('pb-history', JSON.stringify(history));
+  renderHistory();
+}
+
+function runEndGameFlow(afterFn) {
+  var unlinked = unlinkedPlayersWithBalance();
+  if (unlinked.length) {
+    openUnlinkedBalanceWarn(unlinked, function(){
+      finishEndGame(afterFn);
+    });
+    return;
+  }
+  finishEndGame(afterFn);
+}
+
+async function finishEndGame(afterFn) {
+  saveGameToHistory();
+  await postGameBalances();
+  await flushBalancesQueue();
+  if (typeof afterFn === 'function') afterFn();
+}
+
 function endGame(btn) {
-  confirmAction(btn, 'Click again to end game & save to history', function(){
-    var history = JSON.parse(ls('pb-history')||'[]');
-    history.unshift({ id:Date.now(), date:new Date().toISOString(), G:JSON.parse(JSON.stringify(G)) });
-    if (history.length > 50) history = history.slice(0,50);
-    lsSet('pb-history', JSON.stringify(history));
-    toast('Game saved to history ✅');
-    renderHistory();
+  if (_hostViewMode || pbIsHostViewer()) {
+    toast('Read-only in host view');
+    return;
+  }
+  confirmAction(btn, 'Click again to end game, save history & post balances', function(){
+    runEndGameFlow(null);
   });
 }
 
@@ -7188,6 +7609,7 @@ function loadGame(btn, id) {
     G = h.G;
     delete G.type;
     delete G.stakes;
+    ensureGameId();
     restoreInputs();
     _activePlayerId = null; _activeStaffId = null;
     calcAll(); renderAll();
@@ -7236,21 +7658,28 @@ function init() {
   if (saved) {
     try {
       var d = JSON.parse(saved);
-      G = Object.assign({ players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' }, d);
+      G = Object.assign({
+        players:[], txnLog:[], expenses:[], _seq:0,
+        sessionSettings:{bankStart:0,chipFloat:0,taxPct:0},
+        location:'', date:'', gameId:'', balancesPostedAt:null
+      }, d);
       // Drop legacy game type / stakes if present in old saves
       delete G.type;
       delete G.stakes;
+      ensureGameId();
       migrateStaffRoles();
       restoreInputs();
       // Active session always opens as today (local YMD); history loadGame keeps its date.
       setVal('g-date', todayLocalYMD());
       updateGameLabel(); // syncs G.date + persists via autoSave
     } catch(e) {
+      ensureGameId();
       setVal('g-date', todayLocalYMD());
       migrateStaffRoles();
       updateGameLabel();
     }
   } else {
+    ensureGameId();
     setVal('g-date', todayLocalYMD());
     migrateStaffRoles();
     updateGameLabel();
@@ -7261,6 +7690,8 @@ function init() {
   renderChipCountLog();
   renderDealerBanks();
   refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
+    return flushBalancesQueue();
+  }).then(function(){
     calcAll(); renderAll();
   }).catch(function(){});
 }
@@ -8329,10 +8760,11 @@ async function fetchHostViewGame() {
       G = Object.assign({
         players: [], txnLog: [], expenses: [], _seq: 0,
         sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
-        location: '', date: ''
+        location: '', date: '', gameId: '', balancesPostedAt: null
       }, state);
       delete G.type;
       delete G.stakes;
+      if (!G.gameId) G.gameId = pbNewUuid();
       try { migrateStaffRoles(); } catch (_m) {}
       calcAll();
       renderAll();
