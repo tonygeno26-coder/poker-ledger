@@ -34,7 +34,7 @@
   /* Cap edge-to-edge chrome */
   --safe-top:max(env(safe-area-inset-top, 0px), 16px);
   --safe-bottom:max(env(safe-area-inset-bottom, 0px), 8px);
-  --header-inner:80px; /* 56px logo + muted subtitle + bottom pad */
+  --header-inner:72px; /* text logo + muted game label + bottom pad */
   --header-h:calc(var(--safe-top) + var(--header-inner));
   --nav-inner:58px;
   --nav-h:calc(var(--safe-bottom) + var(--nav-inner));
@@ -76,11 +76,24 @@ input,select,button,textarea{font-family:inherit}
   gap:10px;
 }
 .logo{display:flex;align-items:flex-start;gap:10px;min-width:0;padding-left:0}
-.logo img{
-  height:56px;width:auto;max-width:220px;
-  object-fit:contain;display:block;border-radius:4px;
+.logo-text{
+  line-height:1.05;
+  text-transform:uppercase;
+  user-select:none;
+  -webkit-user-select:none;
 }
-.logo span{
+.logo-wordmark{
+  font-size:22px;font-weight:900;letter-spacing:1.2px;
+  display:block;white-space:nowrap;
+}
+.logo-pocket{color:#e03131}
+.logo-books{color:#f59e0b}
+.logo-sub{
+  display:block;
+  font-size:11px;font-weight:700;letter-spacing:2.4px;
+  color:#ffffff;margin-top:2px;
+}
+#game-label{
   font-size:10px;color:var(--text-muted);display:block;
   font-weight:500;letter-spacing:0.2px;margin-top:3px;line-height:1.2;
 }
@@ -452,7 +465,10 @@ select.inp{appearance:none;-webkit-appearance:none}
 <div class="header">
   <div class="logo">
     <div>
-      <img src="logo.png" alt="Pocketbooks Poker" height="56" width="auto">
+      <div class="logo-text" aria-label="Pocketbooks Poker">
+        <span class="logo-wordmark"><span class="logo-pocket">POCKET</span><span class="logo-books">BOOKS</span></span>
+        <span class="logo-sub">POKER</span>
+      </div>
       <span id="game-label">No active game</span>
     </div>
   </div>
@@ -1254,6 +1270,15 @@ function setVal(id,v) {
   var el=document.getElementById(id);
   if(el) el.value=v??'';
   if (id === 'g-date') syncDateDisplay();
+}
+
+/** Local calendar YYYY-MM-DD — avoids UTC day-shift from toISOString(). */
+function todayLocalYMD() {
+  var d = new Date();
+  var y = d.getFullYear();
+  var m = d.getMonth() + 1;
+  var day = d.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
 }
 
 function formatGameDateDisplay(iso) {
@@ -3243,7 +3268,7 @@ function updateGameLabel() {
   G.date     = getVal('g-date');
   var parts = [];
   if (G.location) parts.push(G.location);
-  if (G.date)     parts.push(G.date);
+  if (G.date)     parts.push(formatGameDateDisplay(G.date));
   setText('game-label', parts.join(' · ') || 'No active game');
   autoSave();
 }
@@ -3253,10 +3278,11 @@ function newGame(btn) {
     localStorage.removeItem('pb-current');
     G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' };
     _activePlayerId = null; _activeStaffId = null;
-    setVal('g-location',''); setVal('g-date',new Date().toISOString().split('T')[0]);
+    setVal('g-location',''); setVal('g-date', todayLocalYMD());
     G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
     document.getElementById('player-detail-view').style.display='none';
     document.getElementById('staff-detail-view').style.display='none';
+    updateGameLabel();
     calcAll(); renderAll();
     toast('New game started! 🃏');
   });
@@ -3500,7 +3526,7 @@ function deleteGame(id) {
 
 function restoreInputs() {
   setVal('g-location', G.location||'');
-  setVal('g-date', G.date||new Date().toISOString().split('T')[0]);
+  setVal('g-date', G.date || todayLocalYMD());
   if (!G.sessionSettings) G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
   var bank = G.sessionSettings.bankStart || 0;
   setVal('dash-bank-start', bank ? bank : '');
@@ -3522,7 +3548,6 @@ function setStartingBank() {
 // INIT
 // ══════════════════════════════════════════════════════════════════════════════
 function init() {
-  setVal('g-date', new Date().toISOString().split('T')[0]);
   var saved = ls('pb-current');
   if (saved) {
     try {
@@ -3532,10 +3557,17 @@ function init() {
       delete G.type;
       delete G.stakes;
       migrateStaffRoles();
-      restoreInputs();
-    } catch(e) { console.warn('init restore error:', e); }
+      restoreInputs(); // keeps saved game date
+    } catch(e) {
+      console.warn('init restore error:', e);
+      setVal('g-date', todayLocalYMD());
+      migrateStaffRoles();
+      updateGameLabel();
+    }
   } else {
+    setVal('g-date', todayLocalYMD());
     migrateStaffRoles();
+    updateGameLabel();
   }
   calcAll();
   renderAll();
