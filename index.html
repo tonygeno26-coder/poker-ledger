@@ -1115,7 +1115,7 @@ function calcDashboard() {
       else cashStaffPayouts += sp.amount || 0;
     });
     (p.drops||[]).forEach(function(d){ drop += d.amount; });
-    tips += tipsTotal(p); // dashboard tips total only — chips use getExpectedChips/sumTipsIn once
+    tips += tipsTotal(p); // dashboard tips total only — chips use calculateChipMovements().chipsIn.tips once
     // House cut of tips — only staff tax contributes to profit (not gross tips)
     // Tax applied toward marker debt is NOT house staffTax cash income
     if (p.staffRole) {
@@ -1137,8 +1137,8 @@ function calcDashboard() {
     cashOnHand:   bankStart + cashBuyIns - cashPayouts - cashStaffPayouts - cashExpenses,
     // eCashOnHand = eCashBuyIns - eCashPayouts - eCashStaffPayouts
     eCashOnHand:  eCashBuyIns - eCashPayouts - eCashStaffPayouts,
-    // chipsOnHand via getExpectedChips — single shared formula (tips once; no drop)
-    chipsOnHand:  getExpectedChips(),
+    // chipsOnHand via calculateChipMovements() only — explicit in/out ledger
+    chipsOnHand:  calculateChipMovements().chipsOnHand,
     drop: drop,
     tips: tips,
     expenses: expenses,
@@ -3898,7 +3898,7 @@ function refreshStartingSavedBanner() {
 }
 
 function sumTipsIn() {
-  // Sum all p.tips amounts once — chips formula only; drop does NOT enter chips
+  // Sum all p.tips amounts once — used by chip ledger chipsIn.tips
   var tipsIn = 0;
   (G.players || []).forEach(function(p) {
     tipsIn += tipsTotal(p);
@@ -3906,19 +3906,63 @@ function sumTipsIn() {
   return tipsIn;
 }
 
-function getExpectedChips() {
-  // Single source for dashboard chipsOnHand + chip count expected (chipCounts is log-only).
-  // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn - banksPulled
-  // tipsIn counted once; dropIn is NOT in this formula
-  var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
-  var chipsDealt = 0, chipsReturned = 0;
+/**
+ * Explicit chip movement ledger — sole source for chips on hand / expected chips.
+ *
+ * CHIPS IN (into house tray):
+ *   float        — session starting chip float (sessionSettings.chipFloat)
+ *   cashOuts     — all player cash-outs (chips returned when Pay Out completes)
+ *   tips         — all tip chips taken in (sumTipsIn / tipsTotal once)
+ *   chipTurnIns  — pending p.chipTurnIn only (cleared on Pay Out → lives in cashOuts;
+ *                  do NOT also sum historical turn-ins or you double-count)
+ *
+ * CHIPS OUT (leaving house tray):
+ *   buyIns       — all buy-ins: CASH / ECASH / MARKER / BONUS
+ *   banks        — G.dealerBanks pulled to tables
+ *   drop         — all p.drops (chips removed to drop box)
+ *
+ * chipsOnHand = chipsIn.total - chipsOut.total
+ *
+ * Callers: getExpectedChips(), calcDashboard().chipsOnHand — nowhere else may invent a parallel formula.
+ */
+function calculateChipMovements() {
+  var floatAmt = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
+  var cashOuts = 0, tips = 0, chipTurnIns = 0;
+  var buyIns = 0, drop = 0;
   (G.players || []).forEach(function(p) {
-    (p.buyIns || []).forEach(function(b) { chipsDealt += b.amount || 0; });
-    (p.cashOuts || []).forEach(function(c) { chipsReturned += c.amount || 0; });
+    (p.buyIns || []).forEach(function(b) { buyIns += b.amount || 0; });
+    (p.cashOuts || []).forEach(function(c) { cashOuts += c.amount || 0; });
+    (p.drops || []).forEach(function(d) { drop += d.amount || 0; });
+    tips += tipsTotal(p);
+    // Pending turn-in only — after Pay Out, chipTurnIn is 0 and amount is in cashOuts
+    chipTurnIns += Number(p.chipTurnIn) || 0;
   });
-  var tipsIn = sumTipsIn();
-  var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
-  return chipFloat - chipsDealt + chipsReturned + tipsIn - banksPulled;
+  var banks = (typeof getBankTotal === 'function')
+    ? getBankTotal()
+    : ((G.dealerBanks || []).reduce(function(s, b) { return s + (b.amount || 0); }, 0));
+  var chipsInTotal = floatAmt + cashOuts + tips + chipTurnIns;
+  var chipsOutTotal = buyIns + banks + drop;
+  return {
+    chipsIn: {
+      float: floatAmt,
+      cashOuts: cashOuts,
+      tips: tips,
+      chipTurnIns: chipTurnIns,
+      total: chipsInTotal
+    },
+    chipsOut: {
+      buyIns: buyIns,
+      banks: banks,
+      drop: drop,
+      total: chipsOutTotal
+    },
+    chipsOnHand: chipsInTotal - chipsOutTotal
+  };
+}
+
+function getExpectedChips() {
+  // Dashboard chip count expected + running expected — via calculateChipMovements() only
+  return calculateChipMovements().chipsOnHand;
 }
 
 // Called from renderAll(); display-only chip count history (no accounting).
