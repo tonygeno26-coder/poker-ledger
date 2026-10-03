@@ -1150,13 +1150,11 @@ function playerIsStillPlaying(p) {
 }
 
 /**
- * Tilde (~) only when no chip turn-ins yet but marker debt is known (player-owes estimate).
- * Never tilde from cash / eCash / bonus chip-proxy estimates.
+ * LEDGER RULE: tilde estimates retired. Always false — marker with no chips is red OWES.
+ * Kept as a named helper so call sites stay stable; do not reintroduce gold/~ display.
  */
 function rosterBalanceIsTilde(p) {
-  if (!p) return false;
-  if (playerChipTurnInsTotal(p) > SETTLE_EPSILON) return false;
-  return playerOutstandingMarker(p) > SETTLE_EPSILON;
+  return false;
 }
 
 function playerCashOutsTotal(p) {
@@ -1833,7 +1831,7 @@ function formatAuditPlainText(snap) {
     lines.push('(none)');
   } else {
     snap.players.forEach(function(p) {
-      var balLabel = p.tilde ? ('~' + formatAuditMoney(p.balance)) : formatAuditMoney(p.balance);
+      var balLabel = formatAuditMoney(p.balance);
       if (p.stillPlaying) balLabel = formatAuditMoney(0) + ' (still playing)';
       lines.push(p.name);
       lines.push('  chipTurnIns: ' + formatAuditMoney(p.chipTurnIns));
@@ -1943,7 +1941,7 @@ function renderAuditPanelBody(snap) {
     html += '<div class="audit-empty">(none)</div>';
   } else {
     snap.players.forEach(function(p) {
-      var balLabel = p.tilde ? ('~' + formatAuditMoney(p.balance)) : formatAuditMoney(p.balance);
+      var balLabel = formatAuditMoney(p.balance);
       if (p.stillPlaying) balLabel = formatAuditMoney(0) + ' · still playing';
       var balColor = p.balance > SETTLE_EPSILON ? 'var(--green)' : (p.balance < -SETTLE_EPSILON ? 'var(--red)' : '');
       html += '<div class="audit-person">' + p.name + '</div>';
@@ -2751,19 +2749,8 @@ function tipsTotal(p) {
 }
 
 function rosterPlayerStatusBadge(p) {
-  // Still playing (cash/eCash/bonus only): neutral Even — never Owed/Owes from estimates
-  if (playerIsStillPlaying(p)) {
-    if (playerTotalInDisplay(p) > SETTLE_EPSILON || playerCreditsTotal(p) > SETTLE_EPSILON) {
-      return '<span class="badge badge-gray">Even</span>';
-    }
-  }
-  var tilde = rosterBalanceIsTilde(p);
+  // LEDGER RULE: red OWES / green OWED / neutral EVEN only (no tilde / yellow estimate badges)
   var bal = playerBalance(p);
-  if (!tilde && !playerIsStillPlaying(p)) {
-    var info = calcSettlementInfo(bal, p.id, 'BALANCE');
-    if (info.status === 'SETTLED') return '<span class="badge badge-green">Settled</span>';
-    if (info.status === 'PARTIAL') return '<span class="badge badge-yellow">Partial</span>';
-  }
   if (Math.abs(bal) <= SETTLE_EPSILON) return '<span class="badge badge-gray">Even</span>';
   if (bal < 0) return '<span class="badge badge-red">Owes</span>';
   return '<span class="badge badge-green">Owed</span>';
@@ -2789,16 +2776,8 @@ function rosterBalAmt(bal) {
   return '<span class="roster-amt pos">$' + fmt(bal) + '</span>';
 }
 
-/** Roster header balance: $0 while still playing; gold ~ only for outstanding marker (no turn-ins). */
+/** Roster header balance: red OWES / green OWED / neutral $0 EVEN (no tilde/~). */
 function rosterPlayerBalCell(p) {
-  if (playerIsStillPlaying(p)) {
-    return '<span class="roster-amt zero" title="Still playing">$0</span>';
-  }
-  if (rosterBalanceIsTilde(p)) {
-    var bal = playerBalance(p);
-    // Marker outstanding, no chips yet → ~ player owes
-    return '<span class="roster-amt" style="color:var(--gold)" title="Still playing — marker outstanding">~$' + fmt(Math.abs(bal)) + '</span>';
-  }
   return rosterBalAmt(playerBalance(p));
 }
 
@@ -3852,32 +3831,22 @@ function rosterPlayerExpandedHtml(p) {
   var chipsIn = playerChipTurnInsTotal(p);
   var markerDebt = playerOutstandingMarker(p);
   var creditsTotal = playerCreditsTotal(p);
-  var stillPlaying = playerIsStillPlaying(p);
-  var tilde = rosterBalanceIsTilde(p);
   var dispBal = playerDisplayBalance(p);
   var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
-    : (dispBal < 0 ? 'var(--red)' : (tilde ? 'var(--gold)' : 'var(--green)'));
-  var balPrefix = tilde ? '~' : '';
+    : (dispBal < 0 ? 'var(--red)' : 'var(--green)');
   var balAbs = '$' + fmt(Math.abs(dispBal));
   var balLabel;
-  if (stillPlaying) {
-    balLabel = '$0';
-  } else if (Math.abs(dispBal) <= SETTLE_EPSILON) {
+  if (Math.abs(dispBal) <= SETTLE_EPSILON) {
     balLabel = balAbs;
   } else if (dispBal < 0) {
-    balLabel = balPrefix + balAbs + ' (player owes)';
+    balLabel = balAbs + ' (player owes)';
   } else {
-    balLabel = balPrefix + balAbs + ' (house owes)';
+    balLabel = balAbs + ' (house owes)';
   }
-  var stillPlayingHint = (stillPlaying || tilde)
-    ? ' <span style="color:var(--gold);font-size:11px">(still playing)</span>'
-    : '';
   summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(chipsIn) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Marker debt: <strong style="color:' + (markerDebt > 0 ? 'var(--orange)' : 'var(--text-muted)') + '">$' + fmt(markerDebt) + '</strong></div>';
   summary += '<div class="roster-expand-summary">Credits: <strong style="color:' + (creditsTotal > 0 ? '#3b82f6' : 'var(--text-muted)') + '">$' + fmt(creditsTotal) + '</strong></div>';
-  summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong>'
-    + stillPlayingHint
-    + '</div>';
+  summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong></div>';
   var markerTotal = playerMarkerTotal(p);
   var bonusTotal = playerBonusTotal(p);
   if (bonusTotal > 0) {
