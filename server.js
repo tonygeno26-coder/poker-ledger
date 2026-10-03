@@ -450,6 +450,7 @@ app.post('/auth/verify', async function (req, res) {
     const ownerParam = String(body.owner || (req.query && req.query.owner) || '').trim();
 
     let authUser = null;
+    let sessionAccessToken = accessToken || null;
 
     if (accessToken) {
       const { data, error } = await supabase.auth.getUser(accessToken);
@@ -462,6 +463,9 @@ app.post('/auth/verify', async function (req, res) {
       });
       if (error) throw error;
       authUser = data.user;
+      if (data.session && data.session.access_token) {
+        sessionAccessToken = data.session.access_token;
+      }
     } else {
       return res.status(400).json({ error: 'token or access_token required' });
     }
@@ -485,7 +489,9 @@ app.post('/auth/verify', async function (req, res) {
       subscription_end: user.subscription_end,
       isActive: isSubscriptionActive(user),
       role: user.role || 'owner',
-      linked_owner_id: user.linked_owner_id || null
+      linked_owner_id: user.linked_owner_id || null,
+      // Client persists this for Bearer auth on invite/game routes
+      access_token: sessionAccessToken || null
     });
   } catch (err) {
     console.error('[auth/verify]', err);
@@ -830,6 +836,66 @@ app.get('/game/current/:ownerUserId', async function (req, res) {
     console.error('[game/current]', err);
     const status = err.status || 500;
     res.status(status).json({ error: err.message || 'Failed to load current game' });
+  }
+});
+
+/** Owner sync: upsert latest game state for host viewers to poll. */
+app.post('/game/save', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    const body = req.body || {};
+    const ownerUserId = String(body.ownerUserId || '').trim();
+    if (!ownerUserId) return res.status(400).json({ error: 'ownerUserId required' });
+    if (String(user.id) !== ownerUserId) {
+      return res.status(403).json({ error: 'Only the owner can save their game' });
+    }
+    if (user.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers cannot save games' });
+    }
+
+    let state = body.gameState;
+    if (typeof state === 'string') {
+      try {
+        state = JSON.parse(state);
+      } catch (e) {
+        return res.status(400).json({ error: 'gameState must be valid JSON' });
+      }
+    }
+    if (!state || typeof state !== 'object') {
+      return res.status(400).json({ error: 'gameState required' });
+    }
+
+    const now = new Date().toISOString();
+    const { data: existing, error: findErr } = await supabase
+      .from('games')
+      .select('id')
+      .eq('owner_user_id', ownerUserId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (findErr) throw findErr;
+
+    if (existing && existing.id) {
+      const { error: updErr } = await supabase
+        .from('games')
+        .update({ state: state, updated_at: now })
+        .eq('id', existing.id);
+      if (updErr) throw updErr;
+    } else {
+      const { error: insErr } = await supabase.from('games').insert({
+        owner_user_id: ownerUserId,
+        state: state,
+        updated_at: now
+      });
+      if (insErr) throw insErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[game/save]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to save game' });
   }
 });
 
