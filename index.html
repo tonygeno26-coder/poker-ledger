@@ -1096,23 +1096,18 @@ function updateStaffTaxPreview(staffId) {
 
 function calcDashboard() {
   var bankStart = G.sessionSettings.bankStart || 0;
-  var chipFloat = G.sessionSettings.chipFloat || 0;
   var cashBuyIns = 0, eCashBuyIns = 0, cashPayouts = 0, eCashPayouts = 0;
   var cashStaffPayouts = 0, eCashStaffPayouts = 0;
-  var chipsDealt = 0, chipsReturned = 0, drop = 0, tips = 0, expenses = 0, bonusChips = 0, staffTax = 0;
+  var drop = 0, tips = 0, expenses = 0, bonusChips = 0, staffTax = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
       if (b.type==='CASH')  cashBuyIns  += b.amount;
       if (b.type==='ECASH') eCashBuyIns += b.amount;
       if (b.type==='BONUS') bonusChips  += b.amount;
-      // ALL buy-in types (CASH/ECASH/MARKER/BONUS) deal real chips from the float
-      chipsDealt += b.amount;
     });
     (p.cashOuts||[]).forEach(function(c) {
       if (c.method==='CASH')  cashPayouts  += c.amount;
       if (c.method==='ECASH') eCashPayouts += c.amount;
-      // ALL cash-outs return chips to the float (method is how we pay, not chip movement)
-      chipsReturned += c.amount;
     });
     (p.staffPayouts||[]).forEach(function(sp) {
       var m = String(sp.method || 'CASH').toUpperCase();
@@ -1120,7 +1115,7 @@ function calcDashboard() {
       else cashStaffPayouts += sp.amount || 0;
     });
     (p.drops||[]).forEach(function(d){ drop += d.amount; });
-    (p.tips||[]).forEach(function(t){ tips += t.amount; });
+    tips += tipsTotal(p); // dashboard tips total only — chips use getExpectedChips/sumTipsIn once
     // House cut of tips — only staff tax contributes to profit (not gross tips)
     // Tax applied toward marker debt is NOT house staffTax cash income
     if (p.staffRole) {
@@ -1130,7 +1125,6 @@ function calcDashboard() {
       });
     }
   });
-  var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
   // Expenses: house card → G.expenses; staff row → p.expenses (cash outflows; no method field)
   var cashExpenses = 0;
   (G.expenses||[]).forEach(function(e){ cashExpenses += e.amount; });
@@ -1143,9 +1137,8 @@ function calcDashboard() {
     cashOnHand:   bankStart + cashBuyIns - cashPayouts - cashStaffPayouts - cashExpenses,
     // eCashOnHand = eCashBuyIns - eCashPayouts - eCashStaffPayouts
     eCashOnHand:  eCashBuyIns - eCashPayouts - eCashStaffPayouts,
-    // chipsOnHand = chipFloat - chipsDealt + chipsReturned - banksPulled
-    // Tips and drop do NOT affect chips
-    chipsOnHand:  chipFloat - chipsDealt + chipsReturned - banksPulled,
+    // chipsOnHand via getExpectedChips — single shared formula (tips once; no drop)
+    chipsOnHand:  getExpectedChips(),
     drop: drop,
     tips: tips,
     expenses: expenses,
@@ -3904,18 +3897,28 @@ function refreshStartingSavedBanner() {
   }
 }
 
+function sumTipsIn() {
+  // Sum all p.tips amounts once — chips formula only; drop does NOT enter chips
+  var tipsIn = 0;
+  (G.players || []).forEach(function(p) {
+    tipsIn += tipsTotal(p);
+  });
+  return tipsIn;
+}
+
 function getExpectedChips() {
-  // Same formula as calcDashboard().chipsOnHand — live G only (chipCounts is log-only).
-  // chipsOnHand = chipFloat - chipsDealt + chipsReturned - banksPulled
-  // Tips and drop do NOT affect chips
+  // Single source for dashboard chipsOnHand + chip count expected (chipCounts is log-only).
+  // chipsOnHand = chipFloat - chipsDealt + chipsReturned + tipsIn - banksPulled
+  // tipsIn counted once; dropIn is NOT in this formula
   var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
   var chipsDealt = 0, chipsReturned = 0;
   (G.players || []).forEach(function(p) {
     (p.buyIns || []).forEach(function(b) { chipsDealt += b.amount || 0; });
     (p.cashOuts || []).forEach(function(c) { chipsReturned += c.amount || 0; });
   });
+  var tipsIn = sumTipsIn();
   var banksPulled = (typeof getBankTotal === 'function') ? getBankTotal() : ((G.dealerBanks||[]).reduce(function(s,b){ return s + (b.amount||0); }, 0));
-  return chipFloat - chipsDealt + chipsReturned - banksPulled;
+  return chipFloat - chipsDealt + chipsReturned + tipsIn - banksPulled;
 }
 
 // Called from renderAll(); display-only chip count history (no accounting).
