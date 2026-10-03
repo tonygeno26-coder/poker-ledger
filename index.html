@@ -274,13 +274,14 @@ select.inp{appearance:none;-webkit-appearance:none}
 .modal-bg.sig-overlay .sig-modal-fullscreen{flex:1}
 .sig-title{color:var(--red);font-size:22px;font-weight:900;letter-spacing:1px}
 .sig-sub{font-size:15px;color:var(--gold);margin:-6px 0 14px;line-height:1.5;text-transform:none;letter-spacing:0;font-weight:700}
-.sig-canvas-wrap{width:100%;height:300px;min-height:300px;flex:0 0 300px;touch-action:none;-webkit-user-select:none;user-select:none;display:flex}
-#marker-sign-canvas{display:block;width:100%;height:300px;background:#111;border-radius:12px;border:1px solid #333;touch-action:none;cursor:crosshair;flex:1}
+.sig-canvas-wrap{width:100%;height:300px;min-height:300px;flex:0 0 300px;touch-action:none;-webkit-user-select:none;user-select:none;display:flex;background:#FFFFFF;border:1px solid rgba(255,255,255,0.35);border-radius:12px;padding:8px;box-sizing:border-box;box-shadow:0 0 0 1px rgba(0,0,0,0.35)}
+#marker-sign-canvas{display:block;width:100%;height:100%;background:#FFFFFF;border-radius:8px;border:1px solid #ccc;touch-action:none;cursor:crosshair;flex:1}
 .sig-actions{display:flex;flex-direction:column;gap:10px;margin-top:14px;align-items:stretch}
 .sig-actions .btn-sig-clear{width:100%;background:#3a3a3a;border:1px solid #555;color:#ccc;font-weight:700}
 .sig-actions .btn-sig-confirm{width:100%;background:var(--green);border:1px solid var(--green);color:#000;font-weight:800}
 .sig-actions .sig-skip{width:100%;background:none;border:none;color:var(--text-muted);font-size:13px;font-weight:600;padding:10px 12px;cursor:pointer;text-decoration:underline;text-align:center}
-.sig-view-img{display:block;width:100%;max-height:min(70vh,520px);object-fit:contain;background:#111;border-radius:12px;border:1px solid #333;margin:0 auto}
+.sig-view-frame{background:#FFFFFF;border:1px solid rgba(255,255,255,0.35);border-radius:12px;padding:8px;box-sizing:border-box;box-shadow:0 0 0 1px rgba(0,0,0,0.35)}
+.sig-view-img{display:block;width:100%;max-height:min(70vh,520px);object-fit:contain;background:#FFFFFF;border:none;border-radius:8px;margin:0 auto}
 .sig-badge-btn{border:none;cursor:pointer;font:inherit}
 
 .toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));right:16px;left:16px;margin:0 auto;max-width:360px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;text-align:center}
@@ -840,7 +841,9 @@ select.inp{appearance:none;-webkit-appearance:none}
       <button class="modal-close" onclick="closeModal('modal-marker-view')">×</button>
     </div>
     <div class="sig-sub" id="marker-view-sub"></div>
-    <img id="marker-view-img" class="sig-view-img" alt="Marker signature">
+    <div class="sig-view-frame">
+      <img id="marker-view-img" class="sig-view-img" alt="Marker signature">
+    </div>
   </div>
 </div>
 
@@ -3279,10 +3282,10 @@ function clearMarkerSignature() {
   if (!canvas || !_markerSignCtx) return;
   var dpr = window.devicePixelRatio || 1;
   _markerSignCtx.setTransform(1, 0, 0, 1, 0, 0);
-  _markerSignCtx.fillStyle = '#111111';
+  _markerSignCtx.fillStyle = '#FFFFFF';
   _markerSignCtx.fillRect(0, 0, canvas.width, canvas.height);
   _markerSignCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  _markerSignCtx.strokeStyle = '#ffffff';
+  _markerSignCtx.strokeStyle = '#000000';
   _markerSignCtx.lineWidth = 2.5;
   _markerSignCtx.lineCap = 'round';
   _markerSignCtx.lineJoin = 'round';
@@ -3295,8 +3298,12 @@ function initMarkerSignCanvas() {
   if (!canvas || !wrap) return;
 
   var dpr = window.devicePixelRatio || 1;
-  var w = Math.max(280, Math.floor(wrap.clientWidth || window.innerWidth || 320));
-  var h = 300;
+  // Use content box inside padded wrap so retina sizing stays accurate
+  var style = window.getComputedStyle(wrap);
+  var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+  var padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  var w = Math.max(280, Math.floor((wrap.clientWidth || window.innerWidth || 320) - padX));
+  var h = Math.max(200, Math.floor((wrap.clientHeight || 300) - padY));
   canvas.width = Math.floor(w * dpr);
   canvas.height = Math.floor(h * dpr);
   canvas.style.width = w + 'px';
@@ -3352,6 +3359,19 @@ function onMarkerSignPointerUp(e) {
   _markerSignLast = null;
 }
 
+function bakeMarkerSignatureDataUrl(sourceCanvas) {
+  if (!sourceCanvas) return '';
+  var out = document.createElement('canvas');
+  out.width = sourceCanvas.width;
+  out.height = sourceCanvas.height;
+  var ctx = out.getContext('2d');
+  // White fill under strokes so JPEG export has a solid white background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(sourceCanvas, 0, 0);
+  return out.toDataURL('image/jpeg', 0.6);
+}
+
 function confirmMarkerSignature() {
   if (!_markerSignTarget) return;
   if (!_markerSignHasInk) { toast('Please sign before confirming'); return; }
@@ -3363,8 +3383,8 @@ function confirmMarkerSignature() {
   }
   var b = p.buyIns[_markerSignTarget.buyInIndex];
   var canvas = document.getElementById('marker-sign-canvas');
-  // JPEG on buy-in only — no MARKER_SIGNED txn
-  var dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+  // Bake white bg under dark strokes for export
+  var dataUrl = bakeMarkerSignatureDataUrl(canvas);
   b.signatureData = dataUrl;
   b.signedAt = new Date().toISOString();
   var keepId = p.id;
