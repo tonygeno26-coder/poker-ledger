@@ -75,12 +75,12 @@ input,select,button,textarea{font-family:inherit}
   display:flex;align-items:center;justify-content:space-between;
   gap:10px;
 }
-.logo{display:flex;align-items:flex-start;gap:10px;min-width:0;padding-left:0}
+.logo{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1;padding-left:0}
 .logo img{
   display:block;
   height:48px;
   width:auto;
-  max-width:min(220px,52vw);
+  max-width:min(220px,62vw);
   object-fit:contain;
   /* no drop-shadow / glow — white Pocket/POKER must stay clean on black header */
   filter:none;
@@ -91,6 +91,41 @@ input,select,button,textarea{font-family:inherit}
   font-size:10px;color:var(--text-muted);display:block;
   font-weight:500;letter-spacing:0.2px;margin-top:3px;line-height:1.2;
 }
+
+/* Header hamburger + dropdown (panel below header, not a modal) */
+.hdr-menu-btn{
+  flex-shrink:0;
+  width:44px;height:44px;min-width:44px;min-height:44px;
+  margin-right:max(0px, calc(env(safe-area-inset-right, 0px) - 4px));
+  display:inline-flex;align-items:center;justify-content:center;
+  background:transparent;border:none;border-radius:10px;
+  color:#fff;font-size:22px;line-height:1;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.hdr-menu-btn:hover,.hdr-menu-btn[aria-expanded="true"]{background:var(--surface2)}
+.hdr-menu-btn:focus-visible{outline:2px solid var(--text-muted);outline-offset:2px}
+.hdr-menu{
+  position:fixed;left:0;right:0;top:var(--header-h);z-index:199;
+  background:#111111;border-bottom:1px solid var(--border);
+  padding:6px 0;
+  padding-left:env(safe-area-inset-left, 0px);
+  padding-right:env(safe-area-inset-right, 0px);
+  transform:translateY(-8px);opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+.hdr-menu.open{
+  transform:translateY(0);opacity:1;visibility:visible;pointer-events:auto;
+}
+.hdr-menu-item{
+  display:flex;align-items:center;gap:12px;width:100%;
+  min-height:48px;padding:12px 18px;
+  background:transparent;border:none;border-radius:0;
+  color:var(--text);font-size:15px;font-weight:700;text-align:left;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.hdr-menu-item:hover{background:var(--surface2)}
+.hdr-menu-item:focus-visible{outline:2px solid var(--text-muted);outline-offset:-2px}
+.hdr-menu-ico{font-size:18px;line-height:1;width:1.4em;text-align:center;flex-shrink:0}
 
 /* BOTTOM TAB BAR */
 .nav{
@@ -464,11 +499,12 @@ select.inp{appearance:none;-webkit-appearance:none}
       <span id="game-label">No active game</span>
     </div>
   </div>
-  <div class="flex-row no-print" style="gap:6px">
-    <button class="btn btn-outline btn-sm" onclick="newGame(this)">New Game</button>
-    <button class="btn btn-purple btn-sm" onclick="saveGame()">Save</button>
-    <button class="btn btn-outline btn-sm" type="button" onclick="pbOpenAccount()">Account</button>
-  </div>
+  <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)">☰</button>
+</div>
+<div class="hdr-menu no-print" id="hdr-menu" role="menu" aria-labelledby="hdr-menu-btn" hidden>
+  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true">🃏</span>New Game</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true">💾</span>Save</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true">👤</span>Account</button>
 </div>
 
 <!-- BOTTOM TAB BAR -->
@@ -1428,6 +1464,61 @@ function saveGame() {
   lsSet('pb-current', JSON.stringify(G));
   toast('Game saved ✅');
 }
+
+// ── Header hamburger menu (wires to existing newGame / saveGame / pbOpenAccount) ──
+function isHeaderMenuOpen() {
+  var menu = document.getElementById('hdr-menu');
+  return !!(menu && menu.classList.contains('open'));
+}
+function openHeaderMenu() {
+  var menu = document.getElementById('hdr-menu');
+  var btn = document.getElementById('hdr-menu-btn');
+  if (!menu || !btn) return;
+  menu.hidden = false;
+  // force reflow so transition runs when adding .open
+  void menu.offsetWidth;
+  menu.classList.add('open');
+  btn.setAttribute('aria-expanded', 'true');
+}
+function closeHeaderMenu() {
+  var menu = document.getElementById('hdr-menu');
+  var btn = document.getElementById('hdr-menu-btn');
+  if (!menu || !btn) return;
+  menu.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+  window.setTimeout(function(){
+    if (!menu.classList.contains('open')) menu.hidden = true;
+  }, 200);
+}
+function toggleHeaderMenu(ev) {
+  if (ev) ev.stopPropagation();
+  if (isHeaderMenuOpen()) closeHeaderMenu();
+  else openHeaderMenu();
+}
+function headerMenuNewGame(btn) {
+  // Keep menu open while confirmAction is armed (two-tap); close after confirm
+  newGame(btn);
+  if (!btn || !btn.classList.contains('confirm-armed')) closeHeaderMenu();
+}
+function headerMenuSave() {
+  closeHeaderMenu();
+  saveGame();
+}
+function headerMenuAccount() {
+  closeHeaderMenu();
+  pbOpenAccount();
+}
+document.addEventListener('click', function(ev) {
+  if (!isHeaderMenuOpen()) return;
+  var menu = document.getElementById('hdr-menu');
+  var btn = document.getElementById('hdr-menu-btn');
+  var t = ev.target;
+  if ((menu && menu.contains(t)) || (btn && btn.contains(t))) return;
+  closeHeaderMenu();
+});
+document.addEventListener('keydown', function(ev) {
+  if (ev.key === 'Escape' && isHeaderMenuOpen()) closeHeaderMenu();
+});
 
 function resetLocalData(btn) {
   confirmAction(btn, 'Click again to erase ALL local data', function(){
