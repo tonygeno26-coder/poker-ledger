@@ -34,7 +34,7 @@
   /* Cap edge-to-edge chrome */
   --safe-top:max(env(safe-area-inset-top, 0px), 16px);
   --safe-bottom:max(env(safe-area-inset-bottom, 0px), 8px);
-  --header-inner:72px; /* text logo + muted game label + bottom pad */
+  --header-inner:72px; /* ~56px wordmark + muted game label + pad */
   --header-h:calc(var(--safe-top) + var(--header-inner));
   --nav-inner:58px;
   --nav-h:calc(var(--safe-bottom) + var(--nav-inner));
@@ -70,30 +70,41 @@ input,select,button,textarea{font-family:inherit}
   position:fixed;top:0;left:0;right:0;z-index:200;
   background:#000000;
   border-bottom:1px solid var(--border);
-  padding:10px 16px 12px;
+  padding:8px 16px 8px;
   padding-top:var(--safe-top);
-  display:flex;align-items:center;justify-content:space-between;
-  gap:10px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-rows:auto auto;
+  align-items:center;
+  column-gap:10px;
+  row-gap:2px;
 }
-.logo{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1;padding-left:0}
+.logo{display:contents}
 .logo img{
+  grid-column:1;grid-row:1;
   display:block;
-  height:48px;
+  height:56px;
   width:auto;
-  max-width:min(220px,62vw);
+  max-width:80%;
+  justify-self:start;
   object-fit:contain;
+  object-position:left center;
   /* no drop-shadow / glow — white Pocket/POKER must stay clean on black header */
   filter:none;
   user-select:none;
   -webkit-user-select:none;
 }
 #game-label{
+  grid-column:1;grid-row:2;
   font-size:10px;color:var(--text-muted);display:block;
-  font-weight:500;letter-spacing:0.2px;margin-top:3px;line-height:1.2;
+  font-weight:500;letter-spacing:0.2px;margin-top:0;line-height:1.2;
+  min-width:0;
 }
 
 /* Header hamburger + dropdown (panel below header, not a modal) */
 .hdr-menu-btn{
+  grid-column:2;grid-row:1;
+  align-self:center;
   flex-shrink:0;
   width:44px;height:44px;min-width:44px;min-height:44px;
   margin-right:max(0px, calc(env(safe-area-inset-right, 0px) - 4px));
@@ -494,10 +505,8 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- HEADER -->
 <div class="header">
   <div class="logo">
-    <div>
-      <img src="logo.png" alt="Pocketbooks Poker" style="height: 48px; object-fit: contain;">
-      <span id="game-label">No active game</span>
-    </div>
+    <img src="logo.png" alt="Pocketbooks Poker" width="210" height="56">
+    <span id="game-label">No active game</span>
   </div>
   <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)">☰</button>
 </div>
