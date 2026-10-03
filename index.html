@@ -218,6 +218,33 @@ body.host-view-mode button.hv-allow{pointer-events:auto;opacity:1}
   text-transform:uppercase;letter-spacing:1px;
   margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
 }
+/* Expenses master accordion */
+.expense-acc-header{
+  display:flex;align-items:center;gap:10px;width:100%;
+  background:none;border:none;padding:0;margin:0;cursor:pointer;
+  color:inherit;font:inherit;text-align:left;
+}
+.expense-acc-title{
+  font-size:11px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:1px;
+  display:inline-flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;
+}
+.expense-acc-total{font-size:14px;font-weight:800;color:var(--text);letter-spacing:0;text-transform:none}
+.expense-acc-chevron{transition:transform 0.2s ease;color:var(--text-muted);flex-shrink:0}
+.expense-acc-header[aria-expanded="true"] .expense-acc-chevron{transform:rotate(180deg)}
+.expense-acc-body{margin-top:12px}
+.expense-acc-sec{
+  font-size:10px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:1.2px;
+  margin:14px 0 8px;display:flex;align-items:center;gap:8px;
+}
+.expense-acc-sec::before,.expense-acc-sec::after{content:'';flex:1;height:1px;background:var(--border)}
+.expense-acc-totals{
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;margin-top:4px;font-size:12px;line-height:1.75;color:var(--text-muted);
+}
+.expense-acc-totals strong{color:var(--text);font-weight:800}
+.expense-acc-empty{text-align:center;padding:10px;color:var(--text-muted);font-size:12px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:768px){.grid-2{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
@@ -639,17 +666,25 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   </div>
 
   <div class="card" id="card-expenses">
-    <div class="card-title"><i data-lucide="receipt" aria-hidden="true"></i> House Expense</div>
-    <div class="dash-stack-1" style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="inp-group"><div class="inp-label">Description</div><input class="inp" id="exp-desc" placeholder="e.g. Cards, food, tip out"></div>
-      <div class="inp-group"><div class="inp-label">Amount</div><input class="inp" type="number" id="exp-amount" placeholder="0" min="0"></div>
+    <button type="button" class="expense-acc-header" id="expense-acc-toggle" aria-expanded="false" aria-controls="expense-acc-body" onclick="toggleExpensesAccordion()">
+      <span class="expense-acc-title">
+        <i data-lucide="receipt" aria-hidden="true"></i>
+        Expenses · <span id="expense-acc-total" class="expense-acc-total">$0</span> total
+      </span>
+      <i data-lucide="chevron-down" class="expense-acc-chevron" id="expense-acc-chevron" aria-hidden="true"></i>
+    </button>
+    <div id="expense-acc-body" class="expense-acc-body" style="display:none" hidden>
+      <div class="dash-stack-1" style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="inp-group"><div class="inp-label">Description</div><input class="inp" id="exp-desc" placeholder="e.g. Cards, food, tip out"></div>
+        <div class="inp-group"><div class="inp-label">Amount</div><input class="inp" type="number" id="exp-amount" placeholder="0" min="0"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+        <button class="btn btn-purple" style="flex:1" onclick="addHouseExpense()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
+        <button type="button" class="btn btn-outline btn-sm" id="house-receipt-btn" onclick="pickExpenseReceipt('house')" style="flex-shrink:0;white-space:nowrap"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Receipt</button>
+        <span id="house-receipt-status" style="font-size:11px;color:var(--green);display:none"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Ready</span>
+      </div>
+      <div id="expense-list" class="scroll-y" style="max-height:min(320px,45vh);overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
-      <button class="btn btn-purple" style="flex:1" onclick="addHouseExpense()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
-      <button type="button" class="btn btn-outline btn-sm" id="house-receipt-btn" onclick="pickExpenseReceipt('house')" style="flex-shrink:0;white-space:nowrap"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Receipt</button>
-      <span id="house-receipt-status" style="font-size:11px;color:var(--green);display:none"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Ready</span>
-    </div>
-    <div id="expense-list" class="scroll-y" style="max-height:min(240px,35vh);overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div></div>
   </div>
 
   <div class="card" id="card-chip-count">
@@ -4014,12 +4049,77 @@ function removeExpense(btn, id) {
   });
 }
 
+/** Master Expenses accordion — collapsed by default; form + grouped list when open. */
+var _expensesAccordionOpen = false;
+
+function syncExpensesAccordionUi() {
+  var body = document.getElementById('expense-acc-body');
+  var btn = document.getElementById('expense-acc-toggle');
+  if (body) {
+    body.style.display = _expensesAccordionOpen ? 'block' : 'none';
+    if (_expensesAccordionOpen) body.removeAttribute('hidden');
+    else body.setAttribute('hidden', '');
+  }
+  if (btn) btn.setAttribute('aria-expanded', _expensesAccordionOpen ? 'true' : 'false');
+}
+
+function toggleExpensesAccordion() {
+  _expensesAccordionOpen = !_expensesAccordionOpen;
+  syncExpensesAccordionUi();
+  if (_expensesAccordionOpen) refreshLucideIcons();
+}
+
 function renderExpenseList() {
   var el = document.getElementById('expense-list');
+  var totalEl = document.getElementById('expense-acc-total');
+  syncExpensesAccordionUi();
+
+  var houseList = (G.expenses || []).filter(function(e){ return e.type === 'HOUSE' || !e.playerId; });
+  var houseUnpaid = 0;
+  houseList.forEach(function(e){ if (!e.paid) houseUnpaid += Number(e.amount) || 0; });
+
+  var playerCreditRows = [];
+  var creditsSum = 0;
+  (G.players || []).forEach(function(p) {
+    (p.credits || []).forEach(function(c, idx) {
+      var amt = Number(c && c.amount) || 0;
+      creditsSum += amt;
+      playerCreditRows.push({ p: p, c: c, idx: idx, amount: amt });
+    });
+  });
+
+  // Same source as calcDashboard staffCashExpenses: all p.expenses[] (profiles keep their own view)
+  var staffRows = [];
+  var staffTotal = 0;
+  (G.players || []).forEach(function(p) {
+    (p.expenses || []).forEach(function(e) {
+      var amt = Number(e && e.amount) || 0;
+      staffTotal += amt;
+      staffRows.push({ p: p, e: e, amount: amt });
+    });
+  });
+
+  var bonusIssued = 0;
+  (G.players || []).forEach(function(p) {
+    (p.buyIns || []).forEach(function(b) {
+      if (b.type === 'BONUS') bonusIssued += Number(b.amount) || 0;
+    });
+  });
+
+  // Header / TOTAL grand: unpaid house + player credits + staff reimb + bonus
+  // (matches unpaid-only house rule; paid house leaves cash/eCash instead)
+  var grandTotal = houseUnpaid + creditsSum + staffTotal + bonusIssued;
+  if (totalEl) totalEl.textContent = '$' + fmt(grandTotal);
+
   if (!el) return;
-  var list = (G.expenses || []).filter(function(e){ return e.type === 'HOUSE' || !e.playerId; });
-  var html = list.length
-    ? list.slice().reverse().map(function(e){
+
+  function secLabel(label) {
+    return '<div class="expense-acc-sec">' + label + '</div>';
+  }
+
+  // ── HOUSE ──
+  var houseHtml = houseList.length
+    ? houseList.slice().reverse().map(function(e){
         var receiptBtn = e.receiptPhoto
           ? '<button type="button" title="View receipt" onclick="viewExpenseReceiptPhoto(\'house:' + e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">' + lucideIcon('camera','action-ico') + '</button>'
           : '';
@@ -4050,19 +4150,60 @@ function renderExpenseList() {
           +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">' + lucideIcon('x','action-ico') + '</button>'
           +'</div>';
       }).join('')
-    : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div>';
-  var bonusIssued = 0;
-  (G.players || []).forEach(function(p) {
-    (p.buyIns || []).forEach(function(b) {
-      if (b.type === 'BONUS') bonusIssued += Number(b.amount) || 0;
-    });
-  });
+    : '<div class="expense-acc-empty">No house expenses logged</div>';
+
+  // Bonus chips issued (house cost) under HOUSE section
   if (bonusIssued > 0) {
-    html += '<div style="margin-top:10px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--gold);border-top:1px solid var(--border)">'
+    houseHtml += '<div style="margin-top:8px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--gold);border:1px solid rgba(212,175,55,0.25);border-radius:10px;background:rgba(212,175,55,0.06)">'
       + 'Bonus chips issued: $' + fmt(bonusIssued)
       + '</div>';
   }
-  el.innerHTML = html;
+
+  // ── PLAYERS ── read p.credits[] (same arrays as player profiles — no duplication)
+  var playersHtml = playerCreditRows.length
+    ? playerCreditRows.slice().reverse().map(function(row){
+        var desc = row.c.description || row.c.desc || '';
+        return '<div class="buyin-log-item" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.28);flex-wrap:wrap;gap:6px">'
+          + '<span class="badge badge-blue" style="flex-shrink:0">CREDIT</span>'
+          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (row.p.name || 'Player') + '</span>'
+          + '<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:80px">' + desc + '</span>'
+          + '<span style="font-weight:800;color:#3b82f6;margin-right:4px">$' + fmt(row.amount) + '</span>'
+          + '<button type="button" onclick="event.stopPropagation();voidRosterCredit(this,' + row.p.id + ',' + row.idx + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void credit">' + lucideIcon('x','action-ico') + '</button>'
+          + '</div>';
+      }).join('')
+    : '<div class="expense-acc-empty">No player credits</div>';
+
+  // ── STAFF ── read p.expenses[] (same arrays as staff profiles — no duplication)
+  var staffHtml = staffRows.length
+    ? staffRows.slice().reverse().map(function(row){
+        var desc = row.e.description || row.e.desc || '';
+        var receiptBtn = row.e.receiptPhoto
+          ? '<button type="button" title="View receipt" onclick="event.stopPropagation();viewExpenseReceiptPhoto(\'staff:' + row.p.id + ':' + row.e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">' + lucideIcon('camera','action-ico') + '</button>'
+          : '';
+        return '<div class="buyin-log-item" style="background:rgba(47,158,68,0.08);border-color:rgba(47,158,68,0.28);flex-wrap:wrap;gap:6px">'
+          + '<span class="badge badge-green" style="flex-shrink:0">REIMB</span>'
+          + '<span style="font-weight:700;font-size:12px;color:var(--text);min-width:64px">' + (row.p.name || 'Staff') + '</span>'
+          + '<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:80px">' + desc + '</span>'
+          + receiptBtn
+          + '<span style="font-weight:800;color:var(--green);margin-right:4px">$' + fmt(row.amount) + '</span>'
+          + '<button type="button" onclick="event.stopPropagation();rosterVoidStaffExpense(this,' + row.p.id + ',\'' + row.e.id + '\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void reimbursement">' + lucideIcon('x','action-ico') + '</button>'
+          + '</div>';
+      }).join('')
+    : '<div class="expense-acc-empty">No staff reimbursements</div>';
+
+  // ── TOTAL ──
+  var totalsHtml = '<div class="expense-acc-totals">'
+    + '<div style="display:flex;justify-content:space-between"><span>House (unpaid)</span><strong>$' + fmt(houseUnpaid) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between"><span>Player credits</span><strong style="color:#3b82f6">$' + fmt(creditsSum) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between"><span>Staff</span><strong style="color:var(--green)">$' + fmt(staffTotal) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between"><span>Bonus</span><strong style="color:var(--gold)">$' + fmt(bonusIssued) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)"><span style="font-weight:700;color:var(--text)">Grand total</span><strong>$' + fmt(grandTotal) + '</strong></div>'
+    + '</div>';
+
+  el.innerHTML = secLabel('House') + houseHtml
+    + secLabel('Players') + playersHtml
+    + secLabel('Staff') + staffHtml
+    + secLabel('Total') + totalsHtml;
   refreshLucideIcons();
 }
 
