@@ -554,11 +554,13 @@ select.inp{appearance:none;-webkit-appearance:none}
     <div class="card-title">🎲 Chip Count</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <div>
-        <div class="inp-label" style="margin-bottom:4px">Expected Chips</div>
+        <div class="inp-label" style="margin-bottom:4px">Expected</div>
         <div id="cc-expected" style="font-size:22px;font-weight:800;color:var(--gold)">$0</div>
       </div>
       <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()">🎲 Count Chips</button>
     </div>
+    <div id="cc-last-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--text-muted)">No running counts yet</div>
+    <div class="inp-label" style="margin-bottom:6px">Count Log</div>
     <div id="chip-count-log" class="scroll-y" style="max-height:min(200px,30vh);overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px">
       <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No chip counts logged</div>
     </div>
@@ -783,7 +785,11 @@ select.inp{appearance:none;-webkit-appearance:none}
         <div class="inp-label">Note (optional)</div>
         <input class="inp" id="rc-note" placeholder="e.g. end of night count">
       </div>
-      <button class="btn btn-purple" style="width:100%" onclick="saveRunningCount()">💾 Save Running Count</button>
+      <button class="btn btn-purple" style="width:100%;margin-bottom:14px" onclick="saveRunningCount()">💾 Save Running Count</button>
+      <div class="inp-label" style="margin-bottom:6px">Count History</div>
+      <div id="chip-count-history" class="scroll-y" style="max-height:min(220px,28vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
+        <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No running counts yet</div>
+      </div>
     </div>
   </div>
 </div>
@@ -3790,7 +3796,11 @@ function switchCCTab(tab) {
   document.getElementById('cctab-starting').style.color      = tab==='starting' ? '#fff'           : 'var(--text-muted)';
   document.getElementById('cctab-running').style.background  = tab==='running'  ? 'var(--purple)'  : 'transparent';
   document.getElementById('cctab-running').style.color       = tab==='running'  ? '#fff'           : 'var(--text-muted)';
-  if (tab === 'running') { renderDealerBanks(); updateRunningExpected(); /* expected fresh from G, not last count */ }
+  if (tab === 'running') {
+    renderDealerBanks();
+    updateRunningExpected(); /* expected fresh from G, not last count */
+    renderChipCountLog();
+  }
 }
 
 function openChipCountModal() {
@@ -3819,6 +3829,7 @@ function openChipCountModal() {
   refreshStartingSavedBanner();
   // Recalculate expected fresh from live G state (not last saved count)
   updateRunningExpected();
+  renderChipCountLog();
   switchCCTab('starting');
   openModal('modal-chip-count');
   setTimeout(function(){ var el=document.getElementById('sc-d5'); if(el) el.focus(); }, 100);
@@ -3965,25 +3976,101 @@ function getExpectedChips() {
   return calculateChipMovements().chipsOnHand;
 }
 
-// Called from renderAll(); display-only chip count history (no accounting).
-function renderChipCountLog() {
-  var el = document.getElementById('chip-count-log');
-  if (!el) return;
-  var list = G.chipCounts || [];
-  if (!list.length) {
-    el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No chip counts logged</div>';
-    return;
+// Field accessors for G.chipCounts[] entries from saveRunningCount / saveStartingCount.
+function chipCountActual(c) {
+  if (c.actualTotal != null) return c.actualTotal;
+  if (c.actual != null) return c.actual;
+  if (c.total != null) return c.total;
+  return 0;
+}
+function chipCountExpected(c) {
+  if (c.expectedTotal != null) return c.expectedTotal;
+  if (c.expected != null) return c.expected;
+  return 0;
+}
+function chipCountVariance(c) {
+  if (c.variance != null) return c.variance;
+  return chipCountActual(c) - chipCountExpected(c);
+}
+function chipCountTime(c) {
+  if (c.time) return c.time;
+  if (c.ts) return c.ts;
+  if (c.timestamp) {
+    try { return new Date(c.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
+    catch (e) { return ''; }
   }
-  el.innerHTML = list.slice(0, 20).map(function(c) {
-    var label = c.type || 'COUNT';
-    var total = c.actualTotal != null ? c.actualTotal : (c.total != null ? c.total : 0);
-    var time = c.time || '';
-    var note = c.note ? ' · ' + c.note : '';
-    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">'
-      + '<span style="color:var(--text-muted)">' + label + (time ? ' · ' + time : '') + note + '</span>'
-      + '<span style="font-weight:800;color:var(--gold)">$' + fmt(total) + '</span>'
-      + '</div>';
-  }).join('');
+  return '';
+}
+function chipCountRowHtml(c) {
+  var actual = chipCountActual(c);
+  var expected = chipCountExpected(c);
+  var variance = chipCountVariance(c);
+  var vColor = Math.abs(variance) <= 50 ? 'var(--green)' : 'var(--red)';
+  var vStr = (variance >= 0 ? '+' : '') + '$' + fmt(variance);
+  var time = chipCountTime(c);
+  var note = c.note ? String(c.note) : '';
+  return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">'
+    + '<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:4px">'
+    + '<span style="color:var(--text-muted);font-weight:700">' + (time || '—') + '</span>'
+    + '<span style="font-weight:900;color:' + vColor + '">' + vStr + '</span>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;gap:10px;color:var(--text-muted);font-size:12px">'
+    + '<span>Actual <strong style="color:var(--text)">$' + fmt(actual) + '</strong></span>'
+    + '<span>Expected <strong style="color:var(--text)">$' + fmt(expected) + '</strong></span>'
+    + '</div>'
+    + (note ? '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">📝 ' + note + '</div>' : '')
+    + '</div>';
+}
+
+// Called from renderAll(); display-only chip count history (no accounting).
+// Dashboard: last 5 RUNNING. Modal Count History: all RUNNING. Newest first (unshift order).
+function renderChipCountLog() {
+  var running = (G.chipCounts || []).filter(function(c) {
+    return String(c.type || '').toUpperCase() === 'RUNNING';
+  });
+
+  var dashEl = document.getElementById('chip-count-log');
+  if (dashEl) {
+    if (!running.length) {
+      dashEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No chip counts logged</div>';
+    } else {
+      dashEl.innerHTML = running.slice(0, 5).map(chipCountRowHtml).join('');
+    }
+  }
+
+  var histEl = document.getElementById('chip-count-history');
+  if (histEl) {
+    if (!running.length) {
+      histEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No running counts yet</div>';
+    } else {
+      histEl.innerHTML = running.map(chipCountRowHtml).join('');
+    }
+  }
+
+  var lastEl = document.getElementById('cc-last-summary');
+  if (lastEl) {
+    if (!running.length) {
+      lastEl.innerHTML = 'No running counts yet';
+      lastEl.style.color = 'var(--text-muted)';
+    } else {
+      var last = running[0];
+      var actual = chipCountActual(last);
+      var expected = chipCountExpected(last);
+      var variance = chipCountVariance(last);
+      var vColor = Math.abs(variance) <= 50 ? 'var(--green)' : 'var(--red)';
+      var vStr = (variance >= 0 ? '+' : '') + '$' + fmt(variance);
+      var time = chipCountTime(last);
+      var note = last.note ? ' · ' + last.note : '';
+      lastEl.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px">Last Count'
+        + (time ? ' · ' + time : '') + '</div>'
+        + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+        + '<span>Actual <strong style="color:var(--text)">$' + fmt(actual) + '</strong></span>'
+        + '<span>Expected <strong style="color:var(--text)">$' + fmt(expected) + '</strong></span>'
+        + '<span style="font-weight:900;color:' + vColor + '">' + vStr + '</span>'
+        + '</div>'
+        + (note ? '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">' + note.replace(/^ · /, '') + '</div>' : '');
+    }
+  }
 }
 
 function updateRunningExpected() {
@@ -4101,6 +4188,8 @@ function saveRunningCount() {
   G.chipCounts.unshift(entry); // log only — getExpectedChips never reads this
   closeModal('modal-chip-count');
   autoSave();
+  calcAll();
+  renderAll(); // refresh dashboard log + last-count summary
   var msg = Math.abs(variance)<1 ? '✅ Chips balanced!' : ('⚠️ Variance: '+(variance>=0?'+':'')+'$'+fmt(variance));
   toast(msg);
 }
