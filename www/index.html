@@ -1323,7 +1323,7 @@ function staffHourlyPay(p) {
   return Math.round(rate * hours * 100) / 100;
 }
 
-/** Sum of ECASH buy-ins attributed to this person as Received By (live buyIns; voids excluded). */
+/** Sum of eCash attributed to this person as Received By: ECASH buy-ins + non-voided MARKER_PAYMENT method ECASH. */
 function staffEcashUsed(p) {
   if (!p) return 0;
   var rid = String(p.id);
@@ -1335,13 +1335,23 @@ function staffEcashUsed(p) {
       }
     });
   });
+  // Marker PAY IN eCash (same as ECASH_BUYIN for staff netting). Skip voided.
+  (G.txnLog || []).forEach(function(t) {
+    if (!t || t.voided === true) return;
+    if (t.type === 'MARKER_PAYMENT'
+        && String(t.method || '').toUpperCase() === 'ECASH'
+        && t.receivedById
+        && String(t.receivedById) === rid) {
+      total += (Number(t.amount) || 0);
+    }
+  });
   return Math.round(total * 100) / 100;
 }
 
 function staffTipBalance(p) {
-  // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By  (+ role-specific base/hourly; tax on tips only)
+  // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By (buy-ins + marker PAY IN)
   // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
-  // DROP does NOT affect staff payout / tip balance
+  // DROP does NOT affect staff payout / tip balance. No Chef overpay flooring.
   var grossTips  = tipsTotal(p);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var reimbursements = staffExpensesTotal(p);
@@ -1803,6 +1813,13 @@ function buildAuditSnapshot() {
     txnTotal += 1;
   });
 
+  var cm = calculateChipMovements();
+  var lastCount = (G.chipCounts && G.chipCounts.length) ? G.chipCounts[0] : null;
+  var lastCounted = lastCount ? chipCountActual(lastCount) : null;
+  var lastVariance = lastCount != null
+    ? (lastCounted - cm.chipsOnHand)
+    : null;
+
   return {
     players: players,
     cash: {
@@ -1839,6 +1856,18 @@ function buildAuditSnapshot() {
       staffTax: d.staffTax,
       expenses: d.expenses,
       estProfit: d.profit
+    },
+    chipMovement: {
+      float: cm.chipsIn.chipFloat,
+      chipTurnIns: cm.chipsIn.chipTurnIns,
+      tips: cm.chipsIn.tips,
+      drop: cm.chipsIn.drop,
+      buyInsByType: cm.chipsOut.buyInsByType || {},
+      allBuyIns: cm.chipsOut.allBuyIns,
+      banks: cm.chipsOut.banksPulled,
+      expected: cm.chipsOnHand,
+      lastCounted: lastCounted,
+      variance: lastVariance
     },
     staff: staff,
     txnCounts: txnCounts,
@@ -1931,6 +1960,29 @@ function formatAuditPlainText(snap) {
   lines.push('staff tax:        ' + formatAuditMoney(snap.profit.staffTax));
   lines.push('expenses:         ' + formatAuditMoney(snap.profit.expenses));
   lines.push('EST. PROFIT:      ' + formatAuditMoney(snap.profit.estProfit));
+  lines.push('');
+
+  lines.push('=== CHIP MOVEMENT ===');
+  var cm = snap.chipMovement || {};
+  lines.push('float:            ' + formatAuditMoney(cm.float));
+  lines.push('chipTurnIns:      ' + formatAuditMoney(cm.chipTurnIns));
+  lines.push('tips:             ' + formatAuditMoney(cm.tips));
+  lines.push('drop (IN):        ' + formatAuditMoney(cm.drop));
+  var byType = cm.buyInsByType || {};
+  var typeKeys = Object.keys(byType).sort();
+  if (!typeKeys.length) {
+    lines.push('allBuyIns:        $0');
+  } else {
+    lines.push('allBuyIns:');
+    typeKeys.forEach(function(typ) {
+      lines.push('  ' + typ + ': ' + formatAuditMoney(byType[typ]));
+    });
+    lines.push('  total: ' + formatAuditMoney(cm.allBuyIns));
+  }
+  lines.push('banks:            ' + formatAuditMoney(cm.banks));
+  lines.push('expected:         ' + formatAuditMoney(cm.expected));
+  lines.push('last counted:     ' + (cm.lastCounted == null ? '(none)' : formatAuditMoney(cm.lastCounted)));
+  lines.push('variance:         ' + (cm.variance == null ? '(n/a)' : formatAuditMoney(cm.variance)));
   lines.push('');
 
   lines.push('=== STAFF BALANCES ===');
@@ -2053,6 +2105,30 @@ function renderAuditPanelBody(snap) {
   html += auditRowHtml('EST. PROFIT', formatAuditMoney(snap.profit.estProfit), {
     total: true,
     color: snap.profit.estProfit >= 0 ? 'var(--green)' : 'var(--red)'
+  });
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Chip Movement</div>';
+  var cmH = snap.chipMovement || {};
+  html += auditRowHtml('float', formatAuditMoney(cmH.float));
+  html += auditRowHtml('chipTurnIns', formatAuditMoney(cmH.chipTurnIns));
+  html += auditRowHtml('tips', formatAuditMoney(cmH.tips));
+  html += auditRowHtml('drop (IN)', formatAuditMoney(cmH.drop));
+  var byTypeH = cmH.buyInsByType || {};
+  var typeKeysH = Object.keys(byTypeH).sort();
+  if (!typeKeysH.length) {
+    html += auditRowHtml('allBuyIns', '$0');
+  } else {
+    html += auditRowHtml('allBuyIns', formatAuditMoney(cmH.allBuyIns));
+    typeKeysH.forEach(function(typ) {
+      html += auditRowHtml(typ, formatAuditMoney(byTypeH[typ]), { sub: true });
+    });
+  }
+  html += auditRowHtml('banks', formatAuditMoney(cmH.banks));
+  html += auditRowHtml('expected', formatAuditMoney(cmH.expected), { total: true, color: 'var(--gold)' });
+  html += auditRowHtml('last counted', cmH.lastCounted == null ? '(none)' : formatAuditMoney(cmH.lastCounted));
+  html += auditRowHtml('variance', cmH.variance == null ? '(n/a)' : formatAuditMoney(cmH.variance), {
+    color: cmH.variance == null ? '' : (Math.abs(cmH.variance) < 1 ? 'var(--green)' : 'var(--red)')
   });
   html += '</div>';
 
@@ -6101,30 +6177,39 @@ function sumTipsIn() {
 /**
  * FORMULA 4 (locked) chip movement ledger — sole source for expected / on-hand chips.
  *
- *   expected = chipFloat + chipTurnIns + tipChips − allBuyIns − banksPulled − drop
+ *   expectedChips = chipFloat + chipTurnIns + tipChips + drop − allBuyIns − banksPulled
  *
  *   chipFloat   — sessionSettings.chipFloat
  *   chipTurnIns — non-voided p.chipTurnIns[] (chips returned to float; cashOuts are cash, not chips)
  *   tipChips    — tips returned to float (tipsTotal / sumTipsIn once)
+ *   drop        — chips IN: raked from player stacks and returned to tray (totalDropLogged)
  *   allBuyIns   — all buy-in types chips out (CASH / ECASH / MARKER / BONUS / BALANCE)
  *   banksPulled — G.dealerBanks (or G.banks) via getBankTotal()
- *   drop        — totalDropLogged() staff drops
  *
+ * EST. PROFIT still uses drop as revenue (drop + staffTax − expenses) — unchanged.
  * Callers: getExpectedChips(), calcDashboard().chipsOnHand — nowhere else may invent a parallel formula.
  */
 function calculateChipMovements() {
   var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
   var chipTurnIns = 0, tipChips = 0, allBuyIns = 0;
+  var buyInsByType = { CASH: 0, ECASH: 0, MARKER: 0, BONUS: 0, BALANCE: 0 };
   var drop = totalDropLogged();
   (G.players || []).forEach(function(p) {
     chipTurnIns += playerChipTurnInsTotal(p);
     tipChips += tipsTotal(p);
-    (p.buyIns || []).forEach(function(b) { allBuyIns += b.amount || 0; });
+    (p.buyIns || []).forEach(function(b) {
+      var amt = Number(b.amount) || 0;
+      allBuyIns += amt;
+      var typ = String(b.type || '').toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(buyInsByType, typ)) buyInsByType[typ] += amt;
+      else buyInsByType[typ] = amt;
+    });
   });
   var banksPulled = (typeof getBankTotal === 'function')
     ? getBankTotal()
     : ((G.dealerBanks || G.banks || []).reduce(function(s, b) { return s + (b.amount || 0); }, 0));
-  var chipsOnHand = chipFloat + chipTurnIns + tipChips - allBuyIns - banksPulled - drop;
+  // Drop is chips IN (raked → tray), not chips OUT
+  var chipsOnHand = chipFloat + chipTurnIns + tipChips + drop - allBuyIns - banksPulled;
   return {
     chipsIn: {
       float: chipFloat,
@@ -6132,22 +6217,23 @@ function calculateChipMovements() {
       tipChips: tipChips,
       tips: tipChips,
       chipTurnIns: chipTurnIns,
-      total: chipFloat + chipTurnIns + tipChips
+      drop: drop,
+      total: chipFloat + chipTurnIns + tipChips + drop
     },
     chipsOut: {
       buyIns: allBuyIns,
       allBuyIns: allBuyIns,
+      buyInsByType: buyInsByType,
       banks: banksPulled,
       banksPulled: banksPulled,
-      drop: drop,
-      total: allBuyIns + banksPulled + drop
+      total: allBuyIns + banksPulled
     },
     chipsOnHand: chipsOnHand
   };
 }
 
 function getExpectedChips() {
-  // FORMULA 4: chipFloat + chipTurnIns + tipChips − allBuyIns − banksPulled − drop
+  // FORMULA 4: chipFloat + chipTurnIns + tipChips + drop − allBuyIns − banksPulled
   return calculateChipMovements().chipsOnHand;
 }
 
