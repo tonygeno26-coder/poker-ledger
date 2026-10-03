@@ -2489,6 +2489,119 @@ function rosterSetCashOutMethod(id, method) {
   }
 }
 
+/** Brief green PAID flash after house-owes balance payout. */
+var _balPayoutFlashId = null;
+var _balPayoutFlashUntil = 0;
+
+function rosterSetBalPayoutMethod(id, method) {
+  var hid = document.getElementById('rx-bal-payout-method-' + id);
+  if (hid) hid.value = method;
+  var wrap = document.getElementById('rx-bal-payout-method-pills-' + id);
+  if (wrap) {
+    var pills = wrap.querySelectorAll('.roster-pill');
+    for (var i = 0; i < pills.length; i++) {
+      pills[i].classList.toggle('active', pills[i].getAttribute('data-method') === method);
+    }
+  }
+}
+
+/**
+ * House-owes balance PAY OUT (after credits / completed turn-ins).
+ * Separate from chip turn-in Pay Out — does not clear pending chipTurnIn.
+ */
+function rosterHouseOwesPayoutHtml(p) {
+  // Pending chip turn-in cycle uses rosterTurnInSectionHtml Pay Out instead
+  if (rosterChipTurnInLogged(p)) return '';
+  var bal = playerBalance(p);
+  var flash = (_balPayoutFlashId === p.id && Date.now() < _balPayoutFlashUntil);
+  if (flash) {
+    return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
+      + '<div class="roster-form-label" style="color:var(--green);margin:0">PAID ' + lucideIcon('check','action-ico') + '</div>'
+    + '</div>';
+  }
+  if (Math.abs(bal) <= SETTLE_EPSILON) {
+    // Only show Settled after activity that could create a house-owes / paid cycle
+    var hasActivity = playerCashOutsTotal(p) > 0
+      || playerCreditsTotal(p) > 0
+      || playerChipTurnInsTotal(p) > 0
+      || playerDebtBuyInsTotal(p) > 0
+      || playerTotalInDisplay(p) > 0;
+    if (!hasActivity) return '';
+    return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
+      + '<div class="roster-expand-summary" style="margin:0;color:var(--green);font-weight:800">Settled ✓</div>'
+    + '</div>';
+  }
+  if (bal <= SETTLE_EPSILON) return ''; // player owes — collect via Settle, not PAY OUT
+  var prefill = Math.round(bal * 100) / 100;
+  return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '">'
+    + '<div class="roster-form-label">PAY OUT</div>'
+    + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="CASH">'
+    + '<div class="roster-inline-row">'
+      + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + prefill + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
+      + '<div class="roster-pill-row" id="rx-bal-payout-method-pills-' + p.id + '" style="margin:0;flex-shrink:0">'
+        + '<button type="button" class="roster-pill active" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+        + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+      + '</div>'
+      + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);flex-shrink:0" onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function rosterPayHouseOwes(btn, id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) { toast('Player not found'); return; }
+  if (rosterChipTurnInLogged(p)) {
+    toast('Finish chip turn-in payout first');
+    return;
+  }
+  var bal = playerBalance(p);
+  if (bal <= SETTLE_EPSILON) { toast('Nothing to pay out'); return; }
+  var el = document.getElementById('rx-bal-payout-amount-' + id);
+  var mEl = document.getElementById('rx-bal-payout-method-' + id);
+  var amount = el ? (Number(el.value) || 0) : 0;
+  var method = mEl ? String(mEl.value || 'CASH').toUpperCase() : 'CASH';
+  if (method !== 'ECASH') method = 'CASH';
+  if (!amount || amount <= 0) { toast('Enter payout amount'); return; }
+  if (amount > bal + SETTLE_EPSILON) {
+    toast('Amount exceeds house-owes balance ($' + fmt(bal) + ')');
+    return;
+  }
+  confirmAction(btn, 'Click again to pay $' + fmt(amount) + ' via ' + method, function(){
+    var ts = new Date().toISOString();
+    if (!p.cashOuts) p.cashOuts = [];
+    p.cashOuts.push({
+      method: method,
+      amount: amount,
+      seq: (G._seq || 0) + 1,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: ts
+    });
+    // CASH_OUT matches existing cashOut patterns (cash/eCash on hand, void, history).
+    // PAYOUT alias also counted by playerCashOutsTotal for legacy sessions.
+    appendTxn({
+      type: 'CASH_OUT',
+      amount: amount,
+      playerId: String(p.id),
+      playerName: p.name,
+      method: method,
+      timestamp: ts
+    });
+    // Do NOT clear p.chipTurnIn — chip→cash conversion stays in rosterAddCashOut
+    _balPayoutFlashId = id;
+    _balPayoutFlashUntil = Date.now() + 2500;
+    rosterKeepExpanded(id);
+    calcAll(); renderAll(); autoSave();
+    toast('Paid out $' + fmt(amount) + ' (' + method + ') ✅');
+    setTimeout(function(){
+      if (_balPayoutFlashId === id && Date.now() >= _balPayoutFlashUntil - 50) {
+        _balPayoutFlashId = null;
+        rosterKeepExpanded(id);
+        renderAll();
+      }
+    }, 2600);
+  });
+}
+
 function rosterSetStaffPayoutMethod(id, method) {
   var hid = document.getElementById('rx-staff-payout-method-' + id);
   if (hid) hid.value = method;
@@ -2897,6 +3010,9 @@ function rosterPlayerExpandedHtml(p) {
       + '</div>';
   }
 
+  // House-owes PAY OUT sits directly below balance summary (not chip turn-in Pay Out)
+  var houseOwesPayout = rosterHouseOwesPayoutHtml(p);
+
   var buyInForm = '<div class="roster-form-block" id="rx-buyin-block-' + p.id + '">'
     + '<div class="roster-form-label">Buy-In</div>'
     + '<input type="hidden" id="rx-buyin-type-' + p.id + '" value="CASH">'
@@ -2933,6 +3049,7 @@ function rosterPlayerExpandedHtml(p) {
   return '<tr class="roster-expand-row roster-expand-player"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
     + '<div class="roster-form-label" style="margin-bottom:4px">History</div>'
     + lines + summary
+    + houseOwesPayout
     + buyInForm
     + creditsForm
     + turnInSection
