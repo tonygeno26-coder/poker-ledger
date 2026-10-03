@@ -865,7 +865,8 @@ var G = {
   expenses: [],
   _seq: 0,
   sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
-  location: '', date: ''
+  location: '', date: '',
+  dealerBanks: []
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3424,7 +3425,7 @@ function updateGameLabel() {
 function newGame(btn) {
   confirmAction(btn, 'Click again to start a new game (unsaved data will be lost)', function(){
     localStorage.removeItem('pb-current');
-    G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'' };
+    G = { players:[], txnLog:[], expenses:[], _seq:0, sessionSettings:{bankStart:0,chipFloat:0,taxPct:0}, location:'', date:'', dealerBanks:[], chipCounts:[], startingChipCount:null };
     _activePlayerId = null; _activeStaffId = null;
     setVal('g-location',''); setVal('g-date', todayLocalYMD());
     G.sessionSettings = { bankStart: 0, chipFloat: 0, taxPct: 0 };
@@ -3805,19 +3806,16 @@ function switchCCTab(tab) {
 
 function openChipCountModal() {
   console.log('[chip count modal opened] expected chips:', getExpectedChips());
-  // Each running count is a fresh snapshot — reset ALL count inputs (never seed from last save)
+  // Fresh count inputs each open — reset denoms / note only (never seed from last save)
   CC_DENOMS.forEach(function(d){
     setVal('sc-d'+d, ''); setText('sc-d'+d+'-sv', '$0');
     setVal('rc-d'+d, ''); setText('rc-d'+d+'-rv', '$0');
   });
   setVal('rc-note', '');
-  // Bank amounts from a prior count live only in G.chipCounts[] log — clear live banks for a clean recount
-  G.dealerBanks = [];
-  renderDealerBanks();
-  // Clear sticky variance UI from previous open
+  // G.dealerBanks is session source of truth — keep across modal opens; clear only on New Game
+  if (!G.dealerBanks) G.dealerBanks = [];
+  // Clear sticky denom / variance UI from previous open (banks stay)
   setText('rc-denom-subtotal', '$0');
-  setText('rc-banks-subtotal', '$0');
-  setText('rc-banks-total', '$0');
   setText('rc-actual-total', '$0');
   setText('rc-variance-total', '—');
   setText('rc-variance-display', '—');
@@ -3825,6 +3823,8 @@ function openChipCountModal() {
   var vHdr = document.getElementById('rc-variance-display');
   if (vEl) vEl.style.color = '';
   if (vHdr) vHdr.style.color = '';
+  // Pre-populate banks UI from persisted G.dealerBanks
+  renderDealerBanks();
   // Show saved starting count if exists
   refreshStartingSavedBanner();
   // Recalculate expected fresh from live G state (not last saved count)
@@ -4093,6 +4093,7 @@ function addDealerBank() {
   G.dealerBanks.push({ id: Date.now(), name: '', amount: 0 });
   renderDealerBanks();
   updateRunningTotal();
+  autoSave();
   // Focus the new name input
   var rows = document.querySelectorAll('.bank-name-inp');
   if (rows.length) rows[rows.length-1].focus();
