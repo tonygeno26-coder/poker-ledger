@@ -355,9 +355,12 @@ select.inp{appearance:none;-webkit-appearance:none}
 .end-game-btn{width:100%;height:52px;padding:0 18px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:opacity 0.15s;margin-top:8px}
 .end-game-btn:hover{opacity:0.92}
 
-.txn-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;font-size:13px}
+.txn-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;font-size:13px}
 .txn-type{font-weight:800;color:var(--red);font-size:10px;min-width:90px;text-transform:uppercase;letter-spacing:0.5px}
 .txn-name{color:var(--text-muted);flex:1;padding:0 8px}
+.txn-name-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.txn-name-col .txn-name-main{font-weight:800;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.txn-name-col .txn-reason{font-size:0.75rem;color:var(--text-muted);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .txn-amt{font-weight:800;color:var(--text)}
 .buyin-log-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:12px}
 
@@ -1224,6 +1227,96 @@ function appendTxn(entry) {
   G.txnLog.unshift(Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry));
 }
 
+/** Format chip denom object into a short summary, e.g. "5×2 · 25×4". */
+function formatTxnDenomSummary(denoms) {
+  if (!denoms || typeof denoms !== 'object') return '';
+  var order = [
+    ['five', 5], ['twentyFive', 25], ['hundred', 100],
+    ['fiveHundred', 500], ['thousand', 1000]
+  ];
+  var parts = [];
+  order.forEach(function(pair) {
+    var n = Number(denoms[pair[0]]);
+    if (n > 0) parts.push(pair[1] + '×' + n);
+  });
+  // Also accept numeric keys if present
+  [1, 5, 25, 100, 500, 1000].forEach(function(d) {
+    var n = Number(denoms[d]);
+    if (n > 0 && parts.indexOf(d + '×' + n) < 0) parts.push(d + '×' + n);
+  });
+  return parts.join(' · ');
+}
+
+/**
+ * Muted reason subtitle for dashboard TRANSACTION LOG.
+ * Maps real txn.type values; prefers note/description/desc when present.
+ */
+function txnReasonLabel(t) {
+  if (!t) return '';
+  var note = String(t.note || t.description || t.desc || '').trim();
+  var type = String(t.type || '');
+  function withNote(base) {
+    return note ? (base + ' · ' + note) : base;
+  }
+  switch (type) {
+    case 'CASH_BUYIN':
+      return withNote('Buy-in');
+    case 'MARKER_BUYIN':
+      // Badge shows MARKER OUT; reason clarifies marker buy-in
+      return withNote('Marker buy-in');
+    case 'ECASH_BUYIN': {
+      var recv = String(t.receivedByName || t.receivedBy || '').trim();
+      // Strip trailing role suffix from select labels like "Alex (Dealer)"
+      if (recv) recv = recv.replace(/\s*\([^)]*\)\s*$/, '').trim() || recv;
+      var ecashBase = recv ? ('eCash · received by ' + recv) : 'eCash';
+      return note ? (ecashBase + ' · ' + note) : ecashBase;
+    }
+    case 'BONUS_BUYIN':
+      return withNote('Bonus buy-in');
+    case 'CASH_OUT':
+      return withNote('Cash out');
+    case 'CHIP_TURN_IN': {
+      var denom = String(t.denomSummary || '').trim() || formatTxnDenomSummary(t.denominations);
+      var chipBase = denom ? ('Chip turn-in · ' + denom) : 'Chip turn-in';
+      return note ? (chipBase + ' · ' + note) : chipBase;
+    }
+    case 'TIPS':
+    case 'TIP_TURN_IN':
+      return withNote('Tips turned in');
+    case 'DROP':
+      return note ? ('Drop · ' + note) : 'Drop';
+    case 'STAFF_PAYOUT': {
+      var role = t.staffRole || t.role || '';
+      if (!role && t.playerId && G && Array.isArray(G.players)) {
+        var sp = G.players.find(function(pl){ return String(pl.id) === String(t.playerId); });
+        if (sp) role = sp.staffRole || sp.role || '';
+      }
+      var roleLbl = role ? staffRoleLabel(normalizeStaffRole(role)) : '';
+      var staffBase = roleLbl ? ('Staff payout · ' + roleLbl) : 'Staff payout';
+      return note ? (staffBase + ' · ' + note) : staffBase;
+    }
+    case 'HOUSE_EXPENSE':
+    case 'PLAYER_EXPENSE':
+      return note ? ('Expense · ' + note) : 'Expense';
+    case 'SETTLEMENT_PAYMENT':
+      // MARKER_PAID: player settling balance owed to house
+      if (String(t.settlementKind || '').toUpperCase() === 'ECASH') {
+        return withNote('eCash settlement');
+      }
+      if (t.direction === 'PLAYER_TO_HOUSE') return withNote('Marker paid');
+      return withNote('Settlement');
+    case 'TAX_TO_MARKER':
+      return withNote('Tax toward marker');
+    case 'STAFF_TAX':
+      return withNote('Staff tax');
+    default:
+      if (type.indexOf('VOID_') === 0) {
+        return note ? ('Voided · ' + note) : 'Voided';
+      }
+      return note || '';
+  }
+}
+
 var SETTLE_EPSILON = 0.01;
 var _settleUpContext = null;
 
@@ -1648,6 +1741,7 @@ function renderAll() {
         if (t.type === 'STAFF_PAYOUT' && String(t.method || '').toUpperCase() === 'ECASH' && t.receivedBy && t.receivedBy !== t.playerName) {
           name = (t.playerName || 'Staff') + ' → ' + t.receivedBy;
         }
+        var reason = txnReasonLabel(t);
         var amtColor;
         if (t.type === 'SETTLEMENT_PAYMENT') {
           amtColor = t.direction === 'HOUSE_TO_PLAYER' ? 'var(--red)' : 'var(--green)';
@@ -1661,7 +1755,10 @@ function renderAll() {
           amtColor = 'var(--text)';
         }
         return '<div class="txn-row">'
-          +'<span style="font-weight:800;font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</span>'
+          +'<div class="txn-name-col">'
+            +'<span class="txn-name-main">'+name+'</span>'
+            +(reason ? '<span class="txn-reason">'+reason+'</span>' : '')
+          +'</div>'
           +'<span class="badge" style="background:'+meta.bg+';color:'+meta.color+';font-size:10px;text-transform:uppercase;white-space:nowrap;flex-shrink:0">'+meta.label+'</span>'
           +'<span style="font-weight:800;color:'+amtColor+';text-align:right;min-width:56px;flex-shrink:0">$'+fmt(t.amount)+'</span>'
           +'<span style="font-size:10px;color:var(--text-muted);min-width:40px;text-align:right;flex-shrink:0">'+ts+'</span>'
@@ -2205,7 +2302,8 @@ function rosterAddStaffPayout(id) {
     receivedBy: receivedBy || null,
     receivedById: receivedById || null,
     playerId: String(p.id),
-    playerName: p.name
+    playerName: p.name,
+    staffRole: p.staffRole || p.role || null
   });
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
