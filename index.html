@@ -1000,18 +1000,36 @@ function staffHourlyPay(p) {
   return Math.round(rate * hours * 100) / 100;
 }
 
+/** Sum of ECASH buy-ins attributed to this person as Received By (live buyIns; voids excluded). */
+function staffEcashUsed(p) {
+  if (!p) return 0;
+  var rid = String(p.id);
+  var total = 0;
+  (G.players || []).forEach(function(pl) {
+    (pl.buyIns || []).forEach(function(b) {
+      if (String(b.type || '').toUpperCase() === 'ECASH' && b.receivedById && String(b.receivedById) === rid) {
+        total += (Number(b.amount) || 0);
+      }
+    });
+  });
+  return Math.round(total * 100) / 100;
+}
+
 function staffTipBalance(p) {
-  // tips − tax + reimbursements(p.expenses) − payouts  (+ role-specific base/hourly; tax on tips only)
+  // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By  (+ role-specific base/hourly; tax on tips only)
+  // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
   var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var reimbursements = staffExpensesTotal(p);
   var paidOut    = staffPayoutsTotal(p);
+  var ecashUsed  = staffEcashUsed(p);
   var role = normalizeStaffRole(p.staffRole);
   var base = 0;
   if (role === 'chef') base = staffBasePay(p);
   else if (role === 'books') base = staffHourlyPay(p);
-  return base + grossTips - taxPaid + reimbursements - paidOut;
+  return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed;
 }
+function calcStaffBalance(p) { return staffTipBalance(p); }
 
 function migrateStaffRoles() {
   (G.players || []).forEach(function(p) {
@@ -1615,6 +1633,7 @@ function rosterPlayerStatusBadge(p) {
 function rosterStaffStatusBadge(p) {
   var unpaid = staffTipBalance(p);
   var paidOut = staffPayoutsTotal(p);
+  if (unpaid < -SETTLE_EPSILON) return '<span class="badge badge-red">Owes</span>';
   if (unpaid <= SETTLE_EPSILON) return '<span class="badge badge-green">Paid</span>';
   if (paidOut > SETTLE_EPSILON) return '<span class="badge badge-yellow">Partial</span>';
   return '<span class="badge badge-red">Unpaid</span>';
@@ -2052,6 +2071,10 @@ function rosterAddStaffPayout(id) {
   var method = mEl ? mEl.value : 'CASH';
   if (!amount || amount <= 0) { toast('Enter payout amount'); return; }
   var remaining = staffTipBalance(p);
+  if (remaining < -SETTLE_EPSILON) {
+    toast('Owes house $' + fmt(Math.abs(remaining)) + ' — collect before paying out');
+    return;
+  }
   if (remaining <= SETTLE_EPSILON) { toast('Staff already paid in full'); return; }
   if (amount > remaining + SETTLE_EPSILON) {
     toast('Amount exceeds unpaid balance ($' + fmt(remaining) + ')');
@@ -2352,6 +2375,7 @@ function rosterStaffExpandedHtml(p) {
   var tips = tipsTotal(p);
   var taxWithheld = (p.staffTaxLog || []).reduce(function(s, t){ return s + (t.taxAmount || 0); }, 0);
   var alreadyPaid = staffPayoutsTotal(p);
+  var ecashUsed = staffEcashUsed(p);
   var unpaid = staffTipBalance(p);
   var expTotal = staffExpensesTotal(p);
   var taxPreview0 = calcStaffTaxPreview(p, 30);
@@ -2454,17 +2478,25 @@ function rosterStaffExpandedHtml(p) {
       : '')
   + '</div>';
 
+  var balColor = unpaid < -SETTLE_EPSILON ? 'var(--red)' : (unpaid > SETTLE_EPSILON ? 'var(--green)' : 'var(--text-muted)');
   var summaryBits = '';
   if (roleKey === 'chef') {
-    summaryBits += 'Base pay: <strong style="color:var(--green)">$' + fmt(basePayAmt) + '</strong> · ';
+    summaryBits += '<div>Base pay: <strong style="color:var(--green)">+$' + fmt(basePayAmt) + '</strong></div>';
   } else if (roleKey === 'books') {
-    summaryBits += 'Hourly: <strong style="color:var(--green)">$' + fmt(hourlyAmt) + '</strong> · ';
+    summaryBits += '<div>Hourly: <strong style="color:var(--green)">+$' + fmt(hourlyAmt) + '</strong></div>';
   }
-  summaryBits += 'Gross tips: <strong style="color:var(--gold)">$' + fmt(tips) + '</strong>'
-    + ' · Tax withheld: <strong style="color:var(--red)">$' + fmt(taxWithheld) + '</strong>'
-    + ' · Reimbursements: <strong style="color:var(--green)">+$' + fmt(expTotal) + '</strong>'
-    + ' · Already paid: <strong style="color:var(--text)">$' + fmt(alreadyPaid) + '</strong>'
-    + ' · Net unpaid: <strong style="color:var(--gold)">$' + fmt(unpaid) + '</strong>';
+  summaryBits += '<div>Tips: <strong style="color:var(--gold)">+$' + fmt(tips) + '</strong></div>'
+    + '<div>Tax: <strong style="color:var(--red)">-$' + fmt(taxWithheld) + '</strong></div>'
+    + '<div>Reimbursements: <strong style="color:var(--green)">+$' + fmt(expTotal) + '</strong></div>';
+  if (ecashUsed > SETTLE_EPSILON) {
+    summaryBits += '<div>eCash used: <strong style="color:var(--purple-light)">-$' + fmt(ecashUsed) + '</strong></div>';
+  }
+  if (alreadyPaid > SETTLE_EPSILON) {
+    summaryBits += '<div>Already paid: <strong style="color:var(--text)">-$' + fmt(alreadyPaid) + '</strong></div>';
+  }
+  summaryBits += '<div style="margin-top:4px">Balance: <strong style="color:' + balColor + '">$' + fmt(Math.abs(unpaid)) + '</strong>'
+    + (unpaid < -SETTLE_EPSILON ? ' <span style="color:var(--red)">(owes house)</span>' : '')
+    + '</div>';
 
   var summary = '<div class="roster-form-block">'
     + '<div class="roster-form-label">Balance Summary</div>'
@@ -2472,8 +2504,12 @@ function rosterStaffExpandedHtml(p) {
   + '</div>';
 
   var payoutPrefill = Math.max(0, unpaid);
+  var owesWarn = unpaid < -SETTLE_EPSILON
+    ? '<div style="margin-bottom:10px;font-size:12px;font-weight:700;color:var(--red)">Owes house $' + fmt(Math.abs(unpaid)) + ' — collect before paying out.</div>'
+    : '';
   var payoutForm = '<div class="roster-form-block" id="rx-staff-payout-block-' + p.id + '">'
     + '<div class="roster-form-label">Pay Out Staff</div>'
+    + owesWarn
     + '<input type="hidden" id="rx-staff-payout-method-' + p.id + '" value="CASH">'
     + '<div class="roster-pill-row" id="rx-staff-payout-method-pills-' + p.id + '">'
       + '<button type="button" class="roster-pill roster-pill-gold active" data-method="CASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
@@ -2567,8 +2603,15 @@ function rosterPlayerRow(p) {
   return html;
 }
 
-function rosterStaffRow(p) {
+function rosterStaffBalCell(p) {
   var bal = staffTipBalance(p);
+  if (bal < -SETTLE_EPSILON) {
+    return '<span class="roster-amt neg" title="Net after eCash Received By">Owes house: $' + fmt(Math.abs(bal)) + '</span>';
+  }
+  return rosterBalAmt(bal);
+}
+
+function rosterStaffRow(p) {
   var roleKey = normalizeStaffRole(p.staffRole);
   var active = p.id === _activeStaffId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
@@ -2576,7 +2619,7 @@ function rosterStaffRow(p) {
   var html = '<tr class="roster-row' + active + '" onclick="toggleRosterExpand(' + p.id + ',event)">'
     + '<td><span class="roster-avatar" style="background:' + staffRoleColor(roleKey) + '">' + p.name.charAt(0) + '</span></td>'
     + '<td><div class="roster-name">' + p.name + '</div><div class="roster-role" style="color:' + staffRoleColor(roleKey) + '">' + staffRoleLabel(roleKey) + '</div></td>'
-    + '<td>' + rosterBalAmt(bal) + '</td>'
+    + '<td>' + rosterStaffBalCell(p) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
     + '</tr>';
   if (expanded) html += rosterStaffExpandedHtml(p);
