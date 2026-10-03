@@ -137,6 +137,37 @@ input,select,button,textarea{font-family:inherit}
 .hdr-menu-item:hover{background:var(--surface2)}
 .hdr-menu-item:focus-visible{outline:2px solid var(--text-muted);outline-offset:-2px}
 .hdr-menu-ico{font-size:18px;line-height:1;width:1.4em;text-align:center;flex-shrink:0}
+/* Host viewer read-only mode */
+#pb-host-view-banner{
+  display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:linear-gradient(90deg,rgba(245,158,11,0.22),rgba(245,158,11,0.08));
+  border-bottom:1px solid rgba(245,158,11,0.45);color:var(--gold);
+  padding:10px 16px;font-size:13px;font-weight:700;letter-spacing:0.2px
+}
+#pb-host-view-banner.show{display:flex}
+#pb-host-view-banner .hv-meta{font-size:11px;font-weight:600;color:var(--text-muted)}
+#pb-host-view-banner .hv-err{color:var(--red);font-weight:700}
+body.host-view-mode .host-hide,
+body.host-view-mode .roster-del-btn,
+body.host-view-mode .roster-pill-row,
+body.host-view-mode .roster-form-block,
+body.host-view-mode .roster-expand-actions,
+body.host-view-mode .btn-red:not(.hv-allow),
+body.host-view-mode .end-game-btn,
+body.host-view-mode #hdr-menu-item-new,
+body.host-view-mode #hdr-menu-item-save,
+body.host-view-mode #hdr-menu-item-account{display:none!important}
+body.host-view-mode #page-players > .card:has(#quick-add-name){display:none!important}
+body.host-view-mode input,
+body.host-view-mode select,
+body.host-view-mode textarea{pointer-events:none;opacity:0.65}
+body.host-view-mode button:not(.nav-btn):not(.hdr-menu-btn):not(.hv-allow):not(.hdr-menu-item):not(.modal-close){
+  pointer-events:none;opacity:0.45
+}
+body.host-view-mode .nav-btn,
+body.host-view-mode .hdr-menu-btn,
+body.host-view-mode .hdr-menu-item.hv-allow,
+body.host-view-mode button.hv-allow{pointer-events:auto;opacity:1}
 
 /* BOTTOM TAB BAR */
 .nav{
@@ -503,6 +534,10 @@ select.inp{appearance:none;-webkit-appearance:none}
   <span>Subscription expired — renew to keep access</span>
   <button type="button" class="btn btn-outline btn-xs" onclick="pbOpenCheckout()" style="color:var(--red);border-color:var(--red);flex-shrink:0">Renew</button>
 </div>
+<div id="pb-host-view-banner" aria-live="polite">
+  <span>👁 Host View — Live Updates</span>
+  <span class="hv-meta" id="pb-host-view-meta">Last updated —</span>
+</div>
 
 
 <!-- HEADER -->
@@ -514,9 +549,10 @@ select.inp{appearance:none;-webkit-appearance:none}
   <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)">☰</button>
 </div>
 <div class="hdr-menu no-print" id="hdr-menu" role="menu" aria-labelledby="hdr-menu-btn" hidden>
-  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true">🃏</span>New Game</button>
-  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true">💾</span>Save</button>
-  <button type="button" class="hdr-menu-item" role="menuitem" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true">👤</span>Account</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true">🃏</span>New Game</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true">💾</span>Save</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true">👤</span>Account</button>
+  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true">🚪</span>Log Out</button>
 </div>
 
 <!-- BOTTOM TAB BAR -->
@@ -619,7 +655,7 @@ select.inp{appearance:none;-webkit-appearance:none}
     </div>
   </div>
 
-  <button class="end-game-btn" onclick="endGame(this)">🏁 END GAME</button>
+  <button class="end-game-btn host-hide" onclick="endGame(this)">🏁 END GAME</button>
 </div>
 
 <!-- ===== PLAYERS ===== -->
@@ -633,7 +669,7 @@ select.inp{appearance:none;-webkit-appearance:none}
     </select>
   </div>
 
-  <div class="card" style="padding:12px;margin-bottom:16px">
+  <div class="card host-hide" style="padding:12px;margin-bottom:16px">
     <div class="flex-row" style="gap:8px">
       <input class="inp" id="quick-add-name" placeholder="NAME" style="text-transform:uppercase;flex:2" onkeydown="if(event.key==='Enter')quickAddPerson()">
       <select class="inp" id="quick-add-role" style="flex:1;min-width:120px">
@@ -852,8 +888,17 @@ select.inp{appearance:none;-webkit-appearance:none}
       <div style="margin-top:10px"><span style="color:var(--text-muted)">Status</span><br><strong id="pb-acct-status">—</strong></div>
       <div style="margin-top:10px"><span style="color:var(--text-muted)">Expires</span><br><strong id="pb-acct-end">—</strong></div>
     </div>
+    <div id="pb-host-viewers-section" style="margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:800;letter-spacing:0.6px;color:var(--gold);text-transform:uppercase;margin-bottom:10px">Host Viewers</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="inp" id="pb-hv-email" type="email" autocomplete="email" placeholder="viewer@email.com" style="flex:1;margin:0">
+        <button type="button" class="btn btn-gold btn-sm" id="pb-hv-invite-btn" onclick="pbInviteHostViewer()">Send Invite</button>
+      </div>
+      <div id="pb-hv-msg" style="font-size:12px;min-height:1.2em;margin-bottom:8px;color:var(--text-muted)"></div>
+      <div id="pb-hv-list" style="max-height:180px;overflow-y:auto"></div>
+    </div>
     <button type="button" class="btn btn-outline" style="width:100%;margin-bottom:8px" onclick="pbManageSubscription()">Manage Subscription</button>
-    <button type="button" class="btn btn-red" style="width:100%" onclick="pbLogout()">Log Out</button>
+    <button type="button" class="btn btn-red hv-allow" style="width:100%" onclick="pbLogout()">Log Out</button>
   </div>
 </div>
 
@@ -920,34 +965,92 @@ var G = {
 // ══════════════════════════════════════════════════════════════════════════════
 // ACCOUNTING
 // ══════════════════════════════════════════════════════════════════════════════
+/** Sum CHIP_TURN_IN from txnLog for this player (legacy sessions without chipTurnIns[]). */
+function playerTxnKindTotal(p, kind) {
+  var want = String(kind || '').toUpperCase();
+  return (G.txnLog || []).reduce(function(s, t) {
+    if (!t || String(t.type || '').toUpperCase() !== want) return s;
+    var pidMatch = String(t.playerId || '') === String(p.id);
+    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
+    if (!pidMatch && !nameMatch) return s;
+    return s + (Number(t.amount) || 0);
+  }, 0);
+}
+
+/** Persisted chip turn-in total (history). Falls back to txnLog / pending scalar. */
+function playerChipTurnInsTotal(p) {
+  var hist = (p.chipTurnIns || []).reduce(function(s, t) {
+    return s + (Number(t && t.amount) || 0);
+  }, 0);
+  if (hist > 0) return hist;
+  var fromTxn = playerTxnKindTotal(p, 'CHIP_TURN_IN');
+  if (fromTxn > 0) return fromTxn;
+  // Legacy sessions: turn-in logged only on scalar before history array existed
+  return Number(p.chipTurnIn) || 0;
+}
+
+/**
+ * Buy-ins that create settlement debt (subtract in playerBalance).
+ * MARKER = unpaid chips (debt). CASH/ECASH = prepaid (not debt). BONUS = house expense (not debt).
+ * Including CASH/ECASH here would falsely put cash buyers on "Owes House" and break post-payout even.
+ */
+function playerDebtBuyInsTotal(p) {
+  return (p.buyIns || []).filter(function(b) {
+    return b.type === 'MARKER';
+  }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+}
+
+function playerCashOutsTotal(p) {
+  var fromArr = (p.cashOuts || []).reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
+  if (fromArr > 0) return fromArr;
+  return playerTxnKindTotal(p, 'CASH_OUT') + playerTxnKindTotal(p, 'PAYOUT');
+}
+
+function playerTotalInDisplay(p) {
+  // Display Total In: all buy-ins including BONUS / MARKER / CASH / ECASH
+  return (p.buyIns || []).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
+}
+
+function playerTotalOutDisplay(p) {
+  // Display Total Out: all chip turn-ins + cash paid out
+  return playerChipTurnInsTotal(p) + playerCashOutsTotal(p);
+}
+
 function playerBalance(p) {
   // positive = house owes player   negative = player owes house
-  // ECASH buy-ins: player paid electronically — does NOT create player debt to house
-  // MARKER buy-ins: player owes house (no actual payment made)
-  // CASH buy-ins: player paid cash — does NOT create player debt
-  // Only MARKER creates a negative balance (owes house)
-  // markerCredits (e.g. tax-to-marker) reduce outstanding marker owe
-  var totalIn  = (p.buyIns||[]).filter(function(b){ return b.type==='MARKER'; }).reduce(function(s,b){return s+b.amount;},0);
-  var totalOut = (p.cashOuts||[]).reduce(function(s,c){return s+c.amount;},0);
-  // Reimbursements: player fronted money for the game — house owes it back on top of chips
-  var reimbursed = playerReimbursements(p).reduce(function(s,e){return s+e.amount;},0);
+  // MARKER buy-ins: subtract (player owes). BONUS: skip (house expense).
+  // CASH/ECASH: skip (already paid — not player debt).
+  // chipTurnIns: add (chips returned). cashOuts/payouts: subtract (house paid player).
+  // markerCredits (tax-toward-marker) still reduce marker owe.
+  var debtIn = playerDebtBuyInsTotal(p);
+  var turnIns = playerChipTurnInsTotal(p);
+  var paidOut = playerCashOutsTotal(p);
+  var reimbursed = playerReimbursements(p).reduce(function(s, e) { return s + e.amount; }, 0);
   var markerCredits = playerMarkerCreditsTotal(p);
-  // totalOut - totalIn: cashOut from chips minus markers outstanding = player balance
-  // Negative means player has outstanding markers
-  // Positive means house owes player chips (+ any reimbursements)
-  var result = totalOut - totalIn + reimbursed + markerCredits;
-  console.table({ '[profile balance render]':'', player:p.name, playerBalanceResult:result, totalIn:totalIn, totalOut:totalOut, reimbursed:reimbursed, markerCredits:markerCredits, buyInCount:(p.buyIns||[]).length, markerBuyIns:(p.buyIns||[]).filter(function(b){return b.type==='MARKER';}).length });
+  var result = turnIns - debtIn - paidOut + reimbursed + markerCredits;
+  console.table({
+    '[profile balance render]': '',
+    player: p.name,
+    playerBalanceResult: result,
+    debtIn: debtIn,
+    turnIns: turnIns,
+    paidOut: paidOut,
+    reimbursed: reimbursed,
+    markerCredits: markerCredits,
+    bonusSkipped: playerBonusTotal(p),
+    buyInCount: (p.buyIns || []).length,
+    markerBuyIns: (p.buyIns || []).filter(function(b) { return b.type === 'MARKER'; }).length
+  });
   return result;
 }
 
-/** Display-only: chipTurnIn − markers while awaiting Pay Out (does not change playerBalance). */
+/** Same formula as playerBalance (turn-ins now persist, so pending payout is included). */
 function playerProjectedBalance(p) {
-  return (Number(p.chipTurnIn) || 0) - playerMarkerTotal(p);
+  return playerBalance(p);
 }
 
-/** Finalized playerBalance, or projected net when turn-in is logged and payout is pending. */
+/** playerBalance always; ~pending styling uses rosterChipTurnInLogged separately. */
 function playerDisplayBalance(p) {
-  if (rosterChipTurnInLogged(p)) return playerProjectedBalance(p);
   return playerBalance(p);
 }
 
@@ -1565,6 +1668,10 @@ function autoSave() {
 function saveGame() {
   lsSet('pb-current', JSON.stringify(G));
   toast('Game saved ✅');
+  // Fire-and-forget sync for host viewers (silent on failure)
+  try {
+    if (typeof pbSyncGameToApi === 'function') pbSyncGameToApi();
+  } catch (_e) {}
 }
 
 // ── Header hamburger menu (wires to existing newGame / saveGame / pbOpenAccount) ──
@@ -1609,6 +1716,10 @@ function headerMenuSave() {
 function headerMenuAccount() {
   closeHeaderMenu();
   pbOpenAccount();
+}
+function headerMenuLogout() {
+  closeHeaderMenu();
+  pbLogout();
 }
 document.addEventListener('click', function(ev) {
   if (!isHeaderMenuOpen()) return;
@@ -1727,6 +1838,7 @@ function renderAll() {
     VOID_MARKER_BUYIN:   { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_BONUS_BUYIN:    { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_CASH_OUT:       { label:'VOID OUT',  color:'var(--text-muted)',  bg:'var(--bg3)' },
+    VOID_CHIP_TURN_IN:   { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_EXPENSE:        { label:'VOID EXP',  color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
   var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1 };
@@ -1981,6 +2093,234 @@ function rosterBuyInTypeBadge(type) {
   return '<span class="badge ' + cls + '">' + t + '</span>';
 }
 
+/** History badge for expanded player row (buy-ins + chips in + cash out). */
+function rosterHistoryTypeBadge(kind, buyType) {
+  var k = String(kind || '').toUpperCase();
+  if (k === 'CHIP_TURN_IN' || k === 'CHIPS_IN') {
+    return '<span class="badge badge-green">CHIPS IN</span>';
+  }
+  if (k === 'CASH_OUT') {
+    return '<span class="badge badge-green">CASH OUT</span>';
+  }
+  if (k === 'PAYOUT' || k === 'PAID_OUT') {
+    return '<span class="badge badge-green">PAID OUT</span>';
+  }
+  if (k === 'BUY_IN' || k.slice(-6) === '_BUYIN') {
+    var bt = String(buyType || k.replace(/_BUYIN$/, '') || 'CASH').toUpperCase();
+    return rosterBuyInTypeBadge(bt);
+  }
+  return rosterBuyInTypeBadge(buyType || k);
+}
+
+function rosterHistorySortTs(row) {
+  if (row && row.timestamp) {
+    var ms = new Date(row.timestamp).getTime();
+    if (!isNaN(ms)) return ms;
+  }
+  if (row && row.seq != null) return Number(row.seq) || 0;
+  return 0;
+}
+
+/**
+ * Unified player history for expanded roster row.
+ * Primary: G.txnLog for this player. Fallback: buyIns / chipTurnIns / cashOuts arrays.
+ * Newest first. Void buttons keep array-index handlers when source is an array row.
+ */
+function buildPlayerHistoryRows(p) {
+  var rows = [];
+  var seen = {};
+
+  function keyOf(kind, amount, tsHint) {
+    return String(kind) + '|' + String(amount) + '|' + String(tsHint || '');
+  }
+
+  (G.txnLog || []).forEach(function(t, txnIdx) {
+    if (!t) return;
+    var pidMatch = String(t.playerId || '') === String(p.id);
+    var nameMatch = t.playerName && p.name && String(t.playerName).toUpperCase() === String(p.name).toUpperCase();
+    if (!pidMatch && !nameMatch) return;
+    var typ = String(t.type || '').toUpperCase();
+    if (typ.indexOf('VOID_') === 0) return;
+    var kind = null;
+    var buyType = null;
+    if (typ === 'CHIP_TURN_IN') kind = 'CHIP_TURN_IN';
+    else if (typ === 'CASH_OUT') kind = 'CASH_OUT';
+    else if (typ === 'PAYOUT' || typ === 'PAID_OUT') kind = 'PAYOUT';
+    else if (typ.slice(-6) === '_BUYIN') {
+      kind = 'BUY_IN';
+      buyType = typ.replace(/_BUYIN$/, '') || t.method || 'CASH';
+    } else {
+      return;
+    }
+    var amt = Number(t.amount) || 0;
+    var ts = t.timestamp || '';
+    var timeLabel = ts
+      ? (function(){ try { return new Date(ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; } })()
+      : (t.time || '');
+    var k = keyOf(kind, amt, timeLabel || ts);
+    seen[k] = true;
+    rows.push({
+      kind: kind,
+      buyType: buyType,
+      amount: amt,
+      time: timeLabel,
+      timestamp: ts,
+      seq: t.seq != null ? t.seq : txnIdx,
+      method: t.method || '',
+      source: 'txn',
+      txnIdx: txnIdx,
+      txnId: t.id || null
+    });
+  });
+
+  function attachOrPush(matchFn, newRow) {
+    for (var r = 0; r < rows.length; r++) {
+      if (matchFn(rows[r]) && rows[r].arrayIndex == null) {
+        rows[r].arrayIndex = newRow.arrayIndex;
+        rows[r].source = 'both';
+        if (newRow.signatureData) rows[r].signatureData = newRow.signatureData;
+        if (newRow.buyType) rows[r].buyType = newRow.buyType;
+        if (newRow.method) rows[r].method = newRow.method;
+        if (!rows[r].time && newRow.time) rows[r].time = newRow.time;
+        return;
+      }
+    }
+    rows.push(newRow);
+  }
+
+  (p.buyIns || []).forEach(function(b, i) {
+    var amt = Number(b.amount) || 0;
+    var timeLabel = b.time || '';
+    var bt = String(b.type || 'CASH').toUpperCase();
+    attachOrPush(
+      function(row) {
+        return row.kind === 'BUY_IN'
+          && Number(row.amount) === amt
+          && String(row.buyType || '').toUpperCase() === bt;
+      },
+      {
+        kind: 'BUY_IN',
+        buyType: bt,
+        amount: amt,
+        time: timeLabel,
+        timestamp: b.timestamp || '',
+        seq: b.seq != null ? b.seq : i,
+        method: '',
+        source: 'array',
+        arrayIndex: i,
+        signatureData: b.signatureData
+      }
+    );
+  });
+
+  (p.chipTurnIns || []).forEach(function(t, i) {
+    var amt = Number(t.amount) || 0;
+    var timeLabel = t.time || '';
+    attachOrPush(
+      function(row) { return row.kind === 'CHIP_TURN_IN' && Number(row.amount) === amt; },
+      {
+        kind: 'CHIP_TURN_IN',
+        amount: amt,
+        time: timeLabel,
+        timestamp: t.timestamp || '',
+        seq: t.seq != null ? t.seq : i,
+        method: '',
+        source: 'array',
+        arrayIndex: i
+      }
+    );
+  });
+
+  // Legacy: pending scalar turn-in with no history array / txn yet
+  if (Number(p.chipTurnIn) > 0) {
+    var pendAmt = Number(p.chipTurnIn) || 0;
+    var hasChip = rows.some(function(r){ return r.kind === 'CHIP_TURN_IN' && Number(r.amount) === pendAmt; });
+    if (!hasChip) {
+      rows.push({
+        kind: 'CHIP_TURN_IN',
+        amount: pendAmt,
+        time: '',
+        timestamp: '',
+        seq: 0,
+        method: '',
+        source: 'pending',
+        arrayIndex: null
+      });
+    }
+  }
+
+  (p.cashOuts || []).forEach(function(c, i) {
+    var amt = Number(c.amount) || 0;
+    var timeLabel = c.time || '';
+    attachOrPush(
+      function(row) { return row.kind === 'CASH_OUT' && Number(row.amount) === amt; },
+      {
+        kind: 'CASH_OUT',
+        amount: amt,
+        time: timeLabel,
+        timestamp: c.timestamp || '',
+        seq: c.seq != null ? c.seq : i,
+        method: c.method || '',
+        source: 'array',
+        arrayIndex: i
+      }
+    );
+  });
+
+  rows.sort(function(a, b) {
+    return rosterHistorySortTs(b) - rosterHistorySortTs(a);
+  });
+  return rows;
+}
+
+function renderPlayerHistoryLines(p) {
+  var rows = buildPlayerHistoryRows(p);
+  if (!rows.length) {
+    return '<div class="roster-expand-meta" style="padding:2px 0 4px">No buy-ins, turn-ins, or cash-outs yet</div>';
+  }
+  return rows.map(function(row) {
+    var badge = rosterHistoryTypeBadge(row.kind, row.buyType);
+    var amtColor = (row.kind === 'CHIP_TURN_IN' || row.kind === 'CASH_OUT' || row.kind === 'PAYOUT')
+      ? 'color:var(--green)' : '';
+    var meta = '';
+    if (row.kind === 'CASH_OUT' && row.method) {
+      meta += '<span class="roster-expand-meta">' + row.method + '</span>';
+    }
+    meta += '<span class="roster-expand-meta">' + (row.time || '') + '</span>';
+
+    var signCtrl = '';
+    if (row.kind === 'BUY_IN' && String(row.buyType || '').toUpperCase() === 'MARKER' && row.arrayIndex != null) {
+      signCtrl = row.signatureData
+        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + row.arrayIndex + ')">✍️ SIGNED</button>'
+        : '<button type="button" class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="event.stopPropagation();openMarkerSignModal(' + p.id + ',' + row.arrayIndex + ')">Sign</button>';
+    }
+
+    var voidBtn = '';
+    if (row.kind === 'BUY_IN' && row.arrayIndex != null) {
+      voidBtn = '<button class="roster-del-btn" title="Void buy-in" onclick="event.stopPropagation();voidRosterBuyIn(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+    } else if (row.kind === 'CHIP_TURN_IN' && row.arrayIndex != null) {
+      voidBtn = '<button class="roster-del-btn" title="Void turn-in" onclick="event.stopPropagation();voidRosterTurnIn(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+    } else if (row.kind === 'CASH_OUT' && row.arrayIndex != null) {
+      voidBtn = '<button class="roster-del-btn" title="Void cash-out" onclick="event.stopPropagation();voidRosterCashOut(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+    } else if (row.source === 'txn' || row.source === 'pending') {
+      // txn-only / pending: void via txn id or pending reset
+      if (row.kind === 'CHIP_TURN_IN' && row.source === 'pending') {
+        voidBtn = '<button class="roster-del-btn" title="Clear turn-in" onclick="event.stopPropagation();rosterResetTurnIn(' + p.id + ')">✕</button>';
+      } else if (row.txnId) {
+        voidBtn = '<button class="roster-del-btn" title="Void entry" onclick="event.stopPropagation();voidRosterHistoryTxn(this,' + p.id + ',\'' + String(row.txnId).replace(/'/g, '') + '\',\'' + row.kind + '\',' + (Number(row.amount) || 0) + ')">✕</button>';
+      }
+    }
+
+    return '<div class="roster-expand-line">'
+      + badge
+      + '<span style="font-weight:800;' + amtColor + '">$' + fmt(row.amount) + '</span>'
+      + meta
+      + signCtrl
+      + voidBtn
+      + '</div>';
+  }).join('');
+}
+
 function rosterSetBuyInType(id, type) {
   var hid = document.getElementById('rx-buyin-type-' + id);
   if (hid) hid.value = type;
@@ -2099,6 +2439,9 @@ function rosterLogTurnIn(id) {
   var el = document.getElementById('rx-turnin-amount-' + id);
   var amount = el ? (Number(el.value) || 0) : 0;
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
+  if (!p.chipTurnIns) p.chipTurnIns = [];
+  var time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = amount;
   appendTxn({ type: 'CHIP_TURN_IN', amount: amount, playerId: String(p.id), playerName: p.name });
   rosterKeepExpanded(id);
@@ -2109,6 +2452,11 @@ function rosterLogTurnIn(id) {
 function rosterResetTurnIn(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  var pending = Number(p.chipTurnIn) || 0;
+  if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
+    var last = p.chipTurnIns[p.chipTurnIns.length - 1];
+    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+  }
   p.chipTurnIn = 0;
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
@@ -2362,50 +2710,31 @@ function rosterTurnInSectionHtml(p, markerTotal) {
 }
 
 function rosterPlayerExpandedHtml(p) {
-  var lines = '';
-  (p.buyIns || []).forEach(function(b, i){
-    var signCtrl = '';
-    if (b.type === 'MARKER') {
-      signCtrl = b.signatureData
-        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + i + ')">✍️ SIGNED</button>'
-        : '<button type="button" class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="event.stopPropagation();openMarkerSignModal(' + p.id + ',' + i + ')">Sign</button>';
-    }
-    lines += '<div class="roster-expand-line">'
-      + rosterBuyInTypeBadge(b.type)
-      + '<span style="font-weight:800">$' + fmt(b.amount) + '</span>'
-      + '<span class="roster-expand-meta">' + (b.time || '') + '</span>'
-      + signCtrl
-      + '<button class="roster-del-btn" title="Void buy-in" onclick="event.stopPropagation();voidRosterBuyIn(this,' + p.id + ',' + i + ')">✕</button>'
-      + '</div>';
-  });
-  (p.cashOuts || []).forEach(function(c, i){
-    lines += '<div class="roster-expand-line">'
-      + '<span class="badge badge-green">OUT</span>'
-      + '<span style="font-weight:800;color:var(--green)">$' + fmt(c.amount) + '</span>'
-      + '<span class="roster-expand-meta">' + (c.method || '') + '</span>'
-      + '<span class="roster-expand-meta">' + (c.time || '') + '</span>'
-      + '<button class="roster-del-btn" title="Void cash-out" onclick="event.stopPropagation();voidRosterCashOut(this,' + p.id + ',' + i + ')">✕</button>'
-      + '</div>';
-  });
-  if (!lines) {
-    lines = '<div class="roster-expand-meta" style="padding:2px 0 4px">No buy-ins or cash-outs yet</div>';
-  }
+  var lines = renderPlayerHistoryLines(p);
 
   var summary = '';
+  // Total In/Out helpers already fall back to txnLog when arrays are empty
+  var totalIn = playerTotalInDisplay(p);
+  var totalOut = playerTotalOutDisplay(p);
   var dispBal = playerDisplayBalance(p);
   var balColor = Math.abs(dispBal) <= SETTLE_EPSILON ? 'var(--text-muted)'
     : (dispBal < 0 ? 'var(--red)' : (rosterChipTurnInLogged(p) ? 'var(--gold)' : 'var(--green)'));
   var balPrefix = rosterChipTurnInLogged(p) ? '~' : '';
   var balAbs = '$' + fmt(Math.abs(dispBal));
-  summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balPrefix + balAbs + '</strong>'
+  var balLabel = Math.abs(dispBal) <= SETTLE_EPSILON ? balAbs
+    : (dispBal < 0 ? balPrefix + balAbs + ' (player owes)' : balPrefix + balAbs + ' (house owes)');
+  summary += '<div class="roster-expand-summary">Total In: <strong style="color:var(--text)">$' + fmt(totalIn) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Total Out: <strong style="color:var(--text)">$' + fmt(totalOut) + '</strong></div>';
+  summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong>'
     + (rosterChipTurnInLogged(p) ? ' <span style="color:var(--gold);font-size:11px">(pending payout)</span>' : '')
     + '</div>';
   if (rosterChipTurnInLogged(p)) {
     summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(p.chipTurnIn) + '</strong></div>';
   }
   var markerTotal = playerMarkerTotal(p);
-  if (markerTotal > 0) {
-    summary += '<div class="roster-expand-summary">📋 Marker: <strong style="color:var(--orange)">$' + fmt(markerTotal) + '</strong> outstanding</div>';
+  var markerOutstanding = playerOutstandingMarker(p);
+  if (markerOutstanding > 0 || markerTotal > 0) {
+    summary += '<div class="roster-expand-summary">📋 Marker: <strong style="color:var(--orange)">$' + fmt(markerOutstanding) + '</strong> outstanding</div>';
   }
   var bonusTotal = playerBonusTotal(p);
   if (bonusTotal > 0) {
@@ -2779,6 +3108,60 @@ function voidRosterCashOut(btn, playerId, index) {
   });
 }
 
+function voidRosterTurnIn(btn, playerId, index) {
+  confirmAction(btn, 'Click again to void this turn-in', function(){
+    var p = G.players.find(function(pl){ return pl.id === playerId; });
+    if (!p || !p.chipTurnIns || !p.chipTurnIns[index]) return;
+    var t = p.chipTurnIns[index];
+    p.chipTurnIns.splice(index, 1);
+    if (Number(p.chipTurnIn) === Number(t.amount)) p.chipTurnIn = 0;
+    appendTxn({
+      type: 'VOID_CHIP_TURN_IN',
+      amount: t.amount,
+      playerId: String(p.id),
+      playerName: p.name
+    });
+    rosterKeepExpanded(playerId);
+    calcAll(); renderAll(); autoSave();
+    toast('Turn-in voided');
+  });
+}
+
+/** Void a history row that only exists on txnLog (or sync-remove matching array row). */
+function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
+  confirmAction(btn, 'Click again to void this entry', function(){
+    var p = G.players.find(function(pl){ return pl.id === playerId; });
+    if (!p) return;
+    var typ = String(kind || '').toUpperCase();
+    var amt = Number(amount) || 0;
+    var txnIdx = (G.txnLog || []).findIndex(function(t){ return t && t.id === txnId; });
+    if (txnIdx >= 0) G.txnLog.splice(txnIdx, 1);
+
+    if (typ === 'BUY_IN' && p.buyIns) {
+      var bi = p.buyIns.findIndex(function(b){ return Number(b.amount) === amt; });
+      if (bi >= 0) p.buyIns.splice(bi, 1);
+      appendTxn({ type: 'VOID_CASH_BUYIN', amount: amt, playerId: String(p.id), playerName: p.name });
+    } else if (typ === 'CHIP_TURN_IN') {
+      if (p.chipTurnIns && p.chipTurnIns.length) {
+        var ti = p.chipTurnIns.findIndex(function(t){ return Number(t.amount) === amt; });
+        if (ti >= 0) p.chipTurnIns.splice(ti, 1);
+      }
+      if (Number(p.chipTurnIn) === amt) p.chipTurnIn = 0;
+      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: amt, playerId: String(p.id), playerName: p.name });
+    } else if (typ === 'CASH_OUT' || typ === 'PAYOUT') {
+      if (p.cashOuts && p.cashOuts.length) {
+        var ci = p.cashOuts.findIndex(function(c){ return Number(c.amount) === amt; });
+        if (ci >= 0) p.cashOuts.splice(ci, 1);
+      }
+      appendTxn({ type: 'VOID_CASH_OUT', amount: amt, playerId: String(p.id), playerName: p.name });
+    }
+
+    rosterKeepExpanded(playerId);
+    calcAll(); renderAll(); autoSave();
+    toast('Entry voided');
+  });
+}
+
 function rosterPlayerRow(p) {
   var active = p.id === _activePlayerId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
@@ -3065,7 +3448,7 @@ function addPerson() {
       canLogDrop:      staffRole === 'dealer',
       canReceiveECash: true
     },
-    buyIns: [], cashOuts: [], drops: [], tips: [], expenses: [], markerCredits: []
+    buyIns: [], cashOuts: [], chipTurnIns: [], drops: [], tips: [], expenses: [], markerCredits: []
   };
   if (staffRole === 'chef') newP.basePay = 0;
   if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
@@ -3166,6 +3549,9 @@ function logTurnIn(id) {
   var el = document.getElementById('turnin-amount-' + id);
   var amount = el ? (Number(el.value)||0) : 0;
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
+  if (!p.chipTurnIns) p.chipTurnIns = [];
+  var time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
   p.chipTurnIn = amount;
   appendTxn({ type:'CHIP_TURN_IN', amount:amount, playerId:String(p.id), playerName:p.name });
   calcAll(); renderAll();
@@ -3177,6 +3563,11 @@ function logTurnIn(id) {
 function resetTurnIn(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
+  var pending = Number(p.chipTurnIn) || 0;
+  if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
+    var last = p.chipTurnIns[p.chipTurnIns.length - 1];
+    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+  }
   p.chipTurnIn = 0;
   calcAll(); renderAll();
   if (isPlayerSeat(p)) renderPlayerDetail(id); else renderStaffDetail(id);
@@ -4440,7 +4831,12 @@ function saveRunningCount() {
 
 // ── Pocketbooks auth / subscription gate ─────────────────────────────────────
 var PB_API = 'https://pocketbooks-poker-api-production.up.railway.app';
+var API_BASE = PB_API;
 var PB_AUTH_KEY = 'pb-auth';
+var PB_ROLE_KEY = 'pb-role';
+var PB_LINKED_OWNER_KEY = 'pb-linked-owner';
+var _hostViewPollTimer = null;
+var _hostViewMode = false;
 
 function pbGetAuth() {
   try {
@@ -4451,10 +4847,49 @@ function pbGetAuth() {
 
 function pbSetAuth(obj) {
   try { localStorage.setItem(PB_AUTH_KEY, JSON.stringify(obj)); } catch (e) {}
+  if (obj && obj.role) {
+    try { localStorage.setItem(PB_ROLE_KEY, String(obj.role)); } catch (e) {}
+  }
+  if (obj && obj.linkedOwnerId) {
+    try { localStorage.setItem(PB_LINKED_OWNER_KEY, String(obj.linkedOwnerId)); } catch (e) {}
+  } else if (obj && obj.linked_owner_id) {
+    try { localStorage.setItem(PB_LINKED_OWNER_KEY, String(obj.linked_owner_id)); } catch (e) {}
+  }
 }
 
 function pbClearAuth() {
   try { localStorage.removeItem(PB_AUTH_KEY); } catch (e) {}
+  try { localStorage.removeItem(PB_ROLE_KEY); } catch (e) {}
+  try { localStorage.removeItem(PB_LINKED_OWNER_KEY); } catch (e) {}
+}
+
+function pbGetRole() {
+  try { return localStorage.getItem(PB_ROLE_KEY) || (pbGetAuth() && pbGetAuth().role) || 'owner'; }
+  catch (e) { return 'owner'; }
+}
+
+function pbGetLinkedOwnerId() {
+  try {
+    return localStorage.getItem(PB_LINKED_OWNER_KEY)
+      || (pbGetAuth() && (pbGetAuth().linkedOwnerId || pbGetAuth().linked_owner_id))
+      || '';
+  } catch (e) { return ''; }
+}
+
+function pbIsHostViewer() {
+  return pbGetRole() === 'host_viewer';
+}
+
+function pbAccessToken() {
+  var auth = pbGetAuth();
+  return (auth && (auth.accessToken || auth.access_token)) || '';
+}
+
+function pbAuthHeaders(extra) {
+  var h = Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, extra || {});
+  var tok = pbAccessToken();
+  if (tok) h.Authorization = 'Bearer ' + tok;
+  return h;
 }
 
 function pbIsActive(auth) {
@@ -4512,9 +4947,8 @@ function pbUpdateBanners(auth) {
 
 async function pbApi(path, opts) {
   opts = opts || {};
-  var res = await fetch(PB_API + path, Object.assign({
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-  }, opts));
+  var headers = pbAuthHeaders(opts.headers || {});
+  var res = await fetch(API_BASE + path, Object.assign({}, opts, { headers: headers }));
   var data = null;
   try { data = await res.json(); } catch (e) { data = null; }
   if (!res.ok) {
@@ -4527,20 +4961,29 @@ async function pbApi(path, opts) {
 }
 
 function pbNormalizeAuthFromCheck(email, data) {
+  var prev = pbGetAuth() || {};
   return {
     email: email,
+    userId: prev.userId || null,
+    accessToken: prev.accessToken || null,
     subscriptionStatus: data.status || data.subscription_status || 'none',
     subscriptionEnd: data.subscription_end || null,
-    isActive: !!data.isActive
+    isActive: !!data.isActive,
+    role: prev.role || pbGetRole() || 'owner',
+    linkedOwnerId: prev.linkedOwnerId || pbGetLinkedOwnerId() || null
   };
 }
 
-function pbNormalizeAuthFromVerify(data) {
+function pbNormalizeAuthFromVerify(data, accessToken) {
   return {
     email: (data.user && data.user.email) || '',
+    userId: (data.user && data.user.id) || null,
+    accessToken: accessToken || null,
     subscriptionStatus: data.subscription_status || 'none',
     subscriptionEnd: data.subscription_end || null,
-    isActive: !!data.isActive
+    isActive: !!data.isActive,
+    role: data.role || 'owner',
+    linkedOwnerId: data.linked_owner_id || null
   };
 }
 
@@ -4654,7 +5097,9 @@ function pbParseTokenFromHref(href) {
   var token = params.get('token') || params.get('token_hash') || hashParams.get('token') || hashParams.get('token_hash');
   var accessToken = params.get('access_token') || hashParams.get('access_token');
   var type = params.get('type') || hashParams.get('type') || 'email';
-  return { token: token, accessToken: accessToken, type: type };
+  var role = params.get('role') || hashParams.get('role') || '';
+  var owner = params.get('owner') || hashParams.get('owner') || '';
+  return { token: token, accessToken: accessToken, type: type, role: role, owner: owner };
 }
 
 function pbParseTokenFromUrl() {
@@ -4664,7 +5109,7 @@ function pbParseTokenFromUrl() {
 function pbStripAuthParamsFromUrl() {
   try {
     var u = new URL(window.location.href);
-    ['token','token_hash','access_token','type','checkout'].forEach(function(k){ u.searchParams.delete(k); });
+    ['token','token_hash','access_token','type','checkout','role','owner','refresh_token'].forEach(function(k){ u.searchParams.delete(k); });
     history.replaceState({}, '', u.pathname + u.search + (u.hash && u.hash.indexOf('access_token')>=0 ? '' : u.hash));
   } catch (e) {}
 }
@@ -4675,8 +5120,11 @@ async function pbVerifyParsedToken(parsed) {
   if (parsed.accessToken) body.access_token = parsed.accessToken;
   if (parsed.token) body.token = parsed.token;
   body.type = parsed.type || 'email';
+  if (parsed.role) body.role = parsed.role;
+  if (parsed.owner) body.owner = parsed.owner;
   var data = await pbApi('/auth/verify', { method: 'POST', body: JSON.stringify(body) });
-  var auth = pbNormalizeAuthFromVerify(data);
+  var tok = parsed.accessToken || (data && data.access_token) || null;
+  var auth = pbNormalizeAuthFromVerify(data, tok);
   pbSetAuth(auth);
   return auth;
 }
@@ -4691,6 +5139,12 @@ async function pbHandleMagicLinkReturn() {
 
 async function pbApplyVerifiedAuth(auth, fromLink) {
   if (!auth || !auth.email) return false;
+  // Host viewers skip subscription gate → read-only host view
+  if (auth.role === 'host_viewer' || pbIsHostViewer()) {
+    pbSetAuth(auth);
+    pbUnlockApp(auth);
+    return true;
+  }
   try {
     auth = await pbRefreshSubscription(auth.email) || auth;
   } catch (e) { /* keep verified auth */ }
@@ -4765,6 +5219,17 @@ async function pbHandleLaunchUrl() {
 function pbUnlockApp(auth) {
   pbShowAuthScreen(false);
   pbUpdateBanners(auth);
+  if (pbIsHostViewer()) {
+    renderHostView();
+    return;
+  }
+  stopHostViewPolling();
+  _hostViewMode = false;
+  document.body.classList.remove('host-view-mode');
+  var ban = document.getElementById('pb-host-view-banner');
+  if (ban) ban.classList.remove('show');
+  var logoutItem = document.getElementById('hdr-menu-item-logout');
+  if (logoutItem) logoutItem.style.display = 'none';
   init();
   if (auth && !pbIsActive(auth)) {
     // Allow viewing with expired banner; offer checkout
@@ -4777,19 +5242,190 @@ function pbOpenAccount() {
   setText('pb-acct-email', auth.email || '—');
   setText('pb-acct-status', auth.subscriptionStatus || '—');
   setText('pb-acct-end', auth.subscriptionEnd ? new Date(auth.subscriptionEnd).toLocaleString() : '—');
+  var hvSec = document.getElementById('pb-host-viewers-section');
+  if (hvSec) hvSec.style.display = pbIsHostViewer() ? 'none' : '';
   openModal('modal-pb-account');
+  if (!pbIsHostViewer()) pbLoadHostViewers();
 }
 
 function pbManageSubscription() {
-  window.open(PB_API + '/subscribe', '_blank');
+  window.open(API_BASE + '/subscribe', '_blank');
 }
 
 function pbLogout() {
+  stopHostViewPolling();
+  _hostViewMode = false;
+  document.body.classList.remove('host-view-mode');
+  var ban = document.getElementById('pb-host-view-banner');
+  if (ban) ban.classList.remove('show');
   pbClearAuth();
   closeModal('modal-pb-account');
   pbUpdateBanners(null);
   pbShowAuthScreen(true);
   pbAuthMsg('');
+}
+
+function pbSyncGameToApi() {
+  if (pbIsHostViewer()) return;
+  var auth = pbGetAuth();
+  if (!auth || !auth.userId || !pbAccessToken()) return;
+  var body = {
+    ownerUserId: auth.userId,
+    gameState: JSON.stringify(G)
+  };
+  fetch(API_BASE + '/game/save', {
+    method: 'POST',
+    headers: pbAuthHeaders(),
+    body: JSON.stringify(body)
+  }).catch(function(){ /* silent */ });
+}
+
+function pbHvMsg(text, isErr) {
+  var el = document.getElementById('pb-hv-msg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = isErr ? 'var(--red)' : 'var(--text-muted)';
+}
+
+async function pbInviteHostViewer() {
+  var auth = pbGetAuth() || {};
+  var emailEl = document.getElementById('pb-hv-email');
+  var viewerEmail = String((emailEl && emailEl.value) || '').trim().toLowerCase();
+  var ownerEmail = String(auth.email || '').trim().toLowerCase();
+  if (!viewerEmail || viewerEmail.indexOf('@') < 0) {
+    pbHvMsg('Enter a valid viewer email', true);
+    return;
+  }
+  if (!ownerEmail || !pbAccessToken()) {
+    pbHvMsg('Sign in again to send invites', true);
+    return;
+  }
+  var btn = document.getElementById('pb-hv-invite-btn');
+  if (btn) btn.disabled = true;
+  pbHvMsg('Sending invite…');
+  try {
+    await pbApi('/invite/host-viewer', {
+      method: 'POST',
+      body: JSON.stringify({ ownerEmail: ownerEmail, viewerEmail: viewerEmail })
+    });
+    if (emailEl) emailEl.value = '';
+    pbHvMsg('Invite sent ✅');
+    toast('Host viewer invite sent');
+    await pbLoadHostViewers();
+  } catch (err) {
+    pbHvMsg(err.message || 'Invite failed', true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function pbLoadHostViewers() {
+  var list = document.getElementById('pb-hv-list');
+  if (!list) return;
+  var auth = pbGetAuth() || {};
+  if (!auth.userId || !pbAccessToken()) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Sign in with a magic link to manage viewers</div>';
+    return;
+  }
+  list.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading…</div>';
+  try {
+    var data = await pbApi('/invite/host-viewers/' + encodeURIComponent(auth.userId), { method: 'GET' });
+    var viewers = (data && data.viewers) || [];
+    if (!viewers.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">No host viewers yet</div>';
+      return;
+    }
+    list.innerHTML = viewers.map(function(v) {
+      var email = v.viewer_email || v.email || '—';
+      var status = v.status || '—';
+      var id = v.id || '';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">'
+        + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + email + '</span>'
+        + '<span style="color:var(--text-muted);text-transform:uppercase;font-size:10px;font-weight:700">' + status + '</span>'
+        + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red)" onclick="pbRevokeHostViewer(\'' + id + '\')">Revoke</button>'
+        + '</div>';
+    }).join('');
+  } catch (err) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (err.message || 'Unable to load viewers') + '</div>';
+  }
+}
+
+async function pbRevokeHostViewer(id) {
+  if (!id) return;
+  try {
+    await pbApi('/invite/host-viewer/' + encodeURIComponent(id), { method: 'DELETE' });
+    toast('Viewer revoked');
+    await pbLoadHostViewers();
+  } catch (err) {
+    pbHvMsg(err.message || 'Revoke failed', true);
+  }
+}
+
+function stopHostViewPolling() {
+  if (_hostViewPollTimer) {
+    clearInterval(_hostViewPollTimer);
+    _hostViewPollTimer = null;
+  }
+}
+
+function setHostViewMeta(text, isErr) {
+  var el = document.getElementById('pb-host-view-meta');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'hv-meta' + (isErr ? ' hv-err' : '');
+}
+
+function applyHostViewReadOnly() {
+  document.body.classList.add('host-view-mode');
+  var logoutItem = document.getElementById('hdr-menu-item-logout');
+  if (logoutItem) logoutItem.style.display = '';
+  document.querySelectorAll('input, select, textarea').forEach(function(el) {
+    if (el.closest && el.closest('#pb-auth-screen')) return;
+    el.setAttribute('disabled', 'disabled');
+  });
+}
+
+async function fetchHostViewGame() {
+  var ownerId = pbGetLinkedOwnerId();
+  if (!ownerId || !pbAccessToken()) {
+    setHostViewMeta('⚠ Connection lost', true);
+    return;
+  }
+  try {
+    var state = await pbApi('/game/current/' + encodeURIComponent(ownerId), { method: 'GET' });
+    if (state && typeof state === 'object') {
+      G = Object.assign({
+        players: [], txnLog: [], expenses: [], _seq: 0,
+        sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
+        location: '', date: ''
+      }, state);
+      delete G.type;
+      delete G.stakes;
+      try { migrateStaffRoles(); } catch (_m) {}
+      calcAll();
+      renderAll();
+      renderHistory();
+      renderChipCountLog();
+      renderDealerBanks();
+      applyHostViewReadOnly();
+      setHostViewMeta('Last updated ' + new Date().toLocaleTimeString(), false);
+    }
+  } catch (err) {
+    setHostViewMeta('⚠ Connection lost', true);
+  }
+}
+
+function renderHostView() {
+  _hostViewMode = true;
+  stopHostViewPolling();
+  var ban = document.getElementById('pb-host-view-banner');
+  if (ban) ban.classList.add('show');
+  // Skip new-game / local init — load owner's live G
+  applyHostViewReadOnly();
+  setHostViewMeta('Connecting…', false);
+  fetchHostViewGame();
+  _hostViewPollTimer = setInterval(fetchHostViewGame, 30000);
+  showPage('dashboard');
 }
 
 async function pbBoot() {
@@ -4811,6 +5447,10 @@ async function pbBoot() {
       return;
     }
     var auth = pbGetAuth();
+    if (auth && (auth.role === 'host_viewer' || pbIsHostViewer())) {
+      pbUnlockApp(auth);
+      return;
+    }
     if (auth && auth.email) {
       try {
         auth = await pbRefreshSubscription(auth.email) || auth;
