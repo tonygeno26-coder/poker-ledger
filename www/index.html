@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pocketbooks Poker">
 <title>Pocketbooks Poker</title>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <style>
 :root{
   --bg:#000000;
@@ -510,6 +511,22 @@ select.inp{appearance:none;-webkit-appearance:none}
 .pb-banner.expired{background:var(--red-dim);color:var(--red)}
 #pb-account-modal .modal{max-width:360px}
 
+
+/* Lucide icons — replace UI emojis */
+[data-lucide]{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;stroke-width:2;flex-shrink:0}
+svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;stroke-width:2;flex-shrink:0}
+.nav-btn .nav-ico svg.lucide,.nav-ico svg.lucide{width:22px;height:22px}
+.hdr-menu-btn svg.lucide{width:22px;height:22px}
+.btn svg.lucide,.hdr-menu-ico svg.lucide,.action-ico svg.lucide,
+.modal-close svg.lucide,.roster-del-btn svg.lucide,.card-title svg.lucide,
+.breakdown-title svg.lucide{width:16px;height:16px}
+.card-title,.breakdown-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hdr-menu-ico{display:inline-flex;align-items:center;justify-content:center;width:20px}
+.nav-ico{display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.ico-inline{display:inline-flex;align-items:center;gap:6px}
+.ico-inline svg.lucide{flex-shrink:0}
+.role-card-ico{display:flex;align-items:center;justify-content:center;margin-bottom:4px;color:inherit}
+.role-card-ico svg.lucide{width:22px;height:22px}
 </style>
 </head>
 <body>
@@ -536,7 +553,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   <button type="button" class="btn btn-outline btn-xs" onclick="pbOpenCheckout()" style="color:var(--red);border-color:var(--red);flex-shrink:0">Renew</button>
 </div>
 <div id="pb-host-view-banner" aria-live="polite">
-  <span>👁 Host View — Live Updates</span>
+  <span class="ico-inline"><i data-lucide="eye" aria-hidden="true"></i> Host View — Live Updates</span>
   <span class="hv-meta" id="pb-host-view-meta">Last updated —</span>
 </div>
 
@@ -547,22 +564,22 @@ select.inp{appearance:none;-webkit-appearance:none}
     <img src="logo.png" alt="Pocketbooks Poker" width="210" height="56">
     <span id="game-label">No active game</span>
   </div>
-  <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)">☰</button>
+  <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)"><i data-lucide="menu" aria-hidden="true"></i></button>
 </div>
 <div class="hdr-menu no-print" id="hdr-menu" role="menu" aria-labelledby="hdr-menu-btn" hidden>
-  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true">🃏</span>New Game</button>
-  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true">💾</span>Save</button>
-  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true">👤</span>Account</button>
-  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true">🚪</span>Log Out</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="layers" aria-hidden="true"></i></span>New Game</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="save" aria-hidden="true"></i></span>Save</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="user" aria-hidden="true"></i></span>Account</button>
+  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="lock" aria-hidden="true"></i></span>Log Out</button>
 </div>
 
 <!-- BOTTOM TAB BAR -->
 <nav class="nav">
-  <button class="nav-btn active" data-page="dashboard" onclick="showPage('dashboard')"><span class="nav-ico">▣</span>Dashboard</button>
-  <button class="nav-btn" data-page="players" onclick="filterRosterByRole('players');showPage('players')"><span class="nav-ico">☺</span>Players</button>
-  <button class="nav-btn" data-page="settlement" onclick="showPage('settlement')"><span class="nav-ico">⇄</span>Settle</button>
-  <button class="nav-btn" data-page="staff" onclick="filterRosterByRole('staff');showPage('players')"><span class="nav-ico">♦</span>Staff</button>
-  <button class="nav-btn" data-page="history" onclick="showPage('history')"><span class="nav-ico">☰</span>History</button>
+  <button class="nav-btn active" data-page="dashboard" onclick="showPage('dashboard')"><span class="nav-ico"><i data-lucide="layout-dashboard" aria-hidden="true"></i></span>Dashboard</button>
+  <button class="nav-btn" data-page="players" onclick="filterRosterByRole('players');showPage('players')"><span class="nav-ico"><i data-lucide="users" aria-hidden="true"></i></span>Players</button>
+  <button class="nav-btn" data-page="settlement" onclick="showPage('settlement')"><span class="nav-ico"><i data-lucide="arrow-left-right" aria-hidden="true"></i></span>Settle</button>
+  <button class="nav-btn" data-page="staff" onclick="filterRosterByRole('staff');showPage('players')"><span class="nav-ico"><i data-lucide="award" aria-hidden="true"></i></span>Staff</button>
+  <button class="nav-btn" data-page="history" onclick="showPage('history')"><span class="nav-ico"><i data-lucide="clock" aria-hidden="true"></i></span>History</button>
 </nav>
 
 <div class="main">
@@ -583,7 +600,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   <div class="grid-2">
     <div>
       <div class="card">
-        <div class="card-title">📝 Transaction Log</div>
+        <div class="card-title"><i data-lucide="pen-line" aria-hidden="true"></i> Transaction Log</div>
         <div id="txn-log" class="scroll-y" style="max-height:min(300px,40vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
           <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div>
         </div>
@@ -592,10 +609,10 @@ select.inp{appearance:none;-webkit-appearance:none}
     <div class="card" style="padding:0;overflow:visible">
       <div style="display:flex;border-bottom:1px solid var(--border)">
         <button id="tab-owes-btn" onclick="switchOwesTab('owes')" style="flex:1;padding:14px;background:var(--red-dim);border:none;cursor:pointer;font-size:13px;font-weight:800;color:var(--red);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px">
-          🔴 Owes House <span id="owes-count" class="badge badge-red" style="display:none">0</span>
+          <i data-lucide="arrow-down-circle" aria-hidden="true"></i> Owes House <span id="owes-count" class="badge badge-red" style="display:none">0</span>
         </button>
         <button id="tab-owed-btn" onclick="switchOwesTab('owed')" style="flex:1;padding:14px;background:transparent;border:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:6px">
-          💸 House Owes <span id="owed-count" class="badge" style="display:none;background:var(--green);color:#000">0</span>
+          <i data-lucide="banknote" aria-hidden="true"></i> House Owes <span id="owed-count" class="badge" style="display:none;background:var(--green);color:#000">0</span>
         </button>
       </div>
       <div id="owes-panel" class="scroll-y" style="padding:12px;max-height:min(280px,40vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
@@ -608,7 +625,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   </div>
 
   <div class="breakdown">
-    <div class="breakdown-title">🏦 Breakdown</div>
+    <div class="breakdown-title"><i data-lucide="landmark" aria-hidden="true"></i> Breakdown</div>
     <div class="breakdown-row">
       <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
       <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
@@ -622,27 +639,27 @@ select.inp{appearance:none;-webkit-appearance:none}
   </div>
 
   <div class="card" id="card-expenses">
-    <div class="card-title">🏠 House Expense</div>
+    <div class="card-title"><i data-lucide="receipt" aria-hidden="true"></i> House Expense</div>
     <div class="dash-stack-1" style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">
       <div class="inp-group"><div class="inp-label">Description</div><input class="inp" id="exp-desc" placeholder="e.g. Cards, food, tip out"></div>
       <div class="inp-group"><div class="inp-label">Amount</div><input class="inp" type="number" id="exp-amount" placeholder="0" min="0"></div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
-      <button class="btn btn-purple" style="flex:1" onclick="addHouseExpense()">＋ Add</button>
-      <button type="button" class="btn btn-outline btn-sm" id="house-receipt-btn" onclick="pickExpenseReceipt('house')" style="flex-shrink:0;white-space:nowrap">📷 Receipt</button>
-      <span id="house-receipt-status" style="font-size:11px;color:var(--green);display:none">📷 Ready</span>
+      <button class="btn btn-purple" style="flex:1" onclick="addHouseExpense()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
+      <button type="button" class="btn btn-outline btn-sm" id="house-receipt-btn" onclick="pickExpenseReceipt('house')" style="flex-shrink:0;white-space:nowrap"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Receipt</button>
+      <span id="house-receipt-status" style="font-size:11px;color:var(--green);display:none"><i data-lucide="camera" class="action-ico" aria-hidden="true"></i> Ready</span>
     </div>
     <div id="expense-list" class="scroll-y" style="max-height:min(240px,35vh);overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div></div>
   </div>
 
   <div class="card" id="card-chip-count">
-    <div class="card-title">🎲 Chip Count</div>
+    <div class="card-title"><i data-lucide="layers" aria-hidden="true"></i> Chip Count</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <div>
         <div class="inp-label" style="margin-bottom:4px">Expected</div>
         <div id="cc-expected" style="font-size:22px;font-weight:800;color:var(--gold)">$0</div>
       </div>
-      <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()">🎲 Count Chips</button>
+      <button type="button" class="btn btn-outline dash-chip-btn" style="color:var(--gold);border-color:var(--gold)" onclick="console.log('[chip count button clicked]');openChipCountModal()"><i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Count Chips</button>
     </div>
     <div id="cc-last-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--text-muted)">No running counts yet</div>
     <div class="inp-label" style="margin-bottom:6px">Count Log</div>
@@ -656,13 +673,13 @@ select.inp{appearance:none;-webkit-appearance:none}
     </div>
   </div>
 
-  <button class="end-game-btn host-hide" onclick="endGame(this)">🏁 END GAME</button>
+  <button class="end-game-btn host-hide" onclick="endGame(this)"><i data-lucide="flag" class="action-ico" aria-hidden="true"></i> END GAME</button>
 </div>
 
 <!-- ===== PLAYERS ===== -->
 <div id="page-players" class="page">
   <div class="flex-row" style="margin-bottom:12px;gap:10px">
-    <input class="inp" id="roster-search" placeholder="🔍 Search by name..." oninput="filterRoster(this.value)" style="flex:1">
+    <input class="inp" id="roster-search" placeholder="Search by name..." oninput="filterRoster(this.value)" style="flex:1">
     <select class="inp" id="roster-role-filter" style="width:auto;min-width:140px;flex-shrink:0" onchange="filterRosterByRole(this.value)">
       <option value="all">All</option>
       <option value="players">Players</option>
@@ -674,16 +691,16 @@ select.inp{appearance:none;-webkit-appearance:none}
     <div class="flex-row" style="gap:8px">
       <input class="inp" id="quick-add-name" placeholder="NAME" style="text-transform:uppercase;flex:2" onkeydown="if(event.key==='Enter')quickAddPerson()">
       <select class="inp" id="quick-add-role" style="flex:1;min-width:120px">
-        <option value="player">🎰 Player</option>
-        <option value="dealer">🃏 Dealer</option>
-        <option value="hostess">💃 Hostess</option>
-        <option value="host">🏠 Host</option>
-        <option value="host-player">🏠🎰 Host/Player</option>
-        <option value="chef">👨‍🍳 Chef</option>
-        <option value="books">📒 Books</option>
-        <option value="misc">👔 Misc Staff</option>
+        <option value="player">Player</option>
+        <option value="dealer">Dealer</option>
+        <option value="hostess">Hostess</option>
+        <option value="host">Host</option>
+        <option value="host-player">Host/Player</option>
+        <option value="chef">Chef</option>
+        <option value="books">Books</option>
+        <option value="misc">Misc Staff</option>
       </select>
-      <button class="btn btn-purple" style="flex-shrink:0" onclick="quickAddPerson()">＋ Add</button>
+      <button class="btn btn-purple" style="flex-shrink:0" onclick="quickAddPerson()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
     </div>
   </div>
 
@@ -698,15 +715,15 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- ===== SETTLEMENT ===== -->
 <div id="page-settlement" class="page">
   <div class="card">
-    <div class="card-title">💰 Wallet Summary</div>
+    <div class="card-title"><i data-lucide="bar-chart-2" aria-hidden="true"></i> Wallet Summary</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px" id="settle-wallets"></div>
   </div>
   <div class="card">
-    <div class="card-title">🔴 Players Owing House</div>
+    <div class="card-title"><i data-lucide="arrow-down-circle" aria-hidden="true"></i> Players Owing House</div>
     <div id="settle-owes"></div>
   </div>
   <div class="card">
-    <div class="card-title">💚 House Owes Players</div>
+    <div class="card-title"><i data-lucide="banknote" aria-hidden="true"></i> House Owes Players</div>
     <div id="settle-owed"></div>
   </div>
 </div>
@@ -714,7 +731,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- ===== HISTORY ===== -->
 <div id="page-history" class="page">
   <div class="card">
-    <div class="card-title">📋 Saved Games <button class="btn btn-outline btn-xs ml-auto" onclick="clearHistory(this)">🗑️ Clear All</button></div>
+    <div class="card-title"><i data-lucide="clock" aria-hidden="true"></i> Saved Games <button class="btn btn-outline btn-xs ml-auto" onclick="clearHistory(this)"><i data-lucide="trash-2" class="action-ico" aria-hidden="true"></i> Clear All</button></div>
     <div id="history-list"><div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No saved games yet</div></div>
   </div>
 </div>
@@ -727,7 +744,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- MODAL: Add Player -->
 <div class="modal-bg" id="modal-add-player">
   <div class="modal">
-    <div class="modal-title">➕ Add Person <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
+    <div class="modal-title"><i data-lucide="plus-circle" aria-hidden="true"></i> Add Person <button class="modal-close" onclick="closeModal('modal-add-player')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <div class="inp-group" style="margin-bottom:12px">
       <div class="inp-label">Name</div>
       <input class="inp" id="new-player-name" placeholder="Name" style="text-transform:uppercase">
@@ -737,42 +754,42 @@ select.inp{appearance:none;-webkit-appearance:none}
     <div class="inp-label" style="margin-bottom:8px">Role</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       <div id="role-card-player" onclick="selectRole('player')" style="background:rgba(224,49,49,0.18);border:1.5px solid var(--red);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">🎰</div>
+        <div class="role-card-ico"><i data-lucide="user" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--red)">Player</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Buy in · Cash out</div>
       </div>
       <div id="role-card-dealer" onclick="selectRole('dealer')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">🃏</div>
+        <div class="role-card-ico"><i data-lucide="layers" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Dealer</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Drop · Tax</div>
       </div>
       <div id="role-card-hostess" onclick="selectRole('hostess')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">💃</div>
+        <div class="role-card-ico"><i data-lucide="users" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Hostess</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
       </div>
       <div id="role-card-host" onclick="selectRole('host')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">🏠</div>
+        <div class="role-card-ico"><i data-lucide="landmark" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Host</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
       </div>
       <div id="role-card-host-player" onclick="selectRole('host-player')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s;grid-column:1/-1">
-        <div style="font-size:22px;margin-bottom:4px">🏠🎰</div>
+        <div class="role-card-ico"><i data-lucide="award" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Host/Player</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Buy in · Tips · Tax</div>
       </div>
       <div id="role-card-chef" onclick="selectRole('chef')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">👨‍🍳</div>
+        <div class="role-card-ico"><i data-lucide="utensils" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Chef</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Base pay · Tips</div>
       </div>
       <div id="role-card-books" onclick="selectRole('books')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;margin-bottom:4px">📒</div>
+        <div class="role-card-ico"><i data-lucide="pen-line" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Books</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Hourly · Tips</div>
       </div>
       <div id="role-card-misc" onclick="selectRole('misc')" style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all 0.15s;grid-column:1/-1">
-        <div style="font-size:22px;margin-bottom:4px">👔</div>
+        <div class="role-card-ico"><i data-lucide="badge-check" aria-hidden="true"></i></div>
         <div style="font-size:13px;font-weight:700;color:var(--text-muted)">Misc Staff</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Tips · Expenses</div>
       </div>
@@ -782,7 +799,7 @@ select.inp{appearance:none;-webkit-appearance:none}
       <input class="inp" id="new-player-notes" placeholder="Optional notes">
     </div>
     <div id="add-person-caps" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text-muted)">
-      <div id="add-person-caps-text">✅ Can buy in · ✅ Can cash out</div>
+      <div id="add-person-caps-text" class="ico-inline"><i data-lucide="check-circle" aria-hidden="true"></i> Can buy in · <i data-lucide="check-circle" aria-hidden="true"></i> Can cash out</div>
     </div>
     <button class="btn btn-purple" style="width:100%" onclick="addPerson()">Add</button>
   </div>
@@ -794,7 +811,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- MODAL: Receipt photo viewer -->
 <div class="modal-bg" id="modal-receipt-viewer" onclick="if(event.target===this)closeModal('modal-receipt-viewer')" style="background:rgba(0,0,0,0.92);z-index:9999">
   <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">
-    <button type="button" onclick="closeModal('modal-receipt-viewer')" style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;z-index:2;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;width:40px;height:40px;border-radius:20px;font-size:20px;cursor:pointer;line-height:1">×</button>
+    <button type="button" onclick="closeModal('modal-receipt-viewer')" style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;z-index:2;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;width:40px;height:40px;border-radius:20px;font-size:20px;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
     <img id="receipt-viewer-img" src="" alt="Receipt" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
   </div>
 </div>
@@ -802,19 +819,19 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- MODAL: Chip Count -->
 <div class="modal-bg" id="modal-chip-count">
   <div class="modal" style="max-width:520px">
-    <div class="modal-title">🎲 Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')">✕</button></div>
+    <div class="modal-title"><i data-lucide="layers" aria-hidden="true"></i> Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <!-- Tabs -->
     <div style="display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:16px">
-      <button id="cctab-starting" onclick="switchCCTab('starting')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--purple);color:#fff">📦 Starting Count</button>
-      <button id="cctab-running" onclick="switchCCTab('running')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text-muted)">🔄 Running Count</button>
+      <button id="cctab-starting" onclick="switchCCTab('starting')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--purple);color:#fff"><i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Starting Count</button>
+      <button id="cctab-running" onclick="switchCCTab('running')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text-muted)"><i data-lucide="refresh-cw" class="action-ico" aria-hidden="true"></i> Running Count</button>
     </div>
 
     <!-- TAB: Starting Count -->
     <div id="cc-tab-starting">
       <div id="cc-starting-saved" style="display:none;background:var(--green-dim);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-weight:700;color:var(--green);margin-bottom:4px">✅ Starting Count Saved</div>
+        <div style="font-weight:700;color:var(--green);margin-bottom:4px" class="ico-inline"><i data-lucide="check-circle" aria-hidden="true"></i> Starting Count Saved</div>
         <div id="cc-starting-saved-detail" style="font-size:12px;color:var(--text-muted)"></div>
-        <button onclick="editStartingCount(this)" style="margin-top:8px;padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer">Edit</button>
+        <button onclick="editStartingCount(this)" style="margin-top:8px;padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer"><i data-lucide="pencil" class="action-ico" aria-hidden="true"></i> Edit</button>
       </div>
       <div id="cc-starting-form">
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count starting chips before play begins:</div>
@@ -822,7 +839,7 @@ select.inp{appearance:none;-webkit-appearance:none}
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Starting Total</span><span style="font-weight:900;font-size:1.1rem;color:var(--gold)" id="cc-starting-total">$0</span></div>
         </div>
-        <button class="btn btn-purple" style="width:100%" onclick="saveStartingCount()">💾 Save Starting Count</button>
+        <button class="btn btn-purple" style="width:100%" onclick="saveStartingCount()"><i data-lucide="save" class="action-ico" aria-hidden="true"></i> Save Starting Count</button>
       </div>
     </div>
 
@@ -847,8 +864,8 @@ select.inp{appearance:none;-webkit-appearance:none}
       <!-- Dealer / Table Banks -->
       <div style="background:var(--bg3);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin:12px 0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px">🏦 Dealer / Table Banks</span>
-          <button onclick="addDealerBank()" style="padding:4px 10px;background:var(--gold-dim);border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:var(--gold);font-size:11px;font-weight:700;cursor:pointer">＋ Add Bank</button>
+          <span style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px" class="ico-inline"><i data-lucide="landmark" aria-hidden="true"></i> Dealer / Table Banks</span>
+          <button onclick="addDealerBank()" style="padding:4px 10px;background:var(--gold-dim);border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:var(--gold);font-size:11px;font-weight:700;cursor:pointer"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add Bank</button>
         </div>
         <div id="dealer-banks-list">
           <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:6px">No banks added</div>
@@ -870,7 +887,7 @@ select.inp{appearance:none;-webkit-appearance:none}
         <div class="inp-label">Note (optional)</div>
         <input class="inp" id="rc-note" placeholder="e.g. end of night count">
       </div>
-      <button class="btn btn-purple" style="width:100%;margin-bottom:14px" onclick="saveRunningCount()">💾 Save Running Count</button>
+      <button class="btn btn-purple" style="width:100%;margin-bottom:14px" onclick="saveRunningCount()"><i data-lucide="save" class="action-ico" aria-hidden="true"></i> Save Running Count</button>
       <div class="inp-label" style="margin-bottom:6px">Count History</div>
       <div id="chip-count-history" class="scroll-y" style="max-height:min(220px,28vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
         <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No running counts yet</div>
@@ -883,7 +900,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 <!-- MODAL: Account -->
 <div class="modal-bg" id="modal-pb-account" onclick="if(event.target===this)closeModal('modal-pb-account')">
   <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-title"><span>Account</span><button type="button" class="modal-close" onclick="closeModal('modal-pb-account')">×</button></div>
+    <div class="modal-title"><span class="ico-inline"><i data-lucide="user" aria-hidden="true"></i> Account</span><button type="button" class="modal-close" onclick="closeModal('modal-pb-account')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <div style="padding:4px 0 12px;font-size:13px;line-height:1.7">
       <div><span style="color:var(--text-muted)">Email</span><br><strong id="pb-acct-email">—</strong></div>
       <div style="margin-top:10px"><span style="color:var(--text-muted)">Status</span><br><strong id="pb-acct-status">—</strong></div>
@@ -907,8 +924,8 @@ select.inp{appearance:none;-webkit-appearance:none}
 <div class="modal-bg" id="modal-settle-up">
   <div class="modal" style="max-width:540px">
     <div class="modal-title">
-      <span id="settle-modal-title">🤝 Settle Up</span>
-      <button class="modal-close" onclick="closeSettleUpModal()">✕</button>
+      <span id="settle-modal-title" class="ico-inline"><i data-lucide="arrow-left-right" aria-hidden="true"></i> Settle Up</span>
+      <button class="modal-close" onclick="closeSettleUpModal()" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
     <div id="settle-modal-body"></div>
   </div>
@@ -919,7 +936,7 @@ select.inp{appearance:none;-webkit-appearance:none}
   <div class="modal sig-modal sig-modal-fullscreen">
     <div class="modal-title">
       <span id="marker-sign-title" class="sig-title">MARKER AGREEMENT</span>
-      <button class="modal-close" onclick="skipMarkerSignature()">×</button>
+      <button class="modal-close" onclick="skipMarkerSignature()" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
     <div class="sig-sub" id="marker-sign-sub"></div>
     <div class="sig-canvas-wrap">
@@ -927,7 +944,7 @@ select.inp{appearance:none;-webkit-appearance:none}
     </div>
     <div class="sig-actions">
       <button type="button" class="btn btn-sig-clear" onclick="clearMarkerSignature()">Clear</button>
-      <button type="button" class="btn btn-sig-confirm" onclick="confirmMarkerSignature()">✓ Confirm Signature</button>
+      <button type="button" class="btn btn-sig-confirm" onclick="confirmMarkerSignature()"><i data-lucide="check-circle" class="action-ico" aria-hidden="true"></i> Confirm Signature</button>
       <button type="button" class="sig-skip" onclick="skipMarkerSignature()">Skip</button>
     </div>
   </div>
@@ -1481,7 +1498,7 @@ function defaultSettlementDirection(netBalance) {
 }
 
 function settlementDirectionLabel(dir) {
-  return dir === 'HOUSE_TO_PLAYER' ? '🏠 → Player' : 'Player → 🏠';
+  return dir === 'HOUSE_TO_PLAYER' ? (lucideIcon('landmark','action-ico') + ' → Player') : ('Player → ' + lucideIcon('landmark','action-ico'));
 }
 
 function openSettleUpModal(playerId, name, netBalance, kind) {
@@ -1512,7 +1529,8 @@ function renderSettleUpModal() {
   var kindLabel = ctx.kind === 'ECASH' ? 'E-Cash Owed' : 'Net Balance';
   var defaultDir = defaultSettlementDirection(bal);
 
-  setText('settle-modal-title', '🤝 Settle Up — ' + ctx.name);
+  var _smtEl = document.getElementById('settle-modal-title');
+  if (_smtEl) _smtEl.innerHTML = lucideIcon('arrow-left-right') + ' Settle Up — ' + ctx.name;
 
   var payLog = info.payments.length
     ? info.payments.map(function(p, idx) {
@@ -1522,7 +1540,7 @@ function renderSettleUpModal() {
           + '<span style="color:var(--text-muted);min-width:52px">' + (p.method || 'CASH') + '</span>'
           + '<span style="font-weight:800;flex:1;text-align:right">$' + fmt(p.amount) + '</span>'
           + '<span style="font-size:10px;color:var(--text-dim);min-width:44px;text-align:right">' + (p.time || '') + '</span>'
-          + '<button onclick="removeSettlementPayment(' + txnIdx + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
+          + '<button onclick="removeSettlementPayment(' + txnIdx + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Remove">' + lucideIcon('x','action-ico') + '</button>'
           + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px">No settlement payments yet</div>';
@@ -1550,21 +1568,23 @@ function renderSettleUpModal() {
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
           + '<div class="inp-group"><div class="inp-label">Direction</div>'
             + '<select class="inp" id="settle-direction">'
-              + '<option value="HOUSE_TO_PLAYER"' + (defaultDir === 'HOUSE_TO_PLAYER' ? ' selected' : '') + '>🏠 House pays player</option>'
+              + '<option value="HOUSE_TO_PLAYER"' + (defaultDir === 'HOUSE_TO_PLAYER' ? ' selected' : '') + '>House pays player</option>'
               + '<option value="PLAYER_TO_HOUSE"' + (defaultDir === 'PLAYER_TO_HOUSE' ? ' selected' : '') + '>Player pays house</option>'
             + '</select>'
           + '</div>'
           + '<div class="inp-group"><div class="inp-label">Method</div>'
-            + '<select class="inp" id="settle-method"><option value="CASH">💵 Cash</option><option value="ECASH">📱 E-Cash</option></select>'
+            + '<select class="inp" id="settle-method"><option value="CASH">Cash</option><option value="ECASH">E-Cash</option></select>'
           + '</div>'
         + '</div>'
         + '<div class="inp-group" style="margin-bottom:10px"><div class="inp-label">Amount</div>'
           + '<input class="inp" type="number" id="settle-amount" placeholder="0" min="0" step="0.01"'
           + (info.remaining > 0 ? ' value="' + info.remaining + '"' : '') + '>'
         + '</div>'
-        + '<button class="btn btn-purple" style="width:100%" onclick="addSettlementPayment()">＋ Record Payment</button>'
+        + '<button class="btn btn-purple" style="width:100%" onclick="addSettlementPayment()">' + lucideIcon('plus','action-ico') + ' Record Payment</button>'
       + '</div>'
-      : '<div style="text-align:center;padding:12px;background:var(--green-dim);border:1px solid rgba(16,185,129,0.3);border-radius:10px;color:var(--green);font-weight:700">✅ Fully settled</div>');
+      : '<div style="text-align:center;padding:12px;background:var(--green-dim);border:1px solid rgba(16,185,129,0.3);border-radius:10px;color:var(--green);font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px">' + lucideIcon('check-circle') + ' Fully settled</div>');
+
+  refreshLucideIcons();
 }
 
 function addSettlementPayment() {
@@ -1783,6 +1803,19 @@ function calcAll() {
   // no-op — all values computed fresh in renderAll
 }
 
+
+function lucideIcon(name, cls) {
+  var c = cls ? (' class="' + cls + '"') : '';
+  return '<i data-lucide="' + name + '"' + c + ' aria-hidden="true"></i>';
+}
+function refreshLucideIcons() {
+  try {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  } catch (e) { /* ignore */ }
+}
+
 function renderAll() {
   var d = calcDashboard();
 
@@ -1927,6 +1960,7 @@ function renderAll() {
       bankEl.value = bv ? bv : '';
     }
   }
+  refreshLucideIcons();
 }
 
 var _rosterSearch = '';
@@ -2361,25 +2395,25 @@ function renderPlayerHistoryLines(p) {
     var signCtrl = '';
     if (row.kind === 'BUY_IN' && String(row.buyType || '').toUpperCase() === 'MARKER' && row.arrayIndex != null) {
       signCtrl = row.signatureData
-        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + row.arrayIndex + ')">✍️ SIGNED</button>'
+        ? '<button type="button" class="badge badge-green sig-badge-btn" onclick="event.stopPropagation();viewMarkerSignature(' + p.id + ',' + row.arrayIndex + ')">SIGNED</button>'
         : '<button type="button" class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="event.stopPropagation();openMarkerSignModal(' + p.id + ',' + row.arrayIndex + ')">Sign</button>';
     }
 
     var voidBtn = '';
     if (row.kind === 'BUY_IN' && row.arrayIndex != null) {
-      voidBtn = '<button class="roster-del-btn" title="Void buy-in" onclick="event.stopPropagation();voidRosterBuyIn(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+      voidBtn = '<button class="roster-del-btn" title="Void buy-in" onclick="event.stopPropagation();voidRosterBuyIn(this,' + p.id + ',' + row.arrayIndex + ')">' + lucideIcon('x','action-ico') + '</button>';
     } else if (row.kind === 'CHIP_TURN_IN' && row.arrayIndex != null) {
-      voidBtn = '<button class="roster-del-btn" title="Void turn-in" onclick="event.stopPropagation();voidRosterTurnIn(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+      voidBtn = '<button class="roster-del-btn" title="Void turn-in" onclick="event.stopPropagation();voidRosterTurnIn(this,' + p.id + ',' + row.arrayIndex + ')">' + lucideIcon('x','action-ico') + '</button>';
     } else if (row.kind === 'CASH_OUT' && row.arrayIndex != null) {
-      voidBtn = '<button class="roster-del-btn" title="Void cash-out" onclick="event.stopPropagation();voidRosterCashOut(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+      voidBtn = '<button class="roster-del-btn" title="Void cash-out" onclick="event.stopPropagation();voidRosterCashOut(this,' + p.id + ',' + row.arrayIndex + ')">' + lucideIcon('x','action-ico') + '</button>';
     } else if (row.kind === 'CREDIT' && row.arrayIndex != null) {
-      voidBtn = '<button class="roster-del-btn" title="Void credit" onclick="event.stopPropagation();voidRosterCredit(this,' + p.id + ',' + row.arrayIndex + ')">✕</button>';
+      voidBtn = '<button class="roster-del-btn" title="Void credit" onclick="event.stopPropagation();voidRosterCredit(this,' + p.id + ',' + row.arrayIndex + ')">' + lucideIcon('x','action-ico') + '</button>';
     } else if (row.source === 'txn' || row.source === 'pending') {
       // txn-only / pending: void via txn id or pending reset
       if (row.kind === 'CHIP_TURN_IN' && row.source === 'pending') {
-        voidBtn = '<button class="roster-del-btn" title="Clear turn-in" onclick="event.stopPropagation();rosterResetTurnIn(' + p.id + ')">✕</button>';
+        voidBtn = '<button class="roster-del-btn" title="Clear turn-in" onclick="event.stopPropagation();rosterResetTurnIn(' + p.id + ')">' + lucideIcon('x','action-ico') + '</button>';
       } else if (row.txnId) {
-        voidBtn = '<button class="roster-del-btn" title="Void entry" onclick="event.stopPropagation();voidRosterHistoryTxn(this,' + p.id + ',\'' + String(row.txnId).replace(/'/g, '') + '\',\'' + row.kind + '\',' + (Number(row.amount) || 0) + ')">✕</button>';
+        voidBtn = '<button class="roster-del-btn" title="Void entry" onclick="event.stopPropagation();voidRosterHistoryTxn(this,' + p.id + ',\'' + String(row.txnId).replace(/'/g, '') + '\',\'' + row.kind + '\',' + (Number(row.amount) || 0) + ')">' + lucideIcon('x','action-ico') + '</button>';
       }
     }
 
@@ -2456,7 +2490,7 @@ function rosterUpdateTurnInPreview(id) {
   }
   html += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:' + (net >= 0 ? 'var(--green)' : 'var(--red)') + '">$' + fmt(net) + '</span></div>';
   if (amount > 0 && net < 0) {
-    html += '<div class="roster-turnin-warn">⚠️ Player short $' + fmt(Math.abs(net)) + '</div>';
+    html += '<div class="roster-turnin-warn">' + lucideIcon('alert-triangle','action-ico') + ' Player short $' + fmt(Math.abs(net)) + '</div>';
   }
   previewEl.innerHTML = html;
 }
@@ -2739,7 +2773,7 @@ function rosterTurnInSectionHtml(p, markerTotal) {
         + '<span>Payout</span>'
         + '<a onclick="rosterResetTurnIn(' + p.id + ')" style="font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--purple-light);cursor:pointer;text-decoration:underline">Re-count</a>'
       + '</div>'
-      + '<div class="roster-turnin-locked">✅ Chips turned in: $' + fmt(p.chipTurnIn) + '</div>'
+      + '<div class="roster-turnin-locked">' + lucideIcon('lock','action-ico') + ' Chips turned in: $' + fmt(p.chipTurnIn) + '</div>'
       + (markerTotal > 0
         ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px">Marker: <strong style="color:var(--red)">-$' + fmt(markerTotal) + '</strong> · Net: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
         : '')
@@ -2765,8 +2799,8 @@ function rosterTurnInSectionHtml(p, markerTotal) {
   }
 
   var markerWarn = markerTotal > 0
-    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">⚠️ Turn in chips first — $' + fmt(markerTotal) + ' marker outstanding</div>'
-      + '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red)">⚠️ Player must turn in chips before payout — chips cover the marker first</div>'
+    ? '<div class="roster-turnin-warn" style="margin-bottom:10px">' + lucideIcon('alert-triangle','action-ico') + ' Turn in chips first — $' + fmt(markerTotal) + ' marker outstanding</div>'
+      + '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px;color:var(--red);display:flex;align-items:flex-start;gap:6px">' + lucideIcon('alert-triangle','action-ico') + ' Player must turn in chips before payout — chips cover the marker first</div>'
       + '<button type="button" class="btn btn-outline roster-turnin-btn" disabled style="width:100%;margin-bottom:12px;opacity:0.45;color:var(--text-muted);border-color:var(--border);cursor:not-allowed" title="Turn in chips first">Pay Out</button>'
     : '';
 
@@ -2810,11 +2844,11 @@ function rosterPlayerExpandedHtml(p) {
   var markerTotal = playerMarkerTotal(p);
   var markerOutstanding = playerOutstandingMarker(p);
   if (markerOutstanding > 0 || markerTotal > 0) {
-    summary += '<div class="roster-expand-summary">📋 Marker: <strong style="color:var(--orange)">$' + fmt(markerOutstanding) + '</strong> outstanding</div>';
+    summary += '<div class="roster-expand-summary">' + lucideIcon('receipt','action-ico') + ' Marker: <strong style="color:var(--orange)">$' + fmt(markerOutstanding) + '</strong> outstanding</div>';
   }
   var bonusTotal = playerBonusTotal(p);
   if (bonusTotal > 0) {
-    summary += '<div class="roster-expand-summary">🎁 Bonus: <strong style="color:var(--gold)">$' + fmt(bonusTotal) + '</strong> (house expense)</div>';
+    summary += '<div class="roster-expand-summary">' + lucideIcon('award','action-ico') + ' Bonus: <strong style="color:var(--gold)">$' + fmt(bonusTotal) + '</strong> (house expense)</div>';
   }
   // Host/Player: keep full player expand + compact staff snapshot
   if (isHostPlayer(p)) {
@@ -2844,7 +2878,7 @@ function rosterPlayerExpandedHtml(p) {
     + '</div>'
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-buyin-amount-' + p.id + '" placeholder="Amount" min="0">'
-      + '<button class="btn btn-purple btn-xs" onclick="rosterAddBuyIn(' + p.id + ')">＋ Add Buy-In</button>'
+      + '<button class="btn btn-purple btn-xs" onclick="rosterAddBuyIn(' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add Buy-In</button>'
     + '</div>'
   + '</div>';
 
@@ -2854,7 +2888,7 @@ function rosterPlayerExpandedHtml(p) {
     + '<div class="roster-inline-row" style="margin-bottom:8px">'
       + '<input type="text" class="inp" id="rx-credit-desc-' + p.id + '" placeholder="Description" style="flex:2">'
       + '<input type="number" class="inp" id="rx-credit-amount-' + p.id + '" placeholder="Amount" min="0" style="flex:1">'
-      + '<button class="btn btn-purple btn-xs" onclick="rosterAddCredit(' + p.id + ')">＋ Add</button>'
+      + '<button class="btn btn-purple btn-xs" onclick="rosterAddCredit(' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add</button>'
     + '</div>'
   + '</div>';
 
@@ -3024,13 +3058,13 @@ function rosterStaffExpandedHtml(p) {
   var expLines = '';
   (p.expenses || []).forEach(function(e){
     var receiptBtn = e.receiptPhoto
-      ? '<button type="button" title="View receipt" onclick="event.stopPropagation();viewExpenseReceiptPhoto(this)" data-photo-id="staff:' + p.id + ':' + e.id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px">📷</button>'
+      ? '<button type="button" title="View receipt" onclick="event.stopPropagation();viewExpenseReceiptPhoto(this)" data-photo-id="staff:' + p.id + ':' + e.id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px">' + lucideIcon('camera','action-ico') + '</button>'
       : '';
     expLines += '<div class="roster-expand-line">'
       + '<span style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (e.description || e.desc || '') + '</span>'
       + receiptBtn
       + '<span style="font-weight:800">$' + fmt(e.amount) + '</span>'
-      + '<button class="roster-del-btn" title="Void expense" onclick="event.stopPropagation();rosterVoidStaffExpense(this,' + p.id + ',\'' + e.id + '\')">✕</button>'
+      + '<button class="roster-del-btn" title="Void expense" onclick="event.stopPropagation();rosterVoidStaffExpense(this,' + p.id + ',\'' + e.id + '\')">' + lucideIcon('x','action-ico') + '</button>'
       + '</div>';
   });
   if (!expLines) {
@@ -3039,8 +3073,8 @@ function rosterStaffExpandedHtml(p) {
 
   var pendingStaff = getPendingReceipt('staff:' + p.id);
   var receiptStatus = pendingStaff
-    ? '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--green)">📷 Ready</span>'
-    : '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--text-muted);display:none">📷 Ready</span>';
+    ? '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--green)">' + lucideIcon('camera','action-ico') + ' Ready</span>'
+    : '<span id="rx-exp-receipt-status-' + p.id + '" style="font-size:11px;color:var(--text-muted);display:none">' + lucideIcon('camera','action-ico') + ' Ready</span>';
 
   var expensesSection = '<div class="roster-form-block" id="rx-exp-block-' + p.id + '">'
     + '<div class="roster-form-label">Expenses</div>'
@@ -3048,8 +3082,8 @@ function rosterStaffExpandedHtml(p) {
     + '<div class="roster-inline-row" style="margin-top:8px;flex-wrap:wrap">'
       + '<input class="inp" id="rx-exp-desc-' + p.id + '" placeholder="Description" style="flex:2;min-width:100px">'
       + '<input type="number" class="inp" id="rx-exp-amount-' + p.id + '" placeholder="Amt" min="0" style="flex:1;min-width:70px">'
-      + '<button type="button" class="btn btn-outline btn-xs" onclick="pickExpenseReceipt(\'staff:' + p.id + '\')">📷 Receipt</button>'
-      + '<button type="button" class="btn btn-purple btn-xs" onclick="rosterAddStaffExpense(' + p.id + ')">＋ Add Expense</button>'
+      + '<button type="button" class="btn btn-outline btn-xs" onclick="pickExpenseReceipt(\'staff:' + p.id + '\')">' + lucideIcon('camera','action-ico') + ' Receipt</button>'
+      + '<button type="button" class="btn btn-purple btn-xs" onclick="rosterAddStaffExpense(' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add Expense</button>'
       + receiptStatus
     + '</div>'
   + '</div>';
@@ -3324,7 +3358,7 @@ function rosterPlayerRow(p) {
   var dual = isHostPlayer(p);
   var avatarBg = dual ? staffRoleColor('host-player') : 'var(--red)';
   var markerWarnIco = markerBlocksPayout(p)
-    ? ' <span title="Turn in chips first — marker outstanding" style="color:var(--red);font-weight:800">⚠️</span>'
+    ? ' <span title="Turn in chips first — marker outstanding" style="color:var(--red);font-weight:800">' + lucideIcon('alert-triangle','action-ico') + '</span>'
     : '';
   var roleSub = dual
     ? '<div class="roster-role" style="color:' + staffRoleColor('host-player') + '">Host/Player</div>'
@@ -3390,7 +3424,7 @@ function renderPlayerGrid() {
     + '</tr></thead><tbody>';
 
   if (showPlayers) {
-    html += '<tr class="roster-section"><td colspan="4">👥 Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="4">' + lucideIcon('users','action-ico') + ' Players <span class="badge badge-purple" style="margin-left:6px">' + allPlayers.length + '</span></td></tr>';
     if (players.length) {
       html += players.map(rosterPlayerRow).join('');
     } else {
@@ -3401,7 +3435,7 @@ function renderPlayerGrid() {
   }
 
   if (showStaff) {
-    html += '<tr class="roster-section"><td colspan="4">👔 Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
+    html += '<tr class="roster-section"><td colspan="4">' + lucideIcon('award','action-ico') + ' Staff <span class="badge badge-purple" style="margin-left:6px">' + allStaff.length + '</span></td></tr>';
     if (staff.length) {
       html += staff.map(rosterStaffRow).join('');
     } else {
@@ -3423,6 +3457,8 @@ function renderPlayerGrid() {
       setTimeout(function(){ rosterUpdateStaffTaxPreview(_expandedRosterId); }, 0);
     }
   }
+
+  refreshLucideIcons();
 }
 
 function renderSettlement() {
@@ -3497,6 +3533,8 @@ function renderSettlement() {
         });
       }).join('')
     : '<div style="color:var(--text-muted);font-size:13px;padding:10px 0">Nothing owed to players</div>';
+
+  refreshLucideIcons();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3566,18 +3604,22 @@ function selectRole(role) {
       if (title) title.style.color = 'var(--text-muted)';
     }
   });
+  var ck = lucideIcon('check-circle','action-ico');
   var caps = {
-    player:  '✅ Can buy in · ✅ Can cash out',
-    dealer:  '✅ Tips · ✅ Drop · ✅ Tax · ✅ Expenses',
-    hostess: '✅ Tips · ✅ Tax · ✅ Expenses',
-    host:    '✅ Tips · ✅ Tax · ✅ Expenses',
-    'host-player': '✅ Buy in · ✅ Cash out · ✅ Tips · ✅ Tax · ✅ Expenses',
-    chef:    '✅ Base pay · ✅ Tips · ✅ Tax · ✅ Expenses',
-    books:   '✅ Hourly pay · ✅ Tips · ✅ Tax · ✅ Expenses',
-    misc:    '✅ Tips · ✅ Tax · ✅ Expenses'
+    player:  ck + ' Can buy in · ' + ck + ' Can cash out',
+    dealer:  ck + ' Tips · ' + ck + ' Drop · ' + ck + ' Tax · ' + ck + ' Expenses',
+    hostess: ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses',
+    host:    ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses',
+    'host-player': ck + ' Buy in · ' + ck + ' Cash out · ' + ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses',
+    chef:    ck + ' Base pay · ' + ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses',
+    books:   ck + ' Hourly pay · ' + ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses',
+    misc:    ck + ' Tips · ' + ck + ' Tax · ' + ck + ' Expenses'
   };
   var capEl = document.getElementById('add-person-caps-text');
-  if (capEl) capEl.textContent = caps[role] || caps.player;
+  if (capEl) {
+    capEl.innerHTML = caps[role] || caps.player;
+    refreshLucideIcons();
+  }
 }
 function updateAddPersonUI() { selectRole(getVal('new-player-role') || 'player'); }
 
@@ -3695,7 +3737,7 @@ function updateTurnInPreview(id) {
   if (!amount || !markerTotal) { previewEl.innerHTML = ''; return; }
   var net = amount - markerTotal;
   previewEl.innerHTML = 'Marker: <span style="color:var(--red)">-$'+fmt(markerTotal)+'</span> → Net: <strong style="color:'+(net>=0?'var(--green)':'var(--red)')+'">$'+fmt(net)+'</strong>'
-    + (net < 0 ? '<div style="color:var(--red);margin-top:4px">⚠️ Chips don\'t cover the marker — short $'+fmt(Math.abs(net))+'</div>' : '');
+    + (net < 0 ? '<div style="color:var(--red);margin-top:4px;display:flex;align-items:center;gap:6px">' + lucideIcon('alert-triangle','action-ico') + ' Chips don\'t cover the marker — short $'+fmt(Math.abs(net))+'</div>' : '');
 }
 
 function logTurnIn(id) {
@@ -3812,7 +3854,7 @@ function onExpenseReceiptSelected(evt) {
     } else if (String(key).indexOf('staff:') === 0) {
       var sid = String(key).slice(6);
       var sst = document.getElementById('rx-exp-receipt-status-' + sid);
-      if (sst) { sst.style.display = 'inline'; sst.textContent = '📷 Ready'; }
+      if (sst) { sst.style.display = 'inline'; sst.innerHTML = lucideIcon('camera','action-ico') + ' Ready'; }
     }
     toast('Receipt attached 📷');
   });
@@ -3978,7 +4020,7 @@ function renderExpenseList() {
   el.innerHTML = list.length
     ? list.slice().reverse().map(function(e){
         var receiptBtn = e.receiptPhoto
-          ? '<button type="button" title="View receipt" onclick="viewExpenseReceiptPhoto(\'house:' + e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">📷</button>'
+          ? '<button type="button" title="View receipt" onclick="viewExpenseReceiptPhoto(\'house:' + e.id + '\')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;padding:0 4px;margin-right:4px">' + lucideIcon('camera','action-ico') + '</button>'
           : '';
         var paid = !!e.paid;
         var rowBg = paid
@@ -3998,16 +4040,17 @@ function renderExpenseList() {
             + '<button type="button" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);padding:4px 10px" onclick="event.stopPropagation();payHouseExpense(this,\'' + e.id + '\')">PAY</button>'
           + '</div>';
         return '<div class="buyin-log-item" style="' + rowBg + ';flex-wrap:wrap;gap:6px">'
-          +'<span style="font-weight:700;font-size:11px;color:' + tagColor + ';min-width:70px">🏠 HOUSE</span>'
+          +'<span style="font-weight:700;font-size:11px;color:' + tagColor + ';min-width:70px;display:inline-flex;align-items:center;gap:4px">' + lucideIcon('landmark','action-ico') + ' HOUSE</span>'
           +'<span style="font-size:12px;color:var(--text-muted);flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:80px">'+(e.desc||e.description||'')+'</span>'
           + receiptBtn
           +'<span style="font-weight:800;color:var(--text);margin-right:4px">$'+fmt(e.amount)+'</span>'
           + statusBadge
           + payControls
-          +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">✕</button>'
+          +'<button onclick="removeExpense(this,\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px" title="Void expense">' + lucideIcon('x','action-ico') + '</button>'
           +'</div>';
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No house expenses logged</div>';
+  refreshLucideIcons();
 }
 
 function playerReimbursements(p) {
@@ -4482,9 +4525,9 @@ function renderHistory() {
           + '<div class="hist-owes"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;color:var(--text-muted)">Top owes</div>' + topOwesHtml + '</div>'
           + '<div class="hist-actions">'
             + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();toggleHistoryExpand(' + h.id + ')">' + (open ? 'Collapse' : 'Expand') + '</button>'
-            + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();exportHistorySession(' + h.id + ')">Export</button>'
+            + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();exportHistorySession(' + h.id + ')">' + lucideIcon('share','action-ico') + ' Export</button>'
             + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();loadGame(this,' + h.id + ')">Load</button>'
-            + '<button class="btn btn-xs" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="event.stopPropagation();deleteGame(' + h.id + ')">🗑️</button>'
+            + '<button class="btn btn-xs" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" onclick="event.stopPropagation();deleteGame(' + h.id + ')">' + lucideIcon('trash-2','action-ico') + '</button>'
           + '</div>'
           + '<div class="hist-expand">'
             + '<h4>Players (' + s.playerCount + ')</h4>' + playerList
@@ -4494,6 +4537,7 @@ function renderHistory() {
         + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No saved games yet</div>';
+  refreshLucideIcons();
 }
 
 function loadGame(btn, id) {
@@ -4865,7 +4909,7 @@ function chipCountRowHtml(c) {
     + '<span>Actual <strong style="color:var(--text)">$' + fmt(actual) + '</strong></span>'
     + '<span>Expected <strong style="color:var(--text)">$' + fmt(expected) + '</strong></span>'
     + '</div>'
-    + (note ? '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">📝 ' + note + '</div>' : '')
+    + (note ? '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">' + lucideIcon('pen-line','action-ico') + ' ' + note + '</div>' : '')
     + '</div>';
 }
 
@@ -4918,6 +4962,8 @@ function renderChipCountLog() {
         + (note ? '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">' + note.replace(/^ · /, '') + '</div>' : '');
     }
   }
+
+  refreshLucideIcons();
 }
 
 function updateRunningExpected() {
@@ -4974,12 +5020,14 @@ function renderDealerBanks() {
       return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">'
         + '<input class="inp bank-name-inp" type="text" placeholder="Table / Bank name" value="' + (b.name||'') + '" oninput="updateBankField(' + b.id + ',\'name\',this.value)" style="flex:1;padding:6px 8px;font-size:12px">'
         + '<input class="inp" type="number" placeholder="Amount" value="' + (b.amount||'') + '" oninput="updateBankField(' + b.id + ',\'amount\',this.value)" min="0" style="width:90px;padding:6px 8px;font-size:12px;text-align:right">'
-        + '<button onclick="removeDealerBank(' + b.id + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0">✕</button>'
+        + '<button onclick="removeDealerBank(' + b.id + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0">' + lucideIcon('x','action-ico') + '</button>'
         + '</div>';
     }).join('');
   }
   setText('rc-banks-total', '$' + fmt(getBankTotal()));
   setText('rc-banks-subtotal', '$' + fmt(getBankTotal()));
+
+  refreshLucideIcons();
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -5038,7 +5086,7 @@ function saveRunningCount() {
   autoSave();
   calcAll();
   renderAll(); // refresh dashboard log + last-count summary
-  var msg = Math.abs(variance)<1 ? '✅ Chips balanced!' : ('⚠️ Variance: '+(variance>=0?'+':'')+'$'+fmt(variance));
+  var msg = Math.abs(variance)<1 ? 'Chips balanced!' : ('Variance: '+(variance>=0?'+':'')+'$'+fmt(variance));
   toast(msg);
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5603,7 +5651,7 @@ function applyHostViewReadOnly() {
 async function fetchHostViewGame() {
   var ownerId = pbGetLinkedOwnerId();
   if (!ownerId || !pbAccessToken()) {
-    setHostViewMeta('⚠ Connection lost', true);
+    setHostViewMeta('Connection lost', true);
     return;
   }
   try {
@@ -5626,7 +5674,7 @@ async function fetchHostViewGame() {
       setHostViewMeta('Last updated ' + new Date().toLocaleTimeString(), false);
     }
   } catch (err) {
-    setHostViewMeta('⚠ Connection lost', true);
+    setHostViewMeta('Connection lost', true);
   }
 }
 
@@ -5691,6 +5739,7 @@ async function pbBoot() {
 }
 
 console.log('[app] localStorage key: pb-current | resetLocalData() to clear | G to inspect state');
+refreshLucideIcons();
 pbBoot();
 </script>
 </body>
