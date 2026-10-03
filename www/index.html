@@ -1030,16 +1030,18 @@ function playerTxnKindTotal(p, kind) {
   }, 0);
 }
 
-/** Persisted chip turn-in total (history). Falls back to txnLog / pending scalar. */
+/** Persisted chip turn-in total — sum ALL turn-ins (never last-only). */
 function playerChipTurnInsTotal(p) {
   var hist = (p.chipTurnIns || []).reduce(function(s, t) {
     return s + (Number(t && t.amount) || 0);
   }, 0);
-  if (hist > 0) return hist;
+  // All CHIP_TURN_IN txnLog rows for this player, net of voids
   var fromTxn = playerTxnKindTotal(p, 'CHIP_TURN_IN');
-  if (fromTxn > 0) return fromTxn;
-  // Legacy sessions: turn-in logged only on scalar before history array existed
-  return Number(p.chipTurnIn) || 0;
+  var voided = playerTxnKindTotal(p, 'VOID_CHIP_TURN_IN');
+  var txnNet = Math.max(0, fromTxn - voided);
+  var pending = Number(p.chipTurnIn) || 0;
+  // Prefer the most complete source (incomplete array must not shadow full txnLog)
+  return Math.max(hist, txnNet, pending);
 }
 
 /**
@@ -2678,14 +2680,16 @@ function rosterUpdateTurnInPreview(id) {
   var previewEl = document.getElementById('rx-turnin-preview-' + id);
   if (!el || !previewEl) return;
   var amount = Number(el.value) || 0;
+  var alreadyIn = playerChipTurnInsTotal(p);
+  var chipsIn = alreadyIn + amount;
   var markerTotal = playerMarkerTotal(p);
-  var net = amount - markerTotal;
-  var html = '<div class="roster-turnin-calc-row"><span class="lbl">Chips In</span><span class="val">$' + fmt(amount) + '</span></div>';
+  var net = chipsIn - markerTotal;
+  var html = '<div class="roster-turnin-calc-row"><span class="lbl">Chips In</span><span class="val">$' + fmt(chipsIn) + '</span></div>';
   if (markerTotal > 0) {
     html += '<div class="roster-turnin-calc-row"><span class="lbl">Marker</span><span class="val" style="color:var(--red)">-$' + fmt(markerTotal) + '</span></div>';
   }
   html += '<div class="roster-turnin-calc-row"><span class="lbl">Net Payout</span><span class="val" style="color:' + (net >= 0 ? 'var(--green)' : 'var(--red)') + '">$' + fmt(net) + '</span></div>';
-  if (amount > 0 && net < 0) {
+  if (chipsIn > 0 && net < 0) {
     html += '<div class="roster-turnin-warn">' + lucideIcon('alert-triangle','action-ico') + ' Player short $' + fmt(Math.abs(net)) + '</div>';
   }
   previewEl.innerHTML = html;
@@ -2743,12 +2747,13 @@ function rosterLogTurnIn(id) {
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
   if (!p.chipTurnIns) p.chipTurnIns = [];
   var time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  // Always push — never replace the array / prior turn-ins
   p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
-  p.chipTurnIn = amount;
+  p.chipTurnIn = (Number(p.chipTurnIn) || 0) + amount;
   appendTxn({ type: 'CHIP_TURN_IN', amount: amount, playerId: String(p.id), playerName: p.name });
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
-  toast('Chips turned in: $' + fmt(amount) + ' — awaiting payout');
+  toast('Chips turned in: $' + fmt(playerChipTurnInsTotal(p)) + ' — awaiting payout');
 }
 
 function rosterResetTurnIn(id) {
@@ -2757,9 +2762,18 @@ function rosterResetTurnIn(id) {
   var pending = Number(p.chipTurnIn) || 0;
   if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
     var last = p.chipTurnIns[p.chipTurnIns.length - 1];
-    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+    var lastAmt = last ? (Number(last.amount) || 0) : 0;
+    // Undo only the latest pending entry (prior turn-ins stay in history)
+    if (last && lastAmt > 0 && lastAmt <= pending + 1e-9) {
+      p.chipTurnIns.pop();
+      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: lastAmt, playerId: String(p.id), playerName: p.name });
+      p.chipTurnIn = Math.max(0, pending - lastAmt);
+    } else {
+      p.chipTurnIn = 0;
+    }
+  } else {
+    p.chipTurnIn = 0;
   }
-  p.chipTurnIn = 0;
   rosterKeepExpanded(id);
   calcAll(); renderAll(); autoSave();
   toast('Turn-in cleared — re-count chips');
@@ -2963,16 +2977,24 @@ function rosterAddStaffPayout(id) {
 function rosterTurnInSectionHtml(p, markerTotal) {
   markerTotal = Number(markerTotal) || 0;
   if (rosterChipTurnInLogged(p)) {
-    var netPayout = Math.max(0, Number(p.chipTurnIn) - markerTotal);
+    var totalTurnIns = playerChipTurnInsTotal(p);
+    var pendingTurnIn = Number(p.chipTurnIn) || 0;
+    var netPayout = Math.max(0, pendingTurnIn - markerTotal);
     return '<div class="roster-turnin-block" id="rx-turnin-block-' + p.id + '">'
       + '<div class="roster-turnin-label" style="display:flex;justify-content:space-between;align-items:center">'
         + '<span>Payout</span>'
         + '<a onclick="rosterResetTurnIn(' + p.id + ')" style="font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--purple-light);cursor:pointer;text-decoration:underline">Re-count</a>'
       + '</div>'
-      + '<div class="roster-turnin-locked">' + lucideIcon('lock','action-ico') + ' Chips turned in: $' + fmt(p.chipTurnIn) + '</div>'
+      + '<div class="roster-turnin-locked">' + lucideIcon('lock','action-ico') + ' Chips turned in: $' + fmt(totalTurnIns) + '</div>'
       + (markerTotal > 0
         ? '<div class="roster-expand-summary" style="margin-top:0;margin-bottom:10px">Marker: <strong style="color:var(--red)">-$' + fmt(markerTotal) + '</strong> · Net: <strong style="color:var(--green)">$' + fmt(netPayout) + '</strong></div>'
         : '')
+      + '<div class="roster-form-label">Add more chips</div>'
+      + '<div class="roster-turnin-input-row" style="margin-bottom:10px">'
+        + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
+        + '<button type="button" class="btn btn-purple roster-turnin-btn" onclick="rosterLogTurnIn(' + p.id + ')">Log Turn-In</button>'
+      + '</div>'
+      + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px"></div>'
       + '<div class="roster-form-label">Payout Amount</div>'
       + '<input type="hidden" id="rx-cashout-method-' + p.id + '" value="CASH">'
       + '<div class="roster-pill-row" id="rx-cashout-method-pills-' + p.id + '">'
@@ -3037,8 +3059,8 @@ function rosterPlayerExpandedHtml(p) {
   summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong>'
     + (rosterChipTurnInLogged(p) ? ' <span style="color:var(--gold);font-size:11px">(pending payout)</span>' : '')
     + '</div>';
-  if (rosterChipTurnInLogged(p)) {
-    summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(p.chipTurnIn) + '</strong></div>';
+  if (playerChipTurnInsTotal(p) > 0) {
+    summary += '<div class="roster-expand-summary">Chips turned in: <strong style="color:var(--text)">$' + fmt(playerChipTurnInsTotal(p)) + '</strong></div>';
   }
   var markerTotal = playerMarkerTotal(p);
   var markerOutstanding = playerOutstandingMarker(p);
@@ -3437,8 +3459,12 @@ function voidRosterTurnIn(btn, playerId, index) {
     var p = G.players.find(function(pl){ return pl.id === playerId; });
     if (!p || !p.chipTurnIns || !p.chipTurnIns[index]) return;
     var t = p.chipTurnIns[index];
+    var amt = Number(t.amount) || 0;
     p.chipTurnIns.splice(index, 1);
-    if (Number(p.chipTurnIn) === Number(t.amount)) p.chipTurnIn = 0;
+    // Subtract from pending scalar (supports cumulative multi turn-ins)
+    if ((Number(p.chipTurnIn) || 0) > 0 && amt > 0) {
+      p.chipTurnIn = Math.max(0, (Number(p.chipTurnIn) || 0) - amt);
+    }
     appendTxn({
       type: 'VOID_CHIP_TURN_IN',
       amount: t.amount,
@@ -3470,7 +3496,9 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
         var ti = p.chipTurnIns.findIndex(function(t){ return Number(t.amount) === amt; });
         if (ti >= 0) p.chipTurnIns.splice(ti, 1);
       }
-      if (Number(p.chipTurnIn) === amt) p.chipTurnIn = 0;
+      if ((Number(p.chipTurnIn) || 0) > 0 && amt > 0) {
+        p.chipTurnIn = Math.max(0, (Number(p.chipTurnIn) || 0) - amt);
+      }
       appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: amt, playerId: String(p.id), playerName: p.name });
     } else if (typ === 'CASH_OUT' || typ === 'PAYOUT') {
       if (p.cashOuts && p.cashOuts.length) {
@@ -3951,13 +3979,14 @@ function logTurnIn(id) {
   if (!amount || amount <= 0) { toast('Enter chips counted'); return; }
   if (!p.chipTurnIns) p.chipTurnIns = [];
   var time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  // Always push — never replace the array / prior turn-ins
   p.chipTurnIns.push({ amount: amount, seq: (G._seq || 0) + 1, time: time });
-  p.chipTurnIn = amount;
+  p.chipTurnIn = (Number(p.chipTurnIn) || 0) + amount;
   appendTxn({ type:'CHIP_TURN_IN', amount:amount, playerId:String(p.id), playerName:p.name });
   calcAll(); renderAll();
   if (isPlayerSeat(p)) renderPlayerDetail(id); else renderStaffDetail(id);
   autoSave();
-  toast('Chips turned in: $' + fmt(amount) + ' — awaiting payout');
+  toast('Chips turned in: $' + fmt(playerChipTurnInsTotal(p)) + ' — awaiting payout');
 }
 
 function resetTurnIn(id) {
@@ -3966,9 +3995,17 @@ function resetTurnIn(id) {
   var pending = Number(p.chipTurnIn) || 0;
   if (pending > 0 && p.chipTurnIns && p.chipTurnIns.length) {
     var last = p.chipTurnIns[p.chipTurnIns.length - 1];
-    if (last && Number(last.amount) === pending) p.chipTurnIns.pop();
+    var lastAmt = last ? (Number(last.amount) || 0) : 0;
+    if (last && lastAmt > 0 && lastAmt <= pending + 1e-9) {
+      p.chipTurnIns.pop();
+      appendTxn({ type: 'VOID_CHIP_TURN_IN', amount: lastAmt, playerId: String(p.id), playerName: p.name });
+      p.chipTurnIn = Math.max(0, pending - lastAmt);
+    } else {
+      p.chipTurnIn = 0;
+    }
+  } else {
+    p.chipTurnIn = 0;
   }
-  p.chipTurnIn = 0;
   calcAll(); renderAll();
   if (isPlayerSeat(p)) renderPlayerDetail(id); else renderStaffDetail(id);
   autoSave();
