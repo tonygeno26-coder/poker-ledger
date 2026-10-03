@@ -1319,7 +1319,8 @@ function staffEcashUsed(p) {
 function staffTipBalance(p) {
   // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By  (+ role-specific base/hourly; tax on tips only)
   // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
-  var grossTips  = (p.tips||[]).reduce(function(s,t){ return s + t.amount; }, 0);
+  // DROP does NOT affect staff payout / tip balance
+  var grossTips  = tipsTotal(p);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var reimbursements = staffExpensesTotal(p);
   var paidOut    = staffPayoutsTotal(p);
@@ -1331,6 +1332,135 @@ function staffTipBalance(p) {
   return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed;
 }
 function calcStaffBalance(p) { return staffTipBalance(p); }
+
+/** Match txnLog row to staff by playerId/playerName or staffId/staffName. */
+function staffTxnMatches(t, p) {
+  if (!t || !p) return false;
+  var pid = String(p.id);
+  var pname = String(p.name || '').toUpperCase();
+  if (String(t.playerId || '') === pid) return true;
+  if (String(t.staffId || '') === pid) return true;
+  if (t.playerName && pname && String(t.playerName).toUpperCase() === pname) return true;
+  if (t.staffName && pname && String(t.staffName).toUpperCase() === pname) return true;
+  return false;
+}
+
+function formatStaffHistTime(entry) {
+  if (!entry) return '';
+  var ts = entry.timestamp || entry.ts || '';
+  if (ts) {
+    try { return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { /* fall through */ }
+  }
+  return entry.time || '';
+}
+
+/**
+ * DROP history for staff expanded row.
+ * Primary: active G.txnLog DROP for this staff. Fallback: p.drops / p.dropLog.
+ * Deduped by amount+time. Newest first.
+ */
+function buildStaffDropHistory(p) {
+  var rows = [];
+  var seen = {};
+  function keyOf(amt, timeLabel) {
+    return String(amt) + '|' + String(timeLabel || '');
+  }
+  function pushRow(amt, timeLabel, timestamp, seq) {
+    var k = keyOf(amt, timeLabel);
+    if (seen[k]) return;
+    seen[k] = true;
+    rows.push({ amount: amt, time: timeLabel, timestamp: timestamp || '', seq: seq });
+  }
+  (G.txnLog || []).forEach(function(t, txnIdx) {
+    if (!txnIsActive(t)) return;
+    if (String(t.type || '').toUpperCase() !== 'DROP') return;
+    if (!staffTxnMatches(t, p)) return;
+    var amt = Number(t.amount) || 0;
+    var timeLabel = formatStaffHistTime(t);
+    pushRow(amt, timeLabel, t.timestamp || '', t.seq != null ? t.seq : txnIdx);
+  });
+  function absorbDropArr(arr) {
+    (arr || []).forEach(function(d, i) {
+      if (!d) return;
+      var amt = Number(d.amount) || 0;
+      var timeLabel = formatStaffHistTime(d);
+      pushRow(amt, timeLabel, d.timestamp || '', d.seq != null ? d.seq : i);
+    });
+  }
+  absorbDropArr(p && p.drops);
+  absorbDropArr(p && p.dropLog);
+  rows.sort(function(a, b) {
+    var as = a.seq != null ? a.seq : 0;
+    var bs = b.seq != null ? b.seq : 0;
+    if (as !== bs) return bs - as;
+    return String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+  });
+  return rows;
+}
+
+function staffDropTotal(p) {
+  return buildStaffDropHistory(p).reduce(function(s, d) { return s + (Number(d.amount) || 0); }, 0);
+}
+
+/**
+ * Tips history for staff expanded row.
+ * Sources: p.tipsLog[], p.tips[], active G.txnLog TIPS/TIP_TURN_IN. Deduped.
+ */
+function buildStaffTipsHistory(p) {
+  var rows = [];
+  var seen = {};
+  function keyOf(amt, timeLabel) {
+    return String(amt) + '|' + String(timeLabel || '');
+  }
+  function pushRow(amt, timeLabel, timestamp, seq) {
+    var k = keyOf(amt, timeLabel);
+    if (seen[k]) return;
+    seen[k] = true;
+    rows.push({ amount: amt, time: timeLabel, timestamp: timestamp || '', seq: seq });
+  }
+  (G.txnLog || []).forEach(function(t, txnIdx) {
+    if (!txnIsActive(t)) return;
+    var typ = String(t.type || '').toUpperCase();
+    if (typ !== 'TIPS' && typ !== 'TIP_TURN_IN') return;
+    if (!staffTxnMatches(t, p)) return;
+    var amt = Number(t.amount) || 0;
+    var timeLabel = formatStaffHistTime(t);
+    pushRow(amt, timeLabel, t.timestamp || '', t.seq != null ? t.seq : txnIdx);
+  });
+  function absorbTipsArr(arr) {
+    (arr || []).forEach(function(t, i) {
+      if (!t) return;
+      var amt = Number(t.amount) || 0;
+      var timeLabel = formatStaffHistTime(t);
+      pushRow(amt, timeLabel, t.timestamp || '', t.seq != null ? t.seq : i);
+    });
+  }
+  absorbTipsArr(p && p.tipsLog);
+  absorbTipsArr(p && p.tips);
+  rows.sort(function(a, b) {
+    var as = a.seq != null ? a.seq : 0;
+    var bs = b.seq != null ? b.seq : 0;
+    if (as !== bs) return bs - as;
+    return String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+  });
+  return rows;
+}
+
+/** Session DROP total — prefer active txnLog DROP sum; fall back to player drops arrays. */
+function totalDropLogged() {
+  var fromTxn = (G.txnLog || []).reduce(function(s, t) {
+    if (!txnIsActive(t)) return s;
+    if (String(t.type || '').toUpperCase() !== 'DROP') return s;
+    return s + (Number(t.amount) || 0);
+  }, 0);
+  var fromArr = 0;
+  (G.players || []).forEach(function(p) {
+    (p.drops || []).forEach(function(d) { fromArr += Number(d && d.amount) || 0; });
+    (p.dropLog || []).forEach(function(d) { fromArr += Number(d && d.amount) || 0; });
+  });
+  return Math.max(fromTxn, fromArr);
+}
 
 function migrateStaffRoles() {
   (G.players || []).forEach(function(p) {
@@ -1492,7 +1622,6 @@ function calcDashboard() {
       if (m === 'ECASH') eCashStaffPayouts += sp.amount || 0;
       else cashStaffPayouts += sp.amount || 0;
     });
-    (p.drops||[]).forEach(function(d){ drop += d.amount; });
     tips += tipsTotal(p); // dashboard tips total only — chips use calculateChipMovements().chipsIn.tips once
     // House cut of tips — only staff tax contributes to profit (not gross tips)
     // Tax applied toward marker debt is NOT house staffTax cash income
@@ -1503,6 +1632,8 @@ function calcDashboard() {
       });
     }
   });
+  // Dashboard DROP = sum all active DROP txns (txnLog preferred; player drops[] fallback)
+  drop = totalDropLogged();
   var eb = getExpenseBreakdown();
   var expenses = eb.total;
   var bonusChips = eb.bonusBuyIns;
@@ -2161,7 +2292,8 @@ function buyInsTotal(p) {
 }
 
 function tipsTotal(p) {
-  return (p.tips || []).reduce(function(s, t) { return s + t.amount; }, 0);
+  // Deduped tipsLog + tips + txnLog TIPS — DROP never included
+  return buildStaffTipsHistory(p).reduce(function(s, t) { return s + (Number(t.amount) || 0); }, 0);
 }
 
 function rosterPlayerStatusBadge(p) {
@@ -3357,16 +3489,37 @@ function rosterSetHourlyPay(id) {
 
 function rosterStaffExpandedHtml(p) {
   var roleKey = normalizeStaffRole(p.staffRole);
+  var tipRows = buildStaffTipsHistory(p);
   var lines = '';
-  (p.tips || []).forEach(function(t){
+  tipRows.forEach(function(t){
     lines += '<div class="roster-expand-line">'
-      + '<span style="font-weight:800;color:var(--gold)">$' + fmt(t.amount) + '</span>'
+      + '<span style="font-weight:800;color:var(--gold)">TIPS · $' + fmt(t.amount) + '</span>'
       + '<span class="roster-expand-meta">' + (t.time || '') + '</span>'
       + '</div>';
   });
   if (!lines) {
     lines = '<div class="roster-expand-meta" style="padding:2px 0 4px">No tips logged yet</div>';
   }
+
+  var dropRows = buildStaffDropHistory(p);
+  var dropLines = '';
+  dropRows.forEach(function(d){
+    dropLines += '<div class="roster-expand-line">'
+      + '<span style="font-weight:800;color:var(--orange)">DROP · $' + fmt(d.amount) + '</span>'
+      + '<span class="roster-expand-meta">' + (d.time || '') + '</span>'
+      + '</div>';
+  });
+  if (!dropLines) {
+    dropLines = '<div class="roster-expand-meta" style="padding:2px 0 4px">No drops logged yet</div>';
+  }
+  var dropTotal = staffDropTotal(p);
+  var dropHistorySection = (staffIsDealer(p) || dropRows.length)
+    ? ('<div class="roster-form-block" id="rx-drop-history-' + p.id + '">'
+      + '<div class="roster-form-label">Drop History</div>'
+      + dropLines
+      + '<div class="roster-expand-summary" style="margin:6px 0 0">Total drop logged: <strong style="color:var(--orange)">$' + fmt(dropTotal) + '</strong></div>'
+    + '</div>')
+    : '';
 
   var tips = tipsTotal(p);
   var taxWithheld = (p.staffTaxLog || []).reduce(function(s, t){ return s + (t.taxAmount || 0); }, 0);
@@ -3529,6 +3682,7 @@ function rosterStaffExpandedHtml(p) {
     + lines
     + tipsForm
     + dropForm
+    + dropHistorySection
     + expensesSection
     + taxForm
     + summary
@@ -5267,7 +5421,7 @@ function sumTipsIn() {
  * CHIPS OUT (leaving house tray):
  *   buyIns       — all buy-ins: CASH / ECASH / MARKER / BONUS
  *   banks        — G.dealerBanks pulled to tables
- *   drop         — all p.drops (chips removed to drop box)
+ *   drop         — totalDropLogged() (active txnLog DROP + p.drops fallback)
  *
  * chipsOnHand = chipsIn.total - chipsOut.total
  *
@@ -5276,11 +5430,11 @@ function sumTipsIn() {
 function calculateChipMovements() {
   var floatAmt = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
   var cashOuts = 0, tips = 0, chipTurnIns = 0;
-  var buyIns = 0, drop = 0;
+  var buyIns = 0;
+  var drop = totalDropLogged();
   (G.players || []).forEach(function(p) {
     (p.buyIns || []).forEach(function(b) { buyIns += b.amount || 0; });
     (p.cashOuts || []).forEach(function(c) { cashOuts += c.amount || 0; });
-    (p.drops || []).forEach(function(d) { drop += d.amount || 0; });
     tips += tipsTotal(p);
     // Pending turn-in only — after Pay Out, chipTurnIn is 0 and amount is in cashOuts
     chipTurnIns += Number(p.chipTurnIn) || 0;
