@@ -1131,7 +1131,8 @@ function playerChipTurnInsTotal(p) {
 
 /**
  * MARKER buy-ins only (raw sum before markerCredits).
- * CASH / ECASH / BONUS never enter payout debt — cash→drop, eCash→on hand, bonus→expenses.
+ * CASH / ECASH / BONUS / BALANCE never enter payout debt —
+ * cash→drop, eCash→on hand, bonus→expenses, balance→reduces house-owes via playerBalance.
  */
 function playerDebtBuyInsTotal(p) {
   return (p.buyIns || []).filter(function(b) {
@@ -1178,22 +1179,24 @@ function playerCreditsTotal(p) {
 }
 
 function playerBalance(p) {
-  // FORMULA 1 (locked): balance = chipTurnIns − markerDebt + credits − paidOut
+  // FORMULA 1 (locked): balance = chipTurnIns − markerDebt + credits − paidOut − balanceBuyIns
   //   chipTurnIns = non-voided p.chipTurnIns[] (via playerChipTurnInsTotal)
   //   markerDebt  = MARKER buyIns outstanding (MARKER − markerCredits; tax-to-marker)
   //   credits     = p.credits[]; paidOut = p.cashOuts[] (actual cash paid — no reimbursements)
+  //   balanceBuyIns = BALANCE buy-ins (rebuy vs house-owes; chips out, no cash/eCash/expense)
   //   + = house owes / − = player owes
   //   chipTurnIns===0 && markerDebt===0 → still playing, neutral 0
-  //   chipTurnIns===0 && markerDebt>0 → ~markerDebt player owes (tilde display)
+  //   chipTurnIns===0 && markerDebt>0 → markerDebt player owes (red OWES)
   //   CASH / ECASH / BONUS / DROP never affect player balance
   var markerDebt = playerOutstandingMarker(p);
   var chipTurnIns = playerChipTurnInsTotal(p);
   var paidOut = playerCashOutsTotal(p);
   var credits = playerCreditsTotal(p);
+  var balanceBuyIns = playerBalanceBuyInsTotal(p);
   if (chipTurnIns <= SETTLE_EPSILON && markerDebt <= SETTLE_EPSILON) {
     return 0;
   }
-  return chipTurnIns - markerDebt + credits - paidOut;
+  return chipTurnIns - markerDebt + credits - paidOut - balanceBuyIns;
 }
 
 /** Same formula as playerBalance. */
@@ -1736,12 +1739,14 @@ function buildAuditSnapshot() {
       var markerDebt = playerOutstandingMarker(p);
       var credits = playerCreditsTotal(p);
       var paidOut = playerCashOutsTotal(p);
+      var balanceBuyIns = playerBalanceBuyInsTotal(p);
       players.push({
         name: p.name || 'Player',
         chipTurnIns: chipTurnIns,
         markerDebt: markerDebt,
         credits: credits,
         paidOut: paidOut,
+        balanceBuyIns: balanceBuyIns,
         balance: playerBalance(p),
         stillPlaying: playerIsStillPlaying(p),
         tilde: rosterBalanceIsTilde(p)
@@ -1845,11 +1850,12 @@ function formatAuditPlainText(snap) {
       var balLabel = formatAuditMoney(p.balance);
       if (p.stillPlaying) balLabel = formatAuditMoney(0) + ' (still playing)';
       lines.push(p.name);
-      lines.push('  chipTurnIns: ' + formatAuditMoney(p.chipTurnIns));
-      lines.push('  markerDebt:  ' + formatAuditMoney(p.markerDebt));
-      lines.push('  credits:     ' + formatAuditMoney(p.credits));
-      lines.push('  paidOut:     ' + formatAuditMoney(p.paidOut));
-      lines.push('  balance:     ' + balLabel);
+      lines.push('  chipTurnIns:    ' + formatAuditMoney(p.chipTurnIns));
+      lines.push('  markerDebt:     ' + formatAuditMoney(p.markerDebt));
+      lines.push('  credits:        ' + formatAuditMoney(p.credits));
+      lines.push('  paidOut:        ' + formatAuditMoney(p.paidOut));
+      lines.push('  balanceBuyIns:  ' + formatAuditMoney(p.balanceBuyIns || 0));
+      lines.push('  balance:        ' + balLabel);
     });
   }
   lines.push('');
@@ -1964,6 +1970,7 @@ function renderAuditPanelBody(snap) {
       html += auditRowHtml('markerDebt', formatAuditMoney(p.markerDebt), { sub: true });
       html += auditRowHtml('credits', formatAuditMoney(p.credits), { sub: true });
       html += auditRowHtml('paidOut', formatAuditMoney(p.paidOut), { sub: true });
+      html += auditRowHtml('balanceBuyIns', formatAuditMoney(p.balanceBuyIns || 0), { sub: true });
       html += auditRowHtml('balance', balLabel, { sub: true, total: true, color: balColor });
     });
   }
@@ -2170,6 +2177,8 @@ function txnReasonLabel(t) {
     }
     case 'BONUS_BUYIN':
       return withNote('Bonus buy-in');
+    case 'BALANCE_BUYIN':
+      return withNote('Balance buy-in');
     case 'CASH_OUT':
       return withNote('Cash out');
     case 'CHIP_TURN_IN': {
@@ -2662,6 +2671,7 @@ function renderAll() {
     ECASH_BUYIN:         { label:'ECASH IN',  color:'var(--purple-light)', bg:'var(--purple-dim)' },
     MARKER_BUYIN:        { label:'MARKER OUT', color:'var(--orange)',       bg:'var(--orange-dim)' },
     BONUS_BUYIN:         { label:'BONUS',     color:'var(--gold)',        bg:'var(--gold-dim)' },
+    BALANCE_BUYIN:       { label:'BALANCE',   color:'#3b82f6',            bg:'rgba(59,130,246,0.18)' },
     CASH_OUT:            { label:'CASH OUT',  color:'var(--green)',       bg:'var(--green-dim)' },
     CHIP_TURN_IN:        { label:'CHIPS IN',  color:'var(--green)',       bg:'var(--green-dim)' },
     TIPS:                { label:'TIPS',      color:'var(--gold)',        bg:'var(--gold-dim)' },
@@ -2679,12 +2689,13 @@ function renderAll() {
     VOID_ECASH_BUYIN:    { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_MARKER_BUYIN:   { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_BONUS_BUYIN:    { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
+    VOID_BALANCE_BUYIN:  { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_CASH_OUT:       { label:'VOID OUT',  color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_CHIP_TURN_IN:   { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_EXPENSE:        { label:'VOID EXP',  color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_PLAYER_CREDIT:  { label:'VOID CR',   color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
-  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1 };
+  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, BALANCE_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1 };
   var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1 };
 
   var txnEl = document.getElementById('txn-log');
@@ -2928,6 +2939,7 @@ function rosterBuyInTypeBadge(type) {
   var t = String(type || 'CASH').toUpperCase();
   var cls = t === 'MARKER' ? 'badge-orange'
     : t === 'BONUS' ? 'badge-yellow'
+    : t === 'BALANCE' ? 'badge-blue'
     : t === 'ECASH' ? 'badge-purple'
     : 'badge-gray';
   return '<span class="badge ' + cls + '">' + t + '</span>';
@@ -3222,6 +3234,8 @@ function rosterSetBuyInType(id, type) {
   }
   var row = document.getElementById('rx-ecash-receiver-row-' + id);
   if (row) row.style.display = type === 'ECASH' ? 'block' : 'none';
+  var avail = document.getElementById('rx-balance-avail-' + id);
+  if (avail) avail.style.display = type === 'BALANCE' ? 'block' : 'none';
 }
 
 function rosterSetCashOutMethod(id, method) {
@@ -3503,13 +3517,17 @@ function rosterUpdateTurnInPreview(id) {
   var markerDebt = playerOutstandingMarker(p);
   var credits = playerCreditsTotal(p);
   var paidOut = playerCashOutsTotal(p);
-  var net = chipsIn - markerDebt + credits - paidOut;
+  var balanceUsed = playerBalanceBuyInsTotal(p);
+  var net = chipsIn - markerDebt + credits - paidOut - balanceUsed;
   var html = '<div class="roster-turnin-calc-row"><span class="lbl">Chips In</span><span class="val">$' + fmt(chipsIn) + '</span></div>';
   if (markerDebt > 0) {
     html += '<div class="roster-turnin-calc-row"><span class="lbl">Marker debt</span><span class="val" style="color:var(--red)">-$' + fmt(markerDebt) + '</span></div>';
   }
   if (credits > 0) {
     html += '<div class="roster-turnin-calc-row"><span class="lbl">Credits</span><span class="val" style="color:#3b82f6">+$' + fmt(credits) + '</span></div>';
+  }
+  if (balanceUsed > 0) {
+    html += '<div class="roster-turnin-calc-row"><span class="lbl">Balance used</span><span class="val" style="color:#3b82f6">-$' + fmt(balanceUsed) + '</span></div>';
   }
   if (net >= 0) {
     html += '<div class="roster-turnin-calc-row"><span class="lbl">House owes</span><span class="val" style="color:var(--green)">$' + fmt(net) + '</span></div>';
@@ -3530,8 +3548,16 @@ function rosterAddBuyIn(id) {
   var raw = el ? el.value : '';
   var amount = Number(String(raw).replace(/,/g, '')) || 0;
   var buyTypeEl = document.getElementById('rx-buyin-type-' + id);
-  var buyType = buyTypeEl ? buyTypeEl.value : 'CASH';
+  var buyType = buyTypeEl ? String(buyTypeEl.value || 'CASH').toUpperCase() : 'CASH';
   if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
+  if (buyType === 'BALANCE') {
+    var availBal = playerBalance(p);
+    if (availBal <= SETTLE_EPSILON) { toast('No house-owes balance available'); return; }
+    if (amount > availBal + SETTLE_EPSILON) {
+      toast('Amount exceeds available balance ($' + fmt(availBal) + ')');
+      return;
+    }
+  }
   var receivedById = '', receivedByName = '';
   if (buyType === 'ECASH') {
     var recEl = document.getElementById('rx-ecash-receiver-' + id);
@@ -3917,8 +3943,12 @@ function rosterPlayerExpandedHtml(p) {
   summary += '<div class="roster-expand-summary">Balance: <strong style="color:' + balColor + '">' + balLabel + '</strong></div>';
   var markerTotal = playerMarkerTotal(p);
   var bonusTotal = playerBonusTotal(p);
+  var balanceUsedTotal = playerBalanceBuyInsTotal(p);
   if (bonusTotal > 0) {
     summary += '<div class="roster-expand-summary">' + lucideIcon('award','action-ico') + ' Bonus: <strong style="color:var(--gold)">$' + fmt(bonusTotal) + '</strong> (house expense)</div>';
+  }
+  if (balanceUsedTotal > SETTLE_EPSILON) {
+    summary += '<div class="roster-expand-summary">Balance used: <strong style="color:#3b82f6">$' + fmt(balanceUsedTotal) + '</strong></div>';
   }
   // Host/Player: keep full player expand + compact staff snapshot
   if (isHostPlayer(p)) {
@@ -3934,6 +3964,8 @@ function rosterPlayerExpandedHtml(p) {
   // PAYOUT / COLLECT sits directly below balance summary (not chip turn-in Pay Out)
   var houseOwesPayout = rosterHouseOwesPayoutHtml(p);
 
+  var availBal = Math.max(0, playerBalance(p));
+  var showBalancePill = availBal > SETTLE_EPSILON;
   var buyInForm = '<div class="roster-form-block" id="rx-buyin-block-' + p.id + '">'
     + '<div class="roster-form-label">Buy-In</div>'
     + '<input type="hidden" id="rx-buyin-type-' + p.id + '" value="CASH">'
@@ -3942,6 +3974,9 @@ function rosterPlayerExpandedHtml(p) {
       + '<button type="button" class="roster-pill" data-type="ECASH" onclick="rosterSetBuyInType(' + p.id + ',\'ECASH\')">eCash</button>'
       + '<button type="button" class="roster-pill" data-type="MARKER" onclick="rosterSetBuyInType(' + p.id + ',\'MARKER\')">Marker</button>'
       + '<button type="button" class="roster-pill" data-type="BONUS" onclick="rosterSetBuyInType(' + p.id + ',\'BONUS\')">Bonus</button>'
+      + (showBalancePill
+        ? '<button type="button" class="roster-pill" data-type="BALANCE" onclick="rosterSetBuyInType(' + p.id + ',\'BALANCE\')">Balance</button>'
+        : '')
     + '</div>'
     + '<div id="rx-ecash-receiver-row-' + p.id + '" style="display:none;margin-bottom:8px">'
       + '<div class="roster-form-label">Received By</div>'
@@ -3949,6 +3984,9 @@ function rosterPlayerExpandedHtml(p) {
         + '<option value="">— Select receiver —</option>' + getEcashReceiverOptions()
       + '</select>'
     + '</div>'
+    + (showBalancePill
+      ? '<div id="rx-balance-avail-' + p.id + '" class="roster-expand-meta" style="display:none;padding:0 0 8px">Available: $' + fmt(availBal) + '</div>'
+      : '')
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-buyin-amount-' + p.id + '" placeholder="Amount" min="0">'
       + '<button class="btn btn-purple btn-xs" onclick="rosterAddBuyIn(' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add Buy-In</button>'
@@ -4768,9 +4806,17 @@ function addBuyIn(id) {
   var raw = el ? el.value : '';
   var amount = Number(String(raw).replace(/,/g,'')) || 0;
   var buyTypeEl = document.getElementById('buyin-type-' + id);
-  var buyType = buyTypeEl ? buyTypeEl.value : 'CASH';
+  var buyType = buyTypeEl ? String(buyTypeEl.value || 'CASH').toUpperCase() : 'CASH';
 
   if (!amount || amount <= 0) { toast('Enter an amount first'); return; }
+  if (buyType === 'BALANCE') {
+    var availBal = playerBalance(p);
+    if (availBal <= SETTLE_EPSILON) { toast('No house-owes balance available'); return; }
+    if (amount > availBal + SETTLE_EPSILON) {
+      toast('Amount exceeds available balance ($' + fmt(availBal) + ')');
+      return;
+    }
+  }
 
   // E-Cash requires a receiver
   var receivedById = '', receivedByName = '';
@@ -5274,6 +5320,13 @@ function playerReimbursements(p) {
 
 function playerBonusTotal(p) {
   return (p.buyIns||[]).filter(function(b){ return b.type==='BONUS'; }).reduce(function(s,b){return s+b.amount;},0);
+}
+
+/** BALANCE buy-ins — rebuy against house-owes; reduces playerBalance; chips out; not marker/cash/eCash/expense. */
+function playerBalanceBuyInsTotal(p) {
+  return (p.buyIns || []).filter(function(b) {
+    return String(b.type || '').toUpperCase() === 'BALANCE';
+  }).reduce(function(s, b) { return s + (Number(b.amount) || 0); }, 0);
 }
 
 function playerMarkerTotal(p) {
@@ -6036,7 +6089,7 @@ function sumTipsIn() {
  *   chipFloat   — sessionSettings.chipFloat
  *   chipTurnIns — non-voided p.chipTurnIns[] (chips returned to float; cashOuts are cash, not chips)
  *   tipChips    — tips returned to float (tipsTotal / sumTipsIn once)
- *   allBuyIns   — all buy-in types chips out (CASH / ECASH / MARKER / BONUS)
+ *   allBuyIns   — all buy-in types chips out (CASH / ECASH / MARKER / BONUS / BALANCE)
  *   banksPulled — G.dealerBanks (or G.banks) via getBankTotal()
  *   drop        — totalDropLogged() staff drops
  *
