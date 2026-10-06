@@ -1151,36 +1151,36 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
       }
     }
 
-    // Delete entries for people removed from this game's post set.
-    // Keep skipped (unknown) person rows — never delete this game's rows for skipped persons.
-    const { data: gameRows, error: gameErr } = await supabase
-      .from('person_balance_entries')
-      .select('id, person_id')
-      .eq('game_id', gameId)
-      .eq('owner_user_id', ownerUserId);
-    if (gameErr) throw gameErr;
-
-    const keep = {};
-    validPersonIds.forEach(function (id) {
-      keep[id] = true;
-    });
-    skipped.forEach(function (id) {
-      keep[id] = true;
-    });
+    // Delete entries for people removed from this game's post set — ONLY when
+    // the post is complete (nobody skipped). Partial posts must delete nothing;
+    // a leftovers-only retry would otherwise wipe rows that already succeeded.
     const removedPersonIds = {};
     const deleteIds = [];
-    (gameRows || []).forEach(function (r) {
-      if (!keep[String(r.person_id)]) {
-        deleteIds.push(r.id);
-        removedPersonIds[String(r.person_id)] = true;
-      }
-    });
-    if (deleteIds.length) {
-      const { error: delErr } = await supabase
+    if (skipped.length === 0) {
+      const { data: gameRows, error: gameErr } = await supabase
         .from('person_balance_entries')
-        .delete()
-        .in('id', deleteIds);
-      if (delErr) throw delErr;
+        .select('id, person_id')
+        .eq('game_id', gameId)
+        .eq('owner_user_id', ownerUserId);
+      if (gameErr) throw gameErr;
+
+      const keep = {};
+      validPersonIds.forEach(function (id) {
+        keep[id] = true;
+      });
+      (gameRows || []).forEach(function (r) {
+        if (!keep[String(r.person_id)]) {
+          deleteIds.push(r.id);
+          removedPersonIds[String(r.person_id)] = true;
+        }
+      });
+      if (deleteIds.length) {
+        const { error: delErr } = await supabase
+          .from('person_balance_entries')
+          .delete()
+          .in('id', deleteIds);
+        if (delErr) throw delErr;
+      }
     }
 
     // Recompute standing_balance = sum(deltas) for affected people

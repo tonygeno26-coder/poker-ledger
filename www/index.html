@@ -7397,15 +7397,11 @@ async function flushBalancesQueue() {
       }
       var skippedIds = (res && Array.isArray(res.skipped)) ? res.skipped : [];
       if (skippedIds.length) {
-        var skipSet = {};
-        skippedIds.forEach(function(id){ skipSet[String(id)] = true; });
-        var left = (op.entries || []).filter(function(e){
-          return e && skipSet[String(e.personId)];
-        });
-        if (left.length) {
-          remain.push(Object.assign({}, op, { entries: left, enqueuedAt: Date.now() }));
-          keepForRetry = true;
-        }
+        // Re-queue FULL original op — never leftovers-only. Idempotent resend is
+        // safe; partial list would let the server treat the post as complete and
+        // delete rows for people who already succeeded.
+        remain.push(Object.assign({}, op, { enqueuedAt: Date.now() }));
+        keepForRetry = true;
       }
     } catch (err) {
       var st = err && err.status;
@@ -7467,10 +7463,8 @@ async function postGameBalances(opts) {
     var postedN = (res && typeof res.posted === 'number') ? res.posted : (entries.length - skippedIds.length);
     var skippedM = skippedIds.length;
     if (skippedM) {
-      var skipSet = {};
-      skippedIds.forEach(function(id){ skipSet[String(id)] = true; });
-      var left = entries.filter(function(e){ return e && skipSet[String(e.personId)]; });
-      enqueueBalancePost(Object.assign({}, payload, { entries: left }));
+      // Queue FULL original entries for this gameId (not just skipped leftovers).
+      enqueueBalancePost(payload);
       autoSave();
       updateBalanceSyncUi();
       toast('Posted ' + postedN + ' · ' + skippedM + ' waiting to sync');
@@ -7514,8 +7508,15 @@ async function finishEndGame(afterFn) {
   saveGameToHistory();
   // Ensure newly-created people land in the book before balance post
   await flushPeopleQueue();
-  await postGameBalances();
-  await flushBalancesQueue();
+  var postResult = await postGameBalances();
+  // If anyone was skipped, do NOT immediately flushBalancesQueue for this game —
+  // flush people first, then retry once (full-list idempotent resend).
+  if (postResult && Array.isArray(postResult.skipped) && postResult.skipped.length) {
+    await flushPeopleQueue();
+    await flushBalancesQueue();
+  } else {
+    await flushBalancesQueue();
+  }
   updateBalanceSyncUi();
   if (typeof afterFn === 'function') afterFn();
 }
@@ -8901,10 +8902,11 @@ async function fetchHostViewGame() {
       G = Object.assign({
         players: [], txnLog: [], expenses: [], _seq: 0,
         sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
-        location: '', date: '', gameId: '', balancesPostedAt: null
+        location: '', date: '', gameId: '', balancesPostedAt: null, postedDeltas: {}
       }, state);
       delete G.type;
       delete G.stakes;
+      if (!G.postedDeltas) G.postedDeltas = {};
       if (!G.gameId) G.gameId = pbNewUuid();
       try { migrateStaffRoles(); } catch (_m) {}
       calcAll();
