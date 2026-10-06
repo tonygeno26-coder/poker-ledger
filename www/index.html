@@ -5676,6 +5676,14 @@ function savePeopleQueue(q) {
 
 function enqueuePeopleMutation(op) {
   var q = loadPeopleQueue();
+  // Dedupe pending POSTs for the same person id (signed-out heal may re-enqueue)
+  if (op && op.method === 'POST' && op.body && op.body.id) {
+    var pid = String(op.body.id);
+    q = q.filter(function(existing) {
+      if (!existing || existing.method !== 'POST' || !existing.body) return true;
+      return String(existing.body.id || '') !== pid;
+    });
+  }
   q.push(Object.assign({ enqueuedAt: Date.now() }, op));
   savePeopleQueue(q);
   schedulePeopleQueueFlush();
@@ -5746,7 +5754,27 @@ async function refreshPeopleBook(opts) {
       { method: 'GET' }
     );
     _peopleReadOnly = !!(data && data.readOnly) || pbIsHostViewer();
-    savePeopleCacheLocal((data && data.people) || []);
+    // MERGE (not replace): server wins by id; keep local rows still in the
+    // people queue OR referenced by current game players (orphaned book links).
+    var serverPeople = (data && data.people) || [];
+    var local = (_peopleCache || []).slice();
+    var queuedIds = {};
+    loadPeopleQueue().forEach(function(op) {
+      var qid = (op && op.body && op.body.id) || (op && op.id) || '';
+      if (qid) queuedIds[String(qid)] = true;
+    });
+    var inGame = inGamePersonIds();
+    var byId = {};
+    serverPeople.forEach(function(p) {
+      if (p && p.id) byId[String(p.id)] = p;
+    });
+    local.forEach(function(p) {
+      if (!p || !p.id) return;
+      var id = String(p.id);
+      if (byId[id]) return; // server wins
+      if (queuedIds[id] || inGame[id]) byId[id] = p;
+    });
+    savePeopleCacheLocal(Object.keys(byId).map(function(k){ return byId[k]; }));
     await flushPeopleQueue();
   } catch (_e) {
     // offline — keep local cache
@@ -5881,38 +5909,32 @@ async function persistBookPerson(payload) {
   };
   upsertPeopleCacheRow(row);
 
-  if (_peopleReadOnly || pbIsHostViewer() || !ownerId || !pbAccessToken()) {
-    if (ownerId) {
-      enqueuePeopleMutation({
-        method: 'POST',
-        body: {
-          id: row.id,
-          ownerUserId: ownerId,
-          name: row.name,
-          tag: row.tag,
-          notes: row.notes,
-          last_role: row.last_role,
-          last_played_at: row.last_played_at,
-          archived: row.archived
-        }
-      });
-    }
+  if (_peopleReadOnly || pbIsHostViewer()) {
+    return row;
+  }
+
+  var postBody = {
+    id: row.id,
+    ownerUserId: ownerId || undefined,
+    name: row.name,
+    tag: row.tag,
+    notes: row.notes,
+    last_role: row.last_role,
+    last_played_at: row.last_played_at,
+    archived: row.archived
+  };
+
+  // Signed out / no token: ALWAYS enqueue POST (never cache-only).
+  // flushPeopleQueue fills ownerUserId at send once a session exists.
+  if (!ownerId || !pbAccessToken()) {
+    enqueuePeopleMutation({ method: 'POST', body: postBody });
     return row;
   }
 
   try {
     var res = await pbApi('/people', {
       method: 'POST',
-      body: JSON.stringify({
-        id: row.id,
-        ownerUserId: ownerId,
-        name: row.name,
-        tag: row.tag,
-        notes: row.notes,
-        last_role: row.last_role,
-        last_played_at: row.last_played_at,
-        archived: row.archived
-      })
+      body: JSON.stringify(postBody)
     });
     if (res && res.person) {
       var retargeted = adoptPeopleServerPerson(row.id, res.person);
@@ -5921,21 +5943,39 @@ async function persistBookPerson(payload) {
     }
   } catch (err) {
     if (err && err.status === 409) throw err;
-    enqueuePeopleMutation({
-      method: 'POST',
-      body: {
-        id: row.id,
-        ownerUserId: ownerId,
-        name: row.name,
-        tag: row.tag,
-        notes: row.notes,
-        last_role: row.last_role,
-        last_played_at: row.last_played_at,
-        archived: row.archived
-      }
-    });
+    enqueuePeopleMutation({ method: 'POST', body: postBody });
   }
   return row;
+}
+
+function playerBookLastRole(p) {
+  if (!p) return 'player';
+  if (isHostPlayer(p)) return 'host-player';
+  return p.staffRole || p.role || 'player';
+}
+
+/** Re-create book rows for personIds missing on server/local book (players + staff). */
+async function healPersonIdsForBook(ids) {
+  if (!ids || !ids.length) return;
+  var book = getPeopleBook(true);
+  for (var i = 0; i < ids.length; i++) {
+    var id = String(ids[i] || '');
+    if (!id) continue;
+    var p = (G.players || []).find(function(pl){ return pl && String(pl.personId) === id; });
+    var linked = book.find(function(b){ return String(b.id) === id; });
+    var name = (p && p.name) || (linked && linked.name) || '';
+    if (!name) continue;
+    try {
+      await persistBookPerson({
+        id: id,
+        name: name,
+        tag: (p && p.tag) || (linked && linked.tag) || null,
+        notes: (p && p.notes != null ? p.notes : (linked && linked.notes)) || null,
+        last_role: p ? playerBookLastRole(p) : ((linked && linked.last_role) || 'player'),
+        last_played_at: new Date().toISOString()
+      });
+    } catch (_e) {}
+  }
 }
 
 async function migratePlayersToBook() {
@@ -5946,9 +5986,24 @@ async function migratePlayersToBook() {
     var p = G.players[i];
     if (!p) continue;
     if (p.personId) {
-      if (p.tag == null) {
-        var linked = book.find(function(b){ return String(b.id) === String(p.personId); });
-        if (linked && linked.tag && !p.tag) { p.tag = linked.tag; changed = true; }
+      var linked = book.find(function(b){ return String(b.id) === String(p.personId); });
+      if (!linked) {
+        // Orphaned link (local personId, no book row) — re-create for players AND staff
+        try {
+          await persistBookPerson({
+            id: p.personId,
+            name: p.name,
+            tag: p.tag || null,
+            notes: p.notes || null,
+            last_role: playerBookLastRole(p),
+            last_played_at: new Date().toISOString()
+          });
+          book = getPeopleBook(true);
+          changed = true;
+        } catch (_e) {}
+      } else if (linked.tag && !p.tag) {
+        p.tag = linked.tag;
+        changed = true;
       }
       continue;
     }
@@ -5962,7 +6017,7 @@ async function migratePlayersToBook() {
       if (matches[0].tag) p.tag = matches[0].tag;
       changed = true;
     } else if (matches.length === 0) {
-      var role = isHostPlayer(p) ? 'host-player' : (p.staffRole || 'player');
+      var role = playerBookLastRole(p);
       try {
         var created = await persistBookPerson({
           name: name,
@@ -5983,6 +6038,13 @@ async function migratePlayersToBook() {
     }
   }
   if (changed) autoSave();
+}
+
+/** refresh → migrate (heal) → flush people. Call before balance post/flush. */
+async function pbHealPeopleBook() {
+  try { await refreshPeopleBook(); } catch (_e) {}
+  try { await migratePlayersToBook(); } catch (_e2) {}
+  try { await flushPeopleQueue(); } catch (_e3) {}
 }
 
 function openPlayersBookScreen() {
@@ -7307,6 +7369,20 @@ async function retryBalanceSync() {
     toast('Read-only — cannot post balances');
     return;
   }
+  // Red banner: heal orphaned personIds then retry full balance queue
+  await pbHealPeopleBook();
+  var q = loadBalancesQueue();
+  var healIds = {};
+  q.forEach(function(op) {
+    (op.entries || []).forEach(function(e) {
+      var pid = e && (e.personId || e.person_id);
+      if (pid) healIds[String(pid)] = true;
+    });
+  });
+  (G.players || []).forEach(function(p) {
+    if (p && p.personId) healIds[String(p.personId)] = true;
+  });
+  await healPersonIdsForBook(Object.keys(healIds));
   await flushPeopleQueue();
   await flushBalancesQueue();
   updateBalanceSyncUi();
@@ -7405,11 +7481,37 @@ async function flushBalancesQueue() {
         res.people.forEach(function(person){ upsertPeopleCacheRow(person); });
       }
       var skippedIds = (res && Array.isArray(res.skipped)) ? res.skipped : [];
-      if (skippedIds.length) {
+      if (skippedIds.length && !op._healedSkip) {
+        // Heal orphaned ids once, flush people, retry this op once before banner
+        await healPersonIdsForBook(skippedIds);
+        await flushPeopleQueue();
+        try {
+          var resRetry = await pbApi('/games/' + encodeURIComponent(op.gameId) + '/post-balances', {
+            method: 'POST',
+            body: JSON.stringify({
+              ownerUserId: ownerId,
+              entries: op.entries || [],
+              gameDate: op.gameDate || '',
+              location: op.location || ''
+            })
+          });
+          if (resRetry && Array.isArray(resRetry.people)) {
+            resRetry.people.forEach(function(person){ upsertPeopleCacheRow(person); });
+          }
+          var skipped2 = (resRetry && Array.isArray(resRetry.skipped)) ? resRetry.skipped : [];
+          if (skipped2.length) {
+            remain.push(Object.assign({}, op, { enqueuedAt: Date.now(), _healedSkip: true }));
+            keepForRetry = true;
+          }
+        } catch (_retryErr) {
+          remain.push(Object.assign({}, op, { enqueuedAt: Date.now(), _healedSkip: true }));
+          keepForRetry = true;
+        }
+      } else if (skippedIds.length) {
         // Re-queue FULL original op — never leftovers-only. Idempotent resend is
         // safe; partial list would let the server treat the post as complete and
         // delete rows for people who already succeeded.
-        remain.push(Object.assign({}, op, { enqueuedAt: Date.now() }));
+        remain.push(Object.assign({}, op, { enqueuedAt: Date.now(), _healedSkip: true }));
         keepForRetry = true;
       }
     } catch (err) {
@@ -7473,8 +7575,40 @@ async function postGameBalances(opts) {
     var postedN = (res && typeof res.posted === 'number') ? res.posted : (entries.length - skippedIds.length);
     var skippedM = skippedIds.length;
     if (skippedM) {
+      // Heal skipped personIds once, flush people, retry once before red banner
+      await healPersonIdsForBook(skippedIds);
+      await flushPeopleQueue();
+      try {
+        var res2 = await pbApi('/games/' + encodeURIComponent(G.gameId) + '/post-balances', {
+          method: 'POST',
+          body: JSON.stringify({
+            ownerUserId: ownerId,
+            entries: entries,
+            gameDate: G.date || '',
+            location: G.location || ''
+          })
+        });
+        if (res2 && Array.isArray(res2.people)) {
+          res2.people.forEach(function(person){ upsertPeopleCacheRow(person); });
+        }
+        var skipped2 = (res2 && Array.isArray(res2.skipped)) ? res2.skipped : [];
+        var posted2 = (res2 && typeof res2.posted === 'number') ? res2.posted : (entries.length - skipped2.length);
+        if (!skipped2.length) {
+          G.balancesPostedAt = new Date().toISOString();
+          autoSave();
+          updateBalanceSyncUi();
+          toast('Balances posted ✅ (' + posted2 + ' players)');
+          return { ok: true, count: posted2, people: (res2 && res2.people) || [], healed: true };
+        }
+        skippedIds = skipped2;
+        postedN = posted2;
+        skippedM = skipped2.length;
+        res = res2;
+      } catch (_healErr) {
+        // fall through to queue + banner
+      }
       // Queue FULL original entries for this gameId (not just skipped leftovers).
-      enqueueBalancePost(payload);
+      enqueueBalancePost(Object.assign({}, payload, { _healedSkip: true }));
       autoSave();
       updateBalanceSyncUi();
       toast('Posted ' + postedN + ' · ' + skippedM + ' waiting to sync');
@@ -7516,17 +7650,11 @@ function runEndGameFlow(afterFn) {
 
 async function finishEndGame(afterFn) {
   saveGameToHistory();
-  // Ensure newly-created people land in the book before balance post
-  await flushPeopleQueue();
+  // Heal orphaned book links before balance post: refresh → migrate → flush people
+  await pbHealPeopleBook();
   var postResult = await postGameBalances();
-  // If anyone was skipped, do NOT immediately flushBalancesQueue for this game —
-  // flush people first, then retry once (full-list idempotent resend).
-  if (postResult && Array.isArray(postResult.skipped) && postResult.skipped.length) {
-    await flushPeopleQueue();
-    await flushBalancesQueue();
-  } else {
-    await flushBalancesQueue();
-  }
+  // postGameBalances already heals+retries once on skipped; flush any remainder
+  await flushBalancesQueue();
   updateBalanceSyncUi();
   if (typeof afterFn === 'function') afterFn();
 }
@@ -7764,7 +7892,7 @@ function loadGame(btn, id) {
     calcAll(); renderAll();
     showPage('dashboard');
     toast('Game loaded ✅');
-    refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
+    pbHealPeopleBook().then(function(){
       calcAll(); renderAll();
     }).catch(function(){});
   });
@@ -7840,7 +7968,7 @@ function init() {
   renderChipCountLog();
   renderDealerBanks();
   updateBalanceSyncUi();
-  refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
+  pbHealPeopleBook().then(function(){
     return flushBalancesQueue();
   }).then(function(){
     updateBalanceSyncUi();
@@ -8605,7 +8733,8 @@ async function pbEnsureFreshSession() {
 }
 
 async function pbFlushSyncQueues() {
-  try { await flushPeopleQueue(); } catch (_e) {}
+  // After sign-in / token refresh: refresh → migrate (heal) → flush people → balances
+  try { await pbHealPeopleBook(); } catch (_e) {}
   try { await flushBalancesQueue(); } catch (_e2) {}
   try { updateBalanceSyncUi(); } catch (_e3) {}
 }
