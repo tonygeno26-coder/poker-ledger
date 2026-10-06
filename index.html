@@ -616,6 +616,13 @@ select.inp{appearance:none;-webkit-appearance:none}
   background:var(--red-dim);color:var(--red);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
 }
 .pb-banner.balance-sync:hover{filter:brightness(1.05)}
+.pb-banner.balance-sync.is-posting,
+.pb-banner.balance-sync.is-success{
+  cursor:default;pointer-events:none;opacity:0.95
+}
+.pb-banner.balance-sync.is-posting{background:var(--gold-dim);color:var(--gold)}
+.pb-banner.balance-sync.is-success{background:var(--green-dim, rgba(34,197,94,0.15));color:var(--green)}
+.pb-banner.balance-sync:disabled{cursor:default}
 .pb-banner.signin-sync{
   background:var(--gold-dim);color:var(--gold);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
 }
@@ -7352,42 +7359,117 @@ function formatBookHistoryWhen(e) {
   return '';
 }
 
+var _balancePostUiLock = false;
+var _balancePostSuccessTimer = null;
+
+function setBalancePostBanner(phase, detail) {
+  var ban = document.getElementById('pb-balance-sync-banner');
+  if (!ban) return;
+  if (_balancePostSuccessTimer) {
+    clearTimeout(_balancePostSuccessTimer);
+    _balancePostSuccessTimer = null;
+  }
+  if (phase === 'posting') {
+    _balancePostUiLock = true;
+    ban.disabled = true;
+    ban.setAttribute('aria-disabled', 'true');
+    ban.textContent = 'Posting balances…';
+    ban.classList.add('show', 'is-posting');
+    ban.classList.remove('is-success');
+    return;
+  }
+  if (phase === 'success') {
+    var n = typeof detail === 'number' ? detail : 0;
+    _balancePostUiLock = true;
+    ban.disabled = true;
+    ban.setAttribute('aria-disabled', 'true');
+    ban.textContent = 'Balances posted ✅ (' + n + ' players)';
+    ban.classList.add('show', 'is-success');
+    ban.classList.remove('is-posting');
+    _balancePostSuccessTimer = setTimeout(function () {
+      _balancePostSuccessTimer = null;
+      _balancePostUiLock = false;
+      ban.disabled = false;
+      ban.removeAttribute('aria-disabled');
+      ban.textContent = 'Balances not posted — tap to retry';
+      ban.classList.remove('is-success', 'is-posting');
+      updateBalanceSyncUi();
+    }, 2200);
+    return;
+  }
+  // retry / error
+  _balancePostUiLock = false;
+  ban.disabled = false;
+  ban.removeAttribute('aria-disabled');
+  ban.textContent = detail || 'Balances not posted — tap to retry';
+  ban.classList.add('show');
+  ban.classList.remove('is-posting', 'is-success');
+}
+
 function updateBalanceSyncUi() {
   var q = loadBalancesQueue();
   var pending = q.length > 0;
-  var ban = document.getElementById('pb-balance-sync-banner');
-  if (ban) {
-    if (pending) ban.classList.add('show');
-    else ban.classList.remove('show');
-  }
   var item = document.getElementById('hdr-menu-item-retry-balances');
   if (item) item.style.display = pending ? 'flex' : 'none';
+  if (_balancePostUiLock) return;
+  var ban = document.getElementById('pb-balance-sync-banner');
+  if (ban) {
+    if (pending) {
+      ban.disabled = false;
+      ban.removeAttribute('aria-disabled');
+      if (!ban.classList.contains('is-posting') && !ban.classList.contains('is-success')) {
+        ban.textContent = 'Balances not posted — tap to retry';
+      }
+      ban.classList.add('show');
+    } else {
+      ban.classList.remove('show', 'is-posting', 'is-success');
+      ban.disabled = false;
+      ban.removeAttribute('aria-disabled');
+      ban.textContent = 'Balances not posted — tap to retry';
+    }
+  }
 }
 
 async function retryBalanceSync() {
+  if (_balancePostUiLock) return;
   if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
     toast('Read-only — cannot post balances');
     return;
   }
-  // Red banner: heal orphaned personIds then retry full balance queue
-  await pbHealPeopleBook();
-  var q = loadBalancesQueue();
-  var healIds = {};
-  q.forEach(function(op) {
-    (op.entries || []).forEach(function(e) {
-      var pid = e && (e.personId || e.person_id);
-      if (pid) healIds[String(pid)] = true;
+  setBalancePostBanner('posting');
+  var queuedBefore = loadBalancesQueue();
+  var entryCount = 0;
+  queuedBefore.forEach(function(op) {
+    entryCount += (op.entries && op.entries.length) || 0;
+  });
+  try {
+    // Red banner: heal orphaned personIds then retry full balance queue
+    await pbHealPeopleBook();
+    var q = loadBalancesQueue();
+    var healIds = {};
+    q.forEach(function(op) {
+      (op.entries || []).forEach(function(e) {
+        var pid = e && (e.personId || e.person_id);
+        if (pid) healIds[String(pid)] = true;
+      });
     });
-  });
-  (G.players || []).forEach(function(p) {
-    if (p && p.personId) healIds[String(p.personId)] = true;
-  });
-  await healPersonIdsForBook(Object.keys(healIds));
-  await flushPeopleQueue();
-  await flushBalancesQueue();
-  updateBalanceSyncUi();
-  if (!loadBalancesQueue().length) toast('Balances synced ✅');
-  else toast('Balances not posted — tap to retry');
+    (G.players || []).forEach(function(p) {
+      if (p && p.personId) healIds[String(p.personId)] = true;
+    });
+    await healPersonIdsForBook(Object.keys(healIds));
+    await flushPeopleQueue();
+    await flushBalancesQueue();
+    if (!loadBalancesQueue().length) {
+      setBalancePostBanner('success', entryCount);
+      toast('Balances posted ✅ (' + entryCount + ' players)');
+    } else {
+      setBalancePostBanner('retry');
+      toast('Balances not posted — tap to retry');
+    }
+  } catch (_err) {
+    setBalancePostBanner('retry');
+    toast('Balances not posted — tap to retry');
+  }
 }
 
 function unlinkedPlayersWithBalance() {
@@ -7558,6 +7640,7 @@ async function postGameBalances(opts) {
     pbUpdateBanners(pbGetAuth());
     return { queued: true, count: entries.length };
   }
+  if (!opts._bannerAlreadyPosting) setBalancePostBanner('posting');
   try {
     var res = await pbApi('/games/' + encodeURIComponent(G.gameId) + '/post-balances', {
       method: 'POST',
@@ -7596,7 +7679,7 @@ async function postGameBalances(opts) {
         if (!skipped2.length) {
           G.balancesPostedAt = new Date().toISOString();
           autoSave();
-          updateBalanceSyncUi();
+          setBalancePostBanner('success', posted2);
           toast('Balances posted ✅ (' + posted2 + ' players)');
           return { ok: true, count: posted2, people: (res2 && res2.people) || [], healed: true };
         }
@@ -7610,19 +7693,19 @@ async function postGameBalances(opts) {
       // Queue FULL original entries for this gameId (not just skipped leftovers).
       enqueueBalancePost(Object.assign({}, payload, { _healedSkip: true }));
       autoSave();
-      updateBalanceSyncUi();
+      setBalancePostBanner('retry', 'Posted ' + postedN + ' · ' + skippedM + ' waiting to sync — tap to retry');
       toast('Posted ' + postedN + ' · ' + skippedM + ' waiting to sync');
       return { ok: false, count: postedN, skipped: skippedIds, people: (res && res.people) || [] };
     }
     G.balancesPostedAt = new Date().toISOString();
     autoSave();
-    updateBalanceSyncUi();
+    setBalancePostBanner('success', postedN);
     toast('Balances posted ✅ (' + postedN + ' players)');
     return { ok: true, count: postedN, people: (res && res.people) || [] };
   } catch (err) {
     enqueueBalancePost(payload);
     autoSave();
-    updateBalanceSyncUi();
+    setBalancePostBanner('retry');
     toast('Balances not posted — tap to retry');
     return { queued: true, count: entries.length, error: err };
   }
@@ -7650,12 +7733,30 @@ function runEndGameFlow(afterFn) {
 
 async function finishEndGame(afterFn) {
   saveGameToHistory();
-  // Heal orphaned book links before balance post: refresh → migrate → flush people
-  await pbHealPeopleBook();
-  var postResult = await postGameBalances();
-  // postGameBalances already heals+retries once on skipped; flush any remainder
-  await flushBalancesQueue();
-  updateBalanceSyncUi();
+  setBalancePostBanner('posting');
+  try {
+    // Heal orphaned book links before balance post: refresh → migrate → flush people
+    await pbHealPeopleBook();
+    var postResult = await postGameBalances({ _bannerAlreadyPosting: true });
+    // postGameBalances already heals+retries once on skipped; flush any remainder
+    await flushBalancesQueue();
+    if (postResult && postResult.ok) {
+      // success banner already set inside postGameBalances
+    } else if (!pbAccessToken()) {
+      // signed-out path: leave phone-local queue UI
+      _balancePostUiLock = false;
+      updateBalanceSyncUi();
+    } else if (!loadBalancesQueue().length) {
+      var n = (postResult && typeof postResult.count === 'number')
+        ? postResult.count
+        : (collectPostBalanceEntries().length || 0);
+      setBalancePostBanner('success', n);
+    } else {
+      setBalancePostBanner('retry');
+    }
+  } catch (_err) {
+    setBalancePostBanner('retry');
+  }
   if (typeof afterFn === 'function') afterFn();
 }
 
