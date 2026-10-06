@@ -25,7 +25,10 @@ const stripeWebhookSecret =
     ? process.env.STRIPE_LIVE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET
     : process.env.STRIPE_WEBHOOK_SECRET;
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.warn('[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — auth routes will fail until configured');
 }
 if (!stripeKey) {
@@ -34,12 +37,42 @@ if (!stripeKey) {
   );
 }
 
+// Shared client: DB (.from) + auth.getUser(jwt) only. Must never hold a user session.
 const supabase =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
-    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
+  SUPABASE_URL && SUPABASE_SERVICE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
     : null;
+
+/** Throwaway client for verifyOtp / refreshSession / signInWithOtp so the shared client stays session-free. */
+function authClient() {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+/** null = not checked yet; true = shared session empty; false = leaked session detected */
+let sharedAuthSessionNull = null;
+
+async function assertSharedSessionNull(context) {
+  if (!supabase) return;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data && data.session;
+    if (session) {
+      sharedAuthSessionNull = false;
+      console.error(
+        `[auth] shared supabase session is NOT null after ${context}` +
+          (session.user && session.user.id ? ` user=${session.user.id}` : '')
+      );
+    } else {
+      sharedAuthSessionNull = true;
+    }
+  } catch (err) {
+    console.error(`[auth] getSession check failed after ${context}`, err);
+  }
+}
 
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
 
@@ -404,7 +437,11 @@ async function handleStripeEvent(event) {
 }
 
 app.get('/health', function (_req, res) {
-  res.json({ ok: true, service: 'pocketbooks-poker-subscription' });
+  res.json({
+    ok: true,
+    service: 'pocketbooks-poker-subscription',
+    shared_auth_session_null: sharedAuthSessionNull
+  });
 });
 
 app.get('/subscribe', function (_req, res) {
@@ -422,7 +459,7 @@ app.post('/auth/magic-link', async function (req, res) {
 
     await ensureUser(email);
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await authClient().auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo:
@@ -490,7 +527,7 @@ app.post('/auth/verify', async function (req, res) {
       if (error) throw error;
       authUser = data.user;
     } else if (tokenHash) {
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { data, error } = await authClient().auth.verifyOtp({
         token_hash: tokenHash,
         type
       });
@@ -512,6 +549,8 @@ app.post('/auth/verify', async function (req, res) {
     }
 
     const tokens = tokensFromSession(session, accessToken, incomingRefresh);
+
+    await assertSharedSessionNull('auth/verify');
 
     res.json({
       user: {
@@ -543,7 +582,7 @@ app.post('/auth/refresh', async function (req, res) {
       return res.status(400).json({ error: 'refresh_token required' });
     }
 
-    const { data, error } = await supabase.auth.refreshSession({
+    const { data, error } = await authClient().auth.refreshSession({
       refresh_token: refreshToken
     });
     if (error) throw error;
@@ -560,6 +599,8 @@ app.post('/auth/refresh', async function (req, res) {
 
     const user = await ensureUser(email);
     const tokens = tokensFromSession(data.session, null, null);
+
+    await assertSharedSessionNull('auth/refresh');
 
     res.json({
       user: {
@@ -768,7 +809,7 @@ app.post('/invite/host-viewer', async function (req, res) {
       `${BASE_URL}/auth/callback` +
       `?role=host_viewer&owner=${encodeURIComponent(ownerEmail)}`;
 
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
+    const { error: otpErr } = await authClient().auth.signInWithOtp({
       email: viewerEmail,
       options: {
         emailRedirectTo: redirectTo,
@@ -1500,4 +1541,7 @@ app.listen(PORT, function () {
   console.log(
     `[pocketbooks] STRIPE_MODE=${STRIPE_MODE} key=${stripeKey ? 'set' : 'missing'} price=${stripePriceId ? 'set' : 'missing'} webhook=${stripeWebhookSecret ? 'set' : 'missing'}`
   );
+  assertSharedSessionNull('boot').catch(function (err) {
+    console.error('[auth] boot session check failed', err);
+  });
 });
