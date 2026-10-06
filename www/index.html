@@ -612,6 +612,10 @@ select.inp{appearance:none;-webkit-appearance:none}
 .pb-banner.show{display:flex}
 .pb-banner.trial{background:var(--gold-dim);color:var(--gold)}
 .pb-banner.expired{background:var(--red-dim);color:var(--red)}
+.pb-banner.balance-sync{
+  background:var(--red-dim);color:var(--red);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
+}
+.pb-banner.balance-sync:hover{filter:brightness(1.05)}
 #pb-account-modal .modal{max-width:360px}
 
 
@@ -655,6 +659,9 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <span>Subscription expired — renew to keep access</span>
   <button type="button" class="btn btn-outline btn-xs" onclick="pbOpenCheckout()" style="color:var(--red);border-color:var(--red);flex-shrink:0">Renew</button>
 </div>
+<button type="button" class="pb-banner balance-sync" id="pb-balance-sync-banner" onclick="retryBalanceSync()" aria-live="polite">
+  Balances not posted — tap to retry
+</button>
 <div id="pb-host-view-banner" aria-live="polite">
   <span class="ico-inline"><i data-lucide="eye" aria-hidden="true"></i> Host View — Live Updates</span>
   <span class="hv-meta" id="pb-host-view-meta">Last updated —</span>
@@ -675,6 +682,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="user" aria-hidden="true"></i></span>Account</button>
   <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-book" onclick="headerMenuPlayersBook()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="book-user" aria-hidden="true"></i></span>Players book</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-audit" onclick="headerMenuAudit()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="clipboard-list" aria-hidden="true"></i></span>Audit</button>
+  <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-retry-balances" onclick="headerMenuRetryBalances()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="refresh-cw" aria-hidden="true"></i></span>Retry balance sync</button>
   <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="lock" aria-hidden="true"></i></span>Log Out</button>
 </div>
 
@@ -1130,7 +1138,8 @@ var G = {
   location: '', date: '',
   dealerBanks: [],
   gameId: '',
-  balancesPostedAt: null
+  balancesPostedAt: null,
+  postedDeltas: {}
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2841,6 +2850,10 @@ function headerMenuAudit() {
     return;
   }
   openAuditPanel();
+}
+function headerMenuRetryBalances() {
+  closeHeaderMenu();
+  retryBalanceSync();
 }
 document.addEventListener('click', function(ev) {
   if (!isHeaderMenuOpen()) return;
@@ -5526,6 +5539,11 @@ function signedCarryoverOpening(p) {
 function applyCarryoverPrior(p, standing) {
   standing = Math.round((Number(standing) || 0) * 100) / 100;
   if (!p || !isPlayerSeat(p)) return false;
+  // Subtract this game's already-posted delta so re-link / refresh does not double-count.
+  if (p.personId && G.postedDeltas) {
+    var alreadyPosted = Number(G.postedDeltas[String(p.personId)]) || 0;
+    standing = Math.round((standing - alreadyPosted) * 100) / 100;
+  }
   if (Math.abs(standing) <= SETTLE_EPSILON) return false;
   var already = (p.priorBalances || []).some(function(b) {
     return b && b.voided !== true && String(b.source || '').toLowerCase() === 'carryover';
@@ -6051,7 +6069,7 @@ async function loadBookBalanceHistory(personId) {
       var dlt = Math.round((Number(e.delta) || 0) * 100) / 100;
       var dColor = Math.abs(dlt) <= SETTLE_EPSILON ? 'var(--text-muted)'
         : (dlt < 0 ? 'var(--red)' : 'var(--green)');
-      var when = e.posted_at ? new Date(e.posted_at).toLocaleString() : '';
+      var when = formatBookHistoryWhen(e);
       return '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--border)">'
         + '<div style="color:var(--text-muted)">' + when + '</div>'
         + '<div>Open <strong>$' + fmt(e.opening_balance) + '</strong> → Close <strong>$'
@@ -7148,7 +7166,7 @@ function startFreshGame() {
     players: [], txnLog: [], expenses: [], _seq: 0,
     sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
     location: '', date: '', dealerBanks: [], chipCounts: [], startingChipCount: null,
-    gameId: pbNewUuid(), balancesPostedAt: null
+    gameId: pbNewUuid(), balancesPostedAt: null, postedDeltas: {}
   };
   _activePlayerId = null; _activeStaffId = null;
   setVal('g-location', ''); setVal('g-date', todayLocalYMD());
@@ -7224,6 +7242,69 @@ function collectPostBalanceEntries() {
   return entries;
 }
 
+/** Store per-person posted deltas for this game (closing − opening). */
+function storePostedDeltas(entries) {
+  if (!G.postedDeltas) G.postedDeltas = {};
+  (entries || []).forEach(function(e){
+    if (!e || !e.personId) return;
+    var d = Math.round(((Number(e.closing) || 0) - (Number(e.opening) || 0)) * 100) / 100;
+    G.postedDeltas[String(e.personId)] = d;
+  });
+}
+
+/** Book History label: "M/D · Location" (falls back to posted_at). */
+function formatBookHistoryWhen(e) {
+  var md = '';
+  var gd = e && (e.game_date || e.gameDate);
+  if (gd) {
+    var parts = String(gd).split(/[-/]/);
+    if (parts.length >= 3) {
+      var m = parseInt(parts[1], 10);
+      var d = parseInt(parts[2], 10);
+      if (parts[0].length === 4) { /* YYYY-MM-DD */ }
+      else { m = parseInt(parts[0], 10); d = parseInt(parts[1], 10); }
+      if (m >= 1 && d >= 1) md = m + '/' + d;
+    } else {
+      try {
+        var dt = new Date(gd);
+        if (!isNaN(dt.getTime())) md = (dt.getMonth() + 1) + '/' + dt.getDate();
+      } catch (_e) {}
+    }
+  }
+  var loc = e && e.location ? String(e.location).trim() : '';
+  if (md && loc) return md + ' · ' + loc;
+  if (md) return md;
+  if (loc) return loc;
+  if (e && e.posted_at) {
+    try { return new Date(e.posted_at).toLocaleString(); } catch (_e2) {}
+  }
+  return '';
+}
+
+function updateBalanceSyncUi() {
+  var q = loadBalancesQueue();
+  var pending = q.length > 0;
+  var ban = document.getElementById('pb-balance-sync-banner');
+  if (ban) {
+    if (pending) ban.classList.add('show');
+    else ban.classList.remove('show');
+  }
+  var item = document.getElementById('hdr-menu-item-retry-balances');
+  if (item) item.style.display = pending ? 'flex' : 'none';
+}
+
+async function retryBalanceSync() {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only — cannot post balances');
+    return;
+  }
+  await flushPeopleQueue();
+  await flushBalancesQueue();
+  updateBalanceSyncUi();
+  if (!loadBalancesQueue().length) toast('Balances synced ✅');
+  else toast('Balances not posted — tap to retry');
+}
+
 function unlinkedPlayersWithBalance() {
   return (G.players || []).filter(function(p){
     return p && isPlayerSeat(p) && !p.personId
@@ -7296,8 +7377,9 @@ async function flushBalancesQueue() {
   var ownerId = pbPeopleOwnerId();
   if (!ownerId || !pbAccessToken()) return;
   var q = loadBalancesQueue();
-  if (!q.length) return;
+  if (!q.length) { updateBalanceSyncUi(); return; }
   var remain = [];
+  var keepForRetry = false;
   for (var i = 0; i < q.length; i++) {
     var op = q[i];
     try {
@@ -7305,23 +7387,43 @@ async function flushBalancesQueue() {
         method: 'POST',
         body: JSON.stringify({
           ownerUserId: ownerId,
-          entries: op.entries || []
+          entries: op.entries || [],
+          gameDate: op.gameDate || '',
+          location: op.location || ''
         })
       });
       if (res && Array.isArray(res.people)) {
         res.people.forEach(function(person){ upsertPeopleCacheRow(person); });
       }
+      var skippedIds = (res && Array.isArray(res.skipped)) ? res.skipped : [];
+      if (skippedIds.length) {
+        var skipSet = {};
+        skippedIds.forEach(function(id){ skipSet[String(id)] = true; });
+        var left = (op.entries || []).filter(function(e){
+          return e && skipSet[String(e.personId)];
+        });
+        if (left.length) {
+          remain.push(Object.assign({}, op, { entries: left, enqueuedAt: Date.now() }));
+          keepForRetry = true;
+        }
+      }
     } catch (err) {
       var st = err && err.status;
-      if (st === 400 || st === 403 || st === 409) {
-        // drop permanent failures
+      if (st === 400) {
+        // drop only permanent client validation errors
       } else {
+        // never drop on 403; keep on network / 401 / 5xx / other
         remain.push(op);
+        keepForRetry = true;
         if (st === 401) break;
       }
     }
   }
   saveBalancesQueue(remain);
+  updateBalanceSyncUi();
+  if (keepForRetry && remain.length) {
+    // Persistent banner + hamburger already shown via updateBalanceSyncUi
+  }
 }
 
 async function postGameBalances(opts) {
@@ -7333,31 +7435,57 @@ async function postGameBalances(opts) {
   ensureGameId();
   var ownerId = pbPeopleOwnerId();
   var entries = collectPostBalanceEntries();
-  var payload = { gameId: G.gameId, entries: entries, ownerUserId: ownerId };
+  storePostedDeltas(entries);
+  var payload = {
+    gameId: G.gameId,
+    entries: entries,
+    ownerUserId: ownerId,
+    gameDate: G.date || '',
+    location: G.location || ''
+  };
   if (!ownerId || !pbAccessToken()) {
     enqueueBalancePost(payload);
-    G.balancesPostedAt = new Date().toISOString();
     autoSave();
+    updateBalanceSyncUi();
     toast('Balances queued offline (' + entries.length + ')');
     return { queued: true, count: entries.length };
   }
   try {
     var res = await pbApi('/games/' + encodeURIComponent(G.gameId) + '/post-balances', {
       method: 'POST',
-      body: JSON.stringify({ ownerUserId: ownerId, entries: entries })
+      body: JSON.stringify({
+        ownerUserId: ownerId,
+        entries: entries,
+        gameDate: G.date || '',
+        location: G.location || ''
+      })
     });
     if (res && Array.isArray(res.people)) {
       res.people.forEach(function(person){ upsertPeopleCacheRow(person); });
     }
+    var skippedIds = (res && Array.isArray(res.skipped)) ? res.skipped : [];
+    var postedN = (res && typeof res.posted === 'number') ? res.posted : (entries.length - skippedIds.length);
+    var skippedM = skippedIds.length;
+    if (skippedM) {
+      var skipSet = {};
+      skippedIds.forEach(function(id){ skipSet[String(id)] = true; });
+      var left = entries.filter(function(e){ return e && skipSet[String(e.personId)]; });
+      enqueueBalancePost(Object.assign({}, payload, { entries: left }));
+      autoSave();
+      updateBalanceSyncUi();
+      toast('Posted ' + postedN + ' · ' + skippedM + ' waiting to sync');
+      return { ok: false, count: postedN, skipped: skippedIds, people: (res && res.people) || [] };
+    }
     G.balancesPostedAt = new Date().toISOString();
     autoSave();
-    toast('Balances posted ✅ (' + entries.length + ' players)');
-    return { ok: true, count: entries.length, people: (res && res.people) || [] };
+    updateBalanceSyncUi();
+    toast('Balances posted ✅ (' + postedN + ' players)');
+    return { ok: true, count: postedN, people: (res && res.people) || [] };
   } catch (err) {
     enqueueBalancePost(payload);
-    G.balancesPostedAt = new Date().toISOString();
     autoSave();
-    toast('Balances queued — will sync when online');
+    updateBalanceSyncUi();
+    toast('Balances not posted — tap to retry');
     return { queued: true, count: entries.length, error: err };
   }
 }
@@ -7384,8 +7512,11 @@ function runEndGameFlow(afterFn) {
 
 async function finishEndGame(afterFn) {
   saveGameToHistory();
+  // Ensure newly-created people land in the book before balance post
+  await flushPeopleQueue();
   await postGameBalances();
   await flushBalancesQueue();
+  updateBalanceSyncUi();
   if (typeof afterFn === 'function') afterFn();
 }
 
@@ -7606,10 +7737,17 @@ function loadGame(btn, id) {
   var h = history.find(function(x){ return x.id===id; });
   if (!h) return;
   confirmAction(btn, 'Click again to load this game (current session will be replaced)', function(){
+    var hadNoGameId = !(h.G && h.G.gameId);
     G = h.G;
     delete G.type;
     delete G.stakes;
+    if (!G.postedDeltas) G.postedDeltas = {};
     ensureGameId();
+    // Persist assigned gameId back onto the history entry so re-loads / re-posts share one id
+    if (hadNoGameId && G.gameId) {
+      h.G.gameId = G.gameId;
+      lsSet('pb-history', JSON.stringify(history));
+    }
     restoreInputs();
     _activePlayerId = null; _activeStaffId = null;
     calcAll(); renderAll();
@@ -7661,8 +7799,9 @@ function init() {
       G = Object.assign({
         players:[], txnLog:[], expenses:[], _seq:0,
         sessionSettings:{bankStart:0,chipFloat:0,taxPct:0},
-        location:'', date:'', gameId:'', balancesPostedAt:null
+        location:'', date:'', gameId:'', balancesPostedAt:null, postedDeltas:{}
       }, d);
+      if (!G.postedDeltas) G.postedDeltas = {};
       // Drop legacy game type / stakes if present in old saves
       delete G.type;
       delete G.stakes;
@@ -7689,9 +7828,11 @@ function init() {
   renderHistory();
   renderChipCountLog();
   renderDealerBanks();
+  updateBalanceSyncUi();
   refreshPeopleBook().then(function(){ return migratePlayersToBook(); }).then(function(){
     return flushBalancesQueue();
   }).then(function(){
+    updateBalanceSyncUi();
     calcAll(); renderAll();
   }).catch(function(){});
 }

@@ -999,7 +999,7 @@ app.get('/people/:id/balance-history', async function (req, res) {
     const { data: entries, error: entErr } = await supabase
       .from('person_balance_entries')
       .select(
-        'id, person_id, owner_user_id, game_id, opening_balance, closing_balance, delta, posted_at, created_at'
+        'id, person_id, owner_user_id, game_id, opening_balance, closing_balance, delta, posted_at, created_at, game_date, location'
       )
       .eq('person_id', id)
       .order('posted_at', { ascending: false })
@@ -1078,8 +1078,18 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
     }
     const personIds = Object.keys(byPerson);
     const now = new Date().toISOString();
+    const gameDate =
+      body.gameDate != null
+        ? String(body.gameDate || '').trim()
+        : body.game_date != null
+          ? String(body.game_date || '').trim()
+          : '';
+    const location =
+      body.location != null ? String(body.location || '').trim() : '';
 
-    // Validate all people belong to this owner
+    // Split into owned (post) vs unknown (skip) — never reject the whole request
+    const skipped = [];
+    let validPersonIds = [];
     if (personIds.length) {
       const { data: owned, error: ownedErr } = await supabase
         .from('people')
@@ -1092,15 +1102,14 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
         ownedSet[String(r.id)] = true;
       });
       for (let j = 0; j < personIds.length; j++) {
-        if (!ownedSet[personIds[j]]) {
-          return res.status(403).json({ error: 'Person not in your player book: ' + personIds[j] });
-        }
+        if (ownedSet[personIds[j]]) validPersonIds.push(personIds[j]);
+        else skipped.push(personIds[j]);
       }
     }
 
-    // Upsert rows for posted people
-    for (let k = 0; k < personIds.length; k++) {
-      const ent = byPerson[personIds[k]];
+    // Upsert rows for valid people only
+    for (let k = 0; k < validPersonIds.length; k++) {
+      const ent = byPerson[validPersonIds[k]];
       const delta = roundMoney(ent.closing - ent.opening);
       const { data: existing, error: findErr } = await supabase
         .from('person_balance_entries')
@@ -1110,15 +1119,19 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
         .maybeSingle();
       if (findErr) throw findErr;
 
+      const rowFields = {
+        opening_balance: ent.opening,
+        closing_balance: ent.closing,
+        delta,
+        posted_at: now,
+        game_date: gameDate || null,
+        location: location || null
+      };
+
       if (existing) {
         const { error: updErr } = await supabase
           .from('person_balance_entries')
-          .update({
-            opening_balance: ent.opening,
-            closing_balance: ent.closing,
-            delta,
-            posted_at: now
-          })
+          .update(rowFields)
           .eq('id', existing.id);
         if (updErr) throw updErr;
       } else {
@@ -1130,13 +1143,16 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
           closing_balance: ent.closing,
           delta,
           posted_at: now,
-          created_at: now
+          created_at: now,
+          game_date: gameDate || null,
+          location: location || null
         });
         if (insErr) throw insErr;
       }
     }
 
-    // Delete entries for people removed from this game's post set
+    // Delete entries for people removed from this game's post set.
+    // Keep skipped (unknown) person rows — never delete this game's rows for skipped persons.
     const { data: gameRows, error: gameErr } = await supabase
       .from('person_balance_entries')
       .select('id, person_id')
@@ -1145,7 +1161,10 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
     if (gameErr) throw gameErr;
 
     const keep = {};
-    personIds.forEach(function (id) {
+    validPersonIds.forEach(function (id) {
+      keep[id] = true;
+    });
+    skipped.forEach(function (id) {
       keep[id] = true;
     });
     const removedPersonIds = {};
@@ -1166,7 +1185,7 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
 
     // Recompute standing_balance = sum(deltas) for affected people
     const recomputeIds = {};
-    personIds.forEach(function (id) {
+    validPersonIds.forEach(function (id) {
       recomputeIds[id] = true;
     });
     Object.keys(removedPersonIds).forEach(function (id) {
@@ -1180,7 +1199,8 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
 
     res.json({
       gameId,
-      posted: personIds.length,
+      posted: validPersonIds.length,
+      skipped: skipped,
       removed: deleteIds.length,
       people: updatedPeople
     });
