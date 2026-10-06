@@ -439,6 +439,38 @@ app.post('/auth/magic-link', async function (req, res) {
   }
 });
 
+function jwtExpiresAtIso(accessToken) {
+  try {
+    const parts = String(accessToken || '').split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+    const payload = JSON.parse(Buffer.from(b64 + pad, 'base64').toString('utf8'));
+    if (!payload || !payload.exp) return null;
+    return new Date(payload.exp * 1000).toISOString();
+  } catch (_e) {
+    return null;
+  }
+}
+
+function tokensFromSession(session, fallbackAccess, fallbackRefresh) {
+  const access = (session && session.access_token) || fallbackAccess || null;
+  const refresh = (session && session.refresh_token) || fallbackRefresh || null;
+  let expiresAt = null;
+  if (session && session.expires_at) {
+    expiresAt = new Date(Number(session.expires_at) * 1000).toISOString();
+  } else if (session && session.expires_in != null && access) {
+    expiresAt = new Date(Date.now() + Number(session.expires_in) * 1000).toISOString();
+  } else if (access) {
+    expiresAt = jwtExpiresAtIso(access);
+  }
+  return {
+    access_token: access,
+    refresh_token: refresh,
+    expires_at: expiresAt
+  };
+}
+
 app.post('/auth/verify', async function (req, res) {
   try {
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
@@ -446,11 +478,12 @@ app.post('/auth/verify', async function (req, res) {
     const tokenHash = body.token_hash || body.token;
     const type = body.type || 'email';
     const accessToken = body.access_token;
+    const incomingRefresh = body.refresh_token || null;
     const roleParam = String(body.role || (req.query && req.query.role) || '').trim();
     const ownerParam = String(body.owner || (req.query && req.query.owner) || '').trim();
 
     let authUser = null;
-    let sessionAccessToken = accessToken || null;
+    let session = null;
 
     if (accessToken) {
       const { data, error } = await supabase.auth.getUser(accessToken);
@@ -463,9 +496,7 @@ app.post('/auth/verify', async function (req, res) {
       });
       if (error) throw error;
       authUser = data.user;
-      if (data.session && data.session.access_token) {
-        sessionAccessToken = data.session.access_token;
-      }
+      session = data.session || null;
     } else {
       return res.status(400).json({ error: 'token or access_token required' });
     }
@@ -480,6 +511,8 @@ app.post('/auth/verify', async function (req, res) {
       user = await activateHostViewer(user, ownerParam);
     }
 
+    const tokens = tokensFromSession(session, accessToken, incomingRefresh);
+
     res.json({
       user: {
         id: user.id,
@@ -490,13 +523,61 @@ app.post('/auth/verify', async function (req, res) {
       isActive: isSubscriptionActive(user),
       role: user.role || 'owner',
       linked_owner_id: user.linked_owner_id || null,
-      // Client persists this for Bearer auth on invite/game routes
-      access_token: sessionAccessToken || null
+      // Client persists these for Bearer auth + durable refresh
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: tokens.expires_at
     });
   } catch (err) {
     console.error('[auth/verify]', err);
     const status = err.status || 401;
     res.status(status).json({ error: err.message || 'Verification failed' });
+  }
+});
+
+app.post('/auth/refresh', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const refreshToken = req.body && req.body.refresh_token;
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'refresh_token required' });
+    }
+
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken
+    });
+    if (error) throw error;
+    if (!data || !data.session || !data.session.access_token) {
+      return res.status(401).json({ error: 'Refresh failed' });
+    }
+
+    const authUser = data.user || null;
+    const email = normalizeEmail(
+      (authUser && authUser.email) ||
+        (data.session.user && data.session.user.email)
+    );
+    if (!email) return res.status(400).json({ error: 'No email on auth user' });
+
+    const user = await ensureUser(email);
+    const tokens = tokensFromSession(data.session, null, null);
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email
+      },
+      subscription_status: user.subscription_status,
+      subscription_end: user.subscription_end,
+      isActive: isSubscriptionActive(user),
+      role: user.role || 'owner',
+      linked_owner_id: user.linked_owner_id || null,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: tokens.expires_at
+    });
+  } catch (err) {
+    console.error('[auth/refresh]', err);
+    res.status(401).json({ error: err.message || 'Refresh failed' });
   }
 });
 

@@ -616,6 +616,11 @@ select.inp{appearance:none;-webkit-appearance:none}
   background:var(--red-dim);color:var(--red);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
 }
 .pb-banner.balance-sync:hover{filter:brightness(1.05)}
+.pb-banner.signin-sync{
+  background:var(--gold-dim);color:var(--gold);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
+}
+.pb-banner.signin-sync:hover{filter:brightness(1.05)}
+.pb-auth-not-now{display:none;margin-top:4px}
 #pb-account-modal .modal{max-width:360px}
 
 
@@ -645,6 +650,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     <div class="pb-auth-sub">Enter your email to continue</div>
     <input class="inp" id="pb-auth-email" type="email" autocomplete="email" placeholder="you@email.com" inputmode="email">
     <button type="button" class="btn btn-red" id="pb-auth-magic-btn" onclick="pbSendMagicLink()">Send Magic Link</button>
+    <button type="button" class="btn btn-outline pb-auth-not-now" id="pb-auth-not-now" onclick="pbDismissSignInPrompt()">Not now</button>
     <div class="pb-auth-msg" id="pb-auth-msg"></div>
     <div class="pb-auth-divider"></div>
     <div class="pb-auth-promo-label">Have a promo code?</div>
@@ -659,6 +665,9 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <span>Subscription expired — renew to keep access</span>
   <button type="button" class="btn btn-outline btn-xs" onclick="pbOpenCheckout()" style="color:var(--red);border-color:var(--red);flex-shrink:0">Renew</button>
 </div>
+<button type="button" class="pb-banner signin-sync" id="pb-signin-sync-banner" onclick="pbPromptSignInToSync()" aria-live="polite">
+  Sign in to sync players and balances
+</button>
 <button type="button" class="pb-banner balance-sync" id="pb-balance-sync-banner" onclick="retryBalanceSync()" aria-live="polite">
   Balances not posted — tap to retry
 </button>
@@ -6144,7 +6153,7 @@ async function saveBookEdit() {
 
   if (_peopleReadOnly || pbIsHostViewer() || !pbPeopleOwnerId() || !pbAccessToken()) {
     enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
-    toast('Saved locally — will sync when online');
+    toast(pbAccessToken() ? 'Saved locally — will sync when online' : 'Not signed in — saved on this phone');
     return;
   }
   try {
@@ -6160,7 +6169,7 @@ async function saveBookEdit() {
       return;
     }
     enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
-    toast('Saved locally — will sync when online');
+    toast(pbAccessToken() ? 'Saved locally — will sync when online' : 'Not signed in — saved on this phone');
   }
   renderPlayersBook();
 }
@@ -7443,7 +7452,8 @@ async function postGameBalances(opts) {
     enqueueBalancePost(payload);
     autoSave();
     updateBalanceSyncUi();
-    toast('Balances queued offline (' + entries.length + ')');
+    toast('Not signed in — balances saved on this phone');
+    pbUpdateBanners(pbGetAuth());
     return { queued: true, count: entries.length };
   }
   try {
@@ -8390,6 +8400,20 @@ function pbAccessToken() {
   return (auth && (auth.accessToken || auth.access_token)) || '';
 }
 
+function pbRefreshToken() {
+  var auth = pbGetAuth();
+  return (auth && (auth.refreshToken || auth.refresh_token)) || '';
+}
+
+function pbHasSession() {
+  return !!pbAccessToken();
+}
+
+function pbNeedsSignInToSync(auth) {
+  auth = auth || pbGetAuth();
+  return !!(auth && pbIsActive(auth) && !pbAccessToken());
+}
+
 function pbAuthHeaders(extra) {
   var h = Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, extra || {});
   var tok = pbAccessToken();
@@ -8417,6 +8441,8 @@ function pbShowAuthScreen(show) {
     el.classList.remove('show');
     el.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
+    var notNow = document.getElementById('pb-auth-not-now');
+    if (notNow) notNow.style.display = 'none';
   }
 }
 
@@ -8436,8 +8462,10 @@ function pbDaysRemaining(endIso) {
 function pbUpdateBanners(auth) {
   var trial = document.getElementById('pb-trial-banner');
   var expired = document.getElementById('pb-expired-banner');
+  var signin = document.getElementById('pb-signin-sync-banner');
   if (trial) trial.classList.remove('show');
   if (expired) expired.classList.remove('show');
+  if (signin) signin.classList.remove('show');
   if (!auth) return;
   var st = String(auth.subscriptionStatus || '').toLowerCase();
   if (st === 'trial' && pbIsActive(auth)) {
@@ -8448,15 +8476,161 @@ function pbUpdateBanners(auth) {
   } else if (auth.email && !pbIsActive(auth)) {
     if (expired) expired.classList.add('show');
   }
+  if (pbNeedsSignInToSync(auth) || (auth.needsSignIn && auth.email && !pbAccessToken())) {
+    if (signin) signin.classList.add('show');
+  }
+}
+
+function pbPromptSignInToSync() {
+  var auth = pbGetAuth() || {};
+  var emailEl = document.getElementById('pb-auth-email');
+  if (emailEl && auth.email && !emailEl.value) emailEl.value = auth.email;
+  pbAuthMsg('Sign in to sync players and balances');
+  var notNow = document.getElementById('pb-auth-not-now');
+  if (notNow && pbIsActive(auth)) notNow.style.display = 'block';
+  pbShowAuthScreen(true);
+}
+
+function pbDismissSignInPrompt() {
+  var auth = pbGetAuth();
+  if (pbIsActive(auth)) {
+    pbShowAuthScreen(false);
+    pbUpdateBanners(auth);
+  }
+}
+
+var PB_REFRESH_SKEW_MS = 5 * 60 * 1000;
+var _pbRefreshing = null;
+
+function pbApiSkipSessionRefresh(path) {
+  path = String(path || '');
+  return path.indexOf('/auth/refresh') === 0
+    || path.indexOf('/auth/magic-link') === 0
+    || path.indexOf('/auth/verify') === 0
+    || path.indexOf('/promo/') === 0
+    || path.indexOf('/subscription/check') === 0
+    || path.indexOf('/subscription/create-checkout') === 0;
+}
+
+function pbTokenNeedsRefresh() {
+  var auth = pbGetAuth();
+  if (!auth || !pbRefreshToken()) return false;
+  var exp = auth.expiresAt || auth.expires_at;
+  if (!exp) return true;
+  var t = new Date(exp).getTime();
+  if (isNaN(t)) return true;
+  return t - Date.now() <= PB_REFRESH_SKEW_MS;
+}
+
+function pbApplySessionTokens(data, prev) {
+  prev = prev || pbGetAuth() || {};
+  var next = {
+    email: (data && data.user && data.user.email) || prev.email || '',
+    userId: (data && data.user && data.user.id) || prev.userId || null,
+    accessToken: (data && data.access_token) || null,
+    refreshToken: (data && data.refresh_token) || prev.refreshToken || null,
+    expiresAt: (data && data.expires_at) || null,
+    subscriptionStatus: (data && data.subscription_status) || prev.subscriptionStatus || 'none',
+    subscriptionEnd: (data && data.subscription_end) || prev.subscriptionEnd || null,
+    isActive: data && typeof data.isActive === 'boolean' ? !!data.isActive : !!prev.isActive,
+    role: (data && data.role) || prev.role || pbGetRole() || 'owner',
+    linkedOwnerId: (data && data.linked_owner_id) || prev.linkedOwnerId || pbGetLinkedOwnerId() || null,
+    needsSignIn: false
+  };
+  pbSetAuth(next);
+  return next;
+}
+
+function pbMarkNeedsSignIn() {
+  var auth = pbGetAuth();
+  if (!auth) return;
+  // Keep email/subscription/local queues; drop dead session tokens only
+  var next = Object.assign({}, auth, {
+    accessToken: null,
+    refreshToken: auth.refreshToken || auth.refresh_token || null,
+    expiresAt: null,
+    needsSignIn: true
+  });
+  // If refresh failed, drop refresh too so we don't loop
+  next.refreshToken = null;
+  pbSetAuth(next);
+  pbUpdateBanners(next);
+}
+
+async function pbRefreshAccessToken() {
+  if (_pbRefreshing) return _pbRefreshing;
+  _pbRefreshing = (async function() {
+    var auth = pbGetAuth() || {};
+    var rt = pbRefreshToken();
+    if (!rt) {
+      var err = new Error('Not signed in');
+      err.status = 401;
+      throw err;
+    }
+    var res = await fetch(API_BASE + '/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt })
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      var fail = new Error((data && (data.error || data.message)) || 'Refresh failed');
+      fail.status = res.status || 401;
+      fail.data = data;
+      throw fail;
+    }
+    var next = pbApplySessionTokens(data, auth);
+    pbUpdateBanners(next);
+    return next;
+  })();
+  try {
+    return await _pbRefreshing;
+  } finally {
+    _pbRefreshing = null;
+  }
+}
+
+async function pbEnsureFreshSession() {
+  if (!pbRefreshToken()) return null;
+  if (!pbTokenNeedsRefresh()) return pbGetAuth();
+  try {
+    var next = await pbRefreshAccessToken();
+    try { await pbFlushSyncQueues(); } catch (_f) {}
+    return next;
+  } catch (err) {
+    pbMarkNeedsSignIn();
+    return null;
+  }
+}
+
+async function pbFlushSyncQueues() {
+  try { await flushPeopleQueue(); } catch (_e) {}
+  try { await flushBalancesQueue(); } catch (_e2) {}
+  try { updateBalanceSyncUi(); } catch (_e3) {}
 }
 
 async function pbApi(path, opts) {
   opts = opts || {};
+  var skip = pbApiSkipSessionRefresh(path) || opts._skipRefresh;
+  if (!skip && pbTokenNeedsRefresh()) {
+    try { await pbRefreshAccessToken(); } catch (_e) { /* may 401 below */ }
+  }
   var headers = pbAuthHeaders(opts.headers || {});
   var res = await fetch(API_BASE + path, Object.assign({}, opts, { headers: headers }));
   var data = null;
   try { data = await res.json(); } catch (e) { data = null; }
   if (!res.ok) {
+    if (res.status === 401 && !opts._retried && !skip && pbRefreshToken()) {
+      try {
+        await pbRefreshAccessToken();
+        return pbApi(path, Object.assign({}, opts, { _retried: true, headers: opts.headers }));
+      } catch (_refreshErr) {
+        pbMarkNeedsSignIn();
+      }
+    } else if (res.status === 401 && !skip && !pbRefreshToken() && pbGetAuth()) {
+      pbMarkNeedsSignIn();
+    }
     var err = new Error((data && (data.error || data.message)) || ('Request failed (' + res.status + ')'));
     err.status = res.status;
     err.data = data;
@@ -8471,24 +8645,31 @@ function pbNormalizeAuthFromCheck(email, data) {
     email: email,
     userId: prev.userId || null,
     accessToken: prev.accessToken || null,
+    refreshToken: prev.refreshToken || null,
+    expiresAt: prev.expiresAt || null,
     subscriptionStatus: data.status || data.subscription_status || 'none',
     subscriptionEnd: data.subscription_end || null,
     isActive: !!data.isActive,
     role: prev.role || pbGetRole() || 'owner',
-    linkedOwnerId: prev.linkedOwnerId || pbGetLinkedOwnerId() || null
+    linkedOwnerId: prev.linkedOwnerId || pbGetLinkedOwnerId() || null,
+    needsSignIn: !!prev.needsSignIn && !(prev.accessToken || prev.access_token)
   };
 }
 
 function pbNormalizeAuthFromVerify(data, accessToken) {
+  var prev = pbGetAuth() || {};
   return {
-    email: (data.user && data.user.email) || '',
-    userId: (data.user && data.user.id) || null,
-    accessToken: accessToken || null,
+    email: (data.user && data.user.email) || prev.email || '',
+    userId: (data.user && data.user.id) || prev.userId || null,
+    accessToken: accessToken || data.access_token || null,
+    refreshToken: data.refresh_token || prev.refreshToken || null,
+    expiresAt: data.expires_at || null,
     subscriptionStatus: data.subscription_status || 'none',
     subscriptionEnd: data.subscription_end || null,
     isActive: !!data.isActive,
     role: data.role || 'owner',
-    linkedOwnerId: data.linked_owner_id || null
+    linkedOwnerId: data.linked_owner_id || null,
+    needsSignIn: false
   };
 }
 
@@ -8564,15 +8745,28 @@ async function pbApplyPromo() {
       toast((data && data.message) || 'Invalid promo code');
       return;
     }
+    var prev = pbGetAuth() || {};
     var auth = {
       email: email,
+      userId: prev.userId || null,
+      accessToken: prev.accessToken || null,
+      refreshToken: prev.refreshToken || null,
+      expiresAt: prev.expiresAt || null,
       subscriptionStatus: 'promo',
       subscriptionEnd: data.subscription_end || null,
-      isActive: true
+      isActive: true,
+      needsSignIn: !(prev.accessToken || prev.access_token)
     };
     try {
       var fresh = await pbRefreshSubscription(email);
-      if (fresh) auth = fresh;
+      if (fresh) {
+        auth = Object.assign({}, fresh, {
+          subscriptionStatus: fresh.subscriptionStatus || 'promo',
+          subscriptionEnd: fresh.subscriptionEnd || data.subscription_end || null,
+          isActive: true,
+          needsSignIn: !fresh.accessToken
+        });
+      }
     } catch (e) { /* keep promo auth */ }
     pbSetAuth(auth);
     pbAuthMsg(data.message || 'Promo applied');
@@ -8601,10 +8795,11 @@ function pbParseTokenFromHref(href) {
   }
   var token = params.get('token') || params.get('token_hash') || hashParams.get('token') || hashParams.get('token_hash');
   var accessToken = params.get('access_token') || hashParams.get('access_token');
+  var refreshToken = params.get('refresh_token') || hashParams.get('refresh_token');
   var type = params.get('type') || hashParams.get('type') || 'email';
   var role = params.get('role') || hashParams.get('role') || '';
   var owner = params.get('owner') || hashParams.get('owner') || '';
-  return { token: token, accessToken: accessToken, type: type, role: role, owner: owner };
+  return { token: token, accessToken: accessToken, refreshToken: refreshToken, type: type, role: role, owner: owner };
 }
 
 function pbParseTokenFromUrl() {
@@ -8623,13 +8818,15 @@ async function pbVerifyParsedToken(parsed) {
   if (!parsed || (!parsed.token && !parsed.accessToken)) return null;
   var body = {};
   if (parsed.accessToken) body.access_token = parsed.accessToken;
+  if (parsed.refreshToken) body.refresh_token = parsed.refreshToken;
   if (parsed.token) body.token = parsed.token;
   body.type = parsed.type || 'email';
   if (parsed.role) body.role = parsed.role;
   if (parsed.owner) body.owner = parsed.owner;
-  var data = await pbApi('/auth/verify', { method: 'POST', body: JSON.stringify(body) });
-  var tok = parsed.accessToken || (data && data.access_token) || null;
+  var data = await pbApi('/auth/verify', { method: 'POST', body: JSON.stringify(body), _skipRefresh: true });
+  var tok = (data && data.access_token) || parsed.accessToken || null;
   var auth = pbNormalizeAuthFromVerify(data, tok);
+  if (!auth.refreshToken && parsed.refreshToken) auth.refreshToken = parsed.refreshToken;
   pbSetAuth(auth);
   return auth;
 }
@@ -8648,6 +8845,7 @@ async function pbApplyVerifiedAuth(auth, fromLink) {
   if (auth.role === 'host_viewer' || pbIsHostViewer()) {
     pbSetAuth(auth);
     pbUnlockApp(auth);
+    await pbFlushSyncQueues();
     return true;
   }
   try {
@@ -8656,11 +8854,13 @@ async function pbApplyVerifiedAuth(auth, fromLink) {
   pbSetAuth(auth);
   if (fromLink && !pbIsActive(auth)) {
     pbUnlockApp(auth);
+    await pbFlushSyncQueues();
     await pbOpenCheckout(auth.email);
     return true;
   }
   if (pbIsActive(auth)) {
     pbUnlockApp(auth);
+    await pbFlushSyncQueues();
     return true;
   }
   var emailEl = document.getElementById('pb-auth-email');
@@ -8740,6 +8940,8 @@ function pbUnlockApp(auth) {
     // Allow viewing with expired banner; offer checkout
     pbUpdateBanners(auth);
   }
+  // Flush queued people then balances after unlock / session restore
+  pbFlushSyncQueues();
 }
 
 function pbOpenAccount() {
@@ -8955,7 +9157,8 @@ async function pbBoot() {
     }
     var auth = pbGetAuth();
     if (auth && (auth.role === 'host_viewer' || pbIsHostViewer())) {
-      pbUnlockApp(auth);
+      await pbEnsureFreshSession();
+      pbUnlockApp(pbGetAuth() || auth);
       return;
     }
     if (auth && auth.email) {
@@ -8963,6 +9166,10 @@ async function pbBoot() {
         auth = await pbRefreshSubscription(auth.email) || auth;
       } catch (e) {
         // Keep cached auth if network fails
+      }
+      // Refresh JWT before unlock so people/balance flushes can hit the server
+      if (pbRefreshToken()) {
+        try { await pbEnsureFreshSession(); auth = pbGetAuth() || auth; } catch (_r) {}
       }
     }
     if (pbIsActive(auth)) {
