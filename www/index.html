@@ -39,6 +39,8 @@
   --header-h:calc(var(--safe-top) + var(--header-inner));
   --nav-inner:58px;
   --nav-h:calc(var(--safe-bottom) + var(--nav-inner));
+  --main-max:720px;
+  --main-pad:16px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#000000;color:var(--text);height:auto;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -71,14 +73,22 @@ input,select,button,textarea{font-family:inherit}
   position:fixed;top:0;left:0;right:0;z-index:200;
   background:#000000;
   border-bottom:1px solid var(--border);
-  padding:6px 16px 6px;
+  padding:0;
   padding-top:var(--safe-top);
+  padding-left:env(safe-area-inset-left, 0px);
+  padding-right:env(safe-area-inset-right, 0px);
+  display:flex;justify-content:center;
+}
+.header-inner{
+  width:100%;max-width:var(--main-max);
+  padding:6px var(--main-pad) 6px;
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
   grid-template-rows:auto auto;
   align-items:center;
   column-gap:10px;
   row-gap:0;
+  box-sizing:border-box;
 }
 .logo{display:contents}
 .logo img{
@@ -108,7 +118,7 @@ input,select,button,textarea{font-family:inherit}
   align-self:center;
   flex-shrink:0;
   width:44px;height:44px;min-width:44px;min-height:44px;
-  margin-right:max(0px, calc(env(safe-area-inset-right, 0px) - 4px));
+  margin-right:0;
   display:inline-flex;align-items:center;justify-content:center;
   background:transparent;border:none;border-radius:10px;
   color:#fff;font-size:22px;line-height:1;cursor:pointer;
@@ -215,15 +225,22 @@ body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:
 /* BOTTOM TAB BAR */
 .nav{
   position:fixed;left:0;right:0;bottom:0;z-index:300;
-  display:flex;align-items:stretch;justify-content:space-around;
+  display:flex;align-items:stretch;justify-content:center;
   background:#000000;
   border-top:1px solid var(--border);
-  padding:6px 4px;
+  padding:0;
   padding-bottom:var(--safe-bottom);
+  padding-left:env(safe-area-inset-left, 0px);
+  padding-right:env(safe-area-inset-right, 0px);
   overflow:visible;
 }
+.nav-inner{
+  width:100%;max-width:var(--main-max);
+  display:flex;align-items:stretch;justify-content:center;
+  padding:6px 4px;box-sizing:border-box;gap:0;
+}
 .nav-btn{
-  flex:1;min-width:0;
+  flex:1 1 0;min-width:0;max-width:140px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   padding:8px 4px;cursor:pointer;
   font-size:10px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;
@@ -236,7 +253,7 @@ body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:
 .nav-btn.active{color:var(--red)}
 .nav-btn.active .nav-ico{filter:none;opacity:1}
 
-.main{padding:16px;max-width:720px;margin:0 auto;overflow:visible;min-height:calc(100vh - var(--header-h) - var(--nav-h));min-height:calc(100dvh - var(--header-h) - var(--nav-h));min-height:-webkit-fill-available}
+.main{padding:var(--main-pad);max-width:var(--main-max);margin:0 auto;overflow:visible;min-height:calc(100vh - var(--header-h) - var(--nav-h));min-height:calc(100dvh - var(--header-h) - var(--nav-h));min-height:-webkit-fill-available}
 .page{display:none}
 .page.active{display:block;overflow:visible}
 #page-dashboard.active{overflow:visible}
@@ -292,7 +309,7 @@ body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:
 .grid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .grid-2 > *,.grid-3 > *{min-width:0}
-@media(max-width:768px){.grid-2{grid-template-columns:minmax(0,1fr)}.grid-3{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:767px){.grid-2{grid-template-columns:minmax(0,1fr)}.grid-3{grid-template-columns:minmax(0,1fr)}}
 
 .stat-box{
   background:var(--surface);
@@ -499,6 +516,10 @@ select.inp{appearance:none;-webkit-appearance:none}
 .txn-row > :not(.txn-name-col){flex-shrink:0;white-space:nowrap}
 .buyin-log-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:12px}
 
+#txn-log.dash-scroll{max-height:min(300px,40vh)}
+#owes-panel.dash-scroll,#owed-panel.dash-scroll{max-height:min(280px,40vh)}
+#modal-chip-count .modal{max-width:520px}
+
 #build-info{position:fixed;bottom:calc(70px + env(safe-area-inset-bottom));right:0;background:rgba(0,0,0,0.6);padding:2px 8px;pointer-events:none;z-index:199}
 #build-info span{font-size:9px;color:#333;font-family:ui-monospace,monospace}
 @media print{.header,.nav,.btn,.no-print{display:none!important}body{background:#fff;color:#000;padding:0}}
@@ -573,7 +594,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 .roster-tax-box .val{font-size:13px;font-weight:800}
 
 #roster-table-wrap.card{padding:8px;background:transparent;border:none}
-@media(max-width:768px){
+@media(max-width:767px){
   .roster-table{font-size:13px}
   .roster-table td{padding:12px 8px}
   .roster-actions .btn-xs{padding:0 8px;font-size:10px}
@@ -646,6 +667,64 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 .ico-inline svg.lucide{flex-shrink:0}
 .role-card-ico{display:flex;align-items:center;justify-content:center;margin-bottom:4px;color:inherit}
 .role-card-ico svg.lucide{width:22px;height:22px}
+
+/* ═══ Tablet / iPad layout (phone <768px unchanged) ═══ */
+@media(min-width:768px){
+  :root{--main-max:1000px;--main-pad:24px}
+  body{font-size:16px}
+  .roster-name{font-size:17px}
+  .roster-amt{font-size:17px}
+  .btn{min-height:44px}
+  .btn-sm,.btn-xs{min-height:44px;height:44px;padding:0 14px;font-size:12px}
+  .inp,.amount-btn{min-height:44px}
+  .roster-pill{min-height:44px;height:44px}
+  .breakdown-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  #txn-log.dash-scroll,#owes-panel.dash-scroll,#owed-panel.dash-scroll{max-height:min(420px,55vh)}
+  .modal{max-width:640px}
+  #modal-chip-count .modal{max-width:760px}
+  .chip-denom-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+  .chip-denom-grid > .chip-denom-cell{grid-column:auto!important}
+  .audit-modal-body,.audit-actions{max-width:900px;margin-left:auto;margin-right:auto;width:100%}
+  .audit-modal-fullscreen > .modal-title{max-width:900px;margin-left:auto;margin-right:auto;width:100%;box-sizing:border-box}
+  #page-settlement{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+  #page-settlement > .card{margin-bottom:0}
+  #page-settlement > .card:first-child{grid-column:1/-1}
+  #history-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+  #history-list > .hist-card{margin-bottom:0}
+  .roster-expand-form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+  .roster-expand-form-grid > .roster-form-block,
+  .roster-expand-form-grid > .roster-turnin-block{margin-top:0}
+  .roster-expand-history{margin-bottom:4px}
+}
+@media(min-width:1100px){
+  :root{--main-max:1320px}
+  .roster-split{
+    display:grid;
+    grid-template-columns:minmax(280px,380px) minmax(0,1fr);
+    gap:16px;
+    align-items:stretch;
+  }
+  .roster-pane-list{
+    max-height:calc(100dvh - var(--header-h) - var(--nav-h) - 160px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    position:sticky;top:calc(var(--header-h) + 8px);
+  }
+  .roster-pane-detail{
+    display:block;
+    min-height:280px;
+    max-height:calc(100dvh - var(--header-h) - var(--nav-h) - 160px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:16px;position:sticky;top:calc(var(--header-h) + 8px);
+  }
+  .roster-pane-detail .roster-expand-inner{padding:0}
+  .roster-detail-empty{color:var(--text-muted);font-size:14px;text-align:center;padding:48px 16px}
+  #page-players.roster-twopane .roster-expand-row{display:none!important}
+}
+.roster-pane-detail{display:none}
+@media(min-width:1100px){
+  .roster-pane-detail{display:block}
+}
 </style>
 </head>
 <body>
@@ -686,11 +765,13 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 
 <!-- HEADER -->
 <div class="header">
+  <div class="header-inner">
   <div class="logo">
     <img src="logo.png" alt="Pocketbooks Poker" width="210" height="56">
     <span id="game-label">No active game</span>
   </div>
   <button type="button" class="hdr-menu-btn no-print" id="hdr-menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="hdr-menu" onclick="toggleHeaderMenu(event)"><i data-lucide="menu" aria-hidden="true"></i></button>
+  </div>
 </div>
 <div class="hdr-menu no-print" id="hdr-menu" role="menu" aria-labelledby="hdr-menu-btn" hidden>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="layers" aria-hidden="true"></i></span>New Game</button>
@@ -704,11 +785,13 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 
 <!-- BOTTOM TAB BAR -->
 <nav class="nav">
+  <div class="nav-inner">
   <button class="nav-btn active" data-page="dashboard" onclick="showPage('dashboard')"><span class="nav-ico"><i data-lucide="layout-dashboard" aria-hidden="true"></i></span>Dashboard</button>
   <button class="nav-btn" data-page="players" onclick="filterRosterByRole('players');showPage('players')"><span class="nav-ico"><i data-lucide="users" aria-hidden="true"></i></span>Players</button>
   <button class="nav-btn" data-page="settlement" onclick="showPage('settlement')"><span class="nav-ico"><i data-lucide="arrow-left-right" aria-hidden="true"></i></span>Settle</button>
   <button class="nav-btn" data-page="staff" onclick="filterRosterByRole('staff');showPage('players')"><span class="nav-ico"><i data-lucide="award" aria-hidden="true"></i></span>Staff</button>
   <button class="nav-btn" data-page="history" onclick="showPage('history')"><span class="nav-ico"><i data-lucide="clock" aria-hidden="true"></i></span>History</button>
+  </div>
 </nav>
 
 <div class="main">
@@ -730,7 +813,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     <div>
       <div class="card">
         <div class="card-title"><i data-lucide="pen-line" aria-hidden="true"></i> Transaction Log</div>
-        <div id="txn-log" class="scroll-y" style="max-height:min(300px,40vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
+        <div id="txn-log" class="scroll-y dash-scroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
           <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No transactions yet</div>
         </div>
       </div>
@@ -744,10 +827,10 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
           <i data-lucide="banknote" aria-hidden="true"></i> House Owes <span id="owed-count" class="badge" style="display:none;background:var(--green);color:#000">0</span>
         </button>
       </div>
-      <div id="owes-panel" class="scroll-y" style="padding:12px;max-height:min(280px,40vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
+      <div id="owes-panel" class="scroll-y dash-scroll" style="padding:12px;overflow-y:auto;-webkit-overflow-scrolling:touch">
         <div id="owes-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nobody owes yet</div></div>
       </div>
-      <div id="owed-panel" class="scroll-y" style="display:none;padding:12px;max-height:min(280px,40vh);overflow-y:auto;-webkit-overflow-scrolling:touch">
+      <div id="owed-panel" class="scroll-y dash-scroll" style="display:none;padding:12px;overflow-y:auto;-webkit-overflow-scrolling:touch">
         <div id="owed-list"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Nothing owed yet</div></div>
       </div>
     </div>
@@ -841,8 +924,16 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     </div>
   </div>
 
-  <div id="roster-table-wrap" class="card" style="padding:0;overflow-x:auto;margin-bottom:16px">
-    <div id="roster-table"></div>
+  <div class="roster-split">
+    <div class="roster-pane-list">
+      <div id="roster-table-wrap" class="card" style="padding:0;overflow-x:auto;margin-bottom:16px">
+        <div id="roster-table"></div>
+      </div>
+    </div>
+    <div class="roster-pane-detail" id="roster-pane-detail">
+      <div class="roster-detail-empty" id="roster-detail-empty">Select a player or staff member</div>
+      <div id="roster-detail-body"></div>
+    </div>
   </div>
 
   <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
@@ -978,7 +1069,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 
 <!-- MODAL: Chip Count -->
 <div class="modal-bg" id="modal-chip-count">
-  <div class="modal" style="max-width:520px">
+  <div class="modal">
     <div class="modal-title"><i data-lucide="layers" aria-hidden="true"></i> Chip Count <button class="modal-close" onclick="closeModal('modal-chip-count')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <!-- Tabs -->
     <div style="display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:16px">
@@ -995,7 +1086,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
       </div>
       <div id="cc-starting-form">
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count starting chips before play begins:</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="sc-d5" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d5-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="sc-d25" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d25-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="sc-d100" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d100-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="sc-d500" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d500-sv">$0</div></div><div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="sc-d1000" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d1000-sv">$0</div></div></div>
+        <div class="chip-denom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="chip-denom-cell" style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="sc-d5" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d5-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="sc-d25" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d25-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="sc-d100" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d100-sv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="sc-d500" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d500-sv">$0</div></div><div class="chip-denom-cell" style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="sc-d1000" placeholder="0" min="0" oninput="updateStartingTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="sc-d1000-sv">$0</div></div></div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Starting Total</span><span style="font-weight:900;font-size:1.1rem;color:var(--gold)" id="cc-starting-total">$0</span></div>
         </div>
@@ -1020,7 +1111,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         </div>
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Count chips currently on the table:</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="rc-d5" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d5-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="rc-d25" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d25-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="rc-d100" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d100-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="rc-d500" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d500-rv">$0</div></div><div style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="rc-d1000" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d1000-rv">$0</div></div></div>
+      <div class="chip-denom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="chip-denom-cell" style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$5</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$5 Chips — qty</div><input class="inp" type="number" id="rc-d5" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d5-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$25</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$25 Chips — qty</div><input class="inp" type="number" id="rc-d25" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d25-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$100</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$100 Chips — qty</div><input class="inp" type="number" id="rc-d100" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d100-rv">$0</div></div><div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#000;flex-shrink:0">$500</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$500 Chips — qty</div><input class="inp" type="number" id="rc-d500" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d500-rv">$0</div></div><div class="chip-denom-cell" style="grid-column:1/-1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:8px"><div style="width:30px;height:30px;border-radius:6px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0">$1000</div><div style="flex:1"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">$1000 Chips — qty</div><input class="inp" type="number" id="rc-d1000" placeholder="0" min="0" oninput="updateRunningTotal()" style="text-align:center;padding:5px;font-size:0.95rem;font-weight:800"></div><div style="font-size:11px;color:var(--text-muted);min-width:46px;text-align:right" id="rc-d1000-rv">$0</div></div></div>
       <!-- Dealer / Table Banks -->
       <div style="background:var(--bg3);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin:12px 0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -3163,6 +3254,13 @@ function rosterPlayerBalCell(p) {
 }
 
 var _expandedRosterId = null;
+(function(){
+  if (!window.matchMedia) return;
+  var mq = window.matchMedia('(min-width: 1100px)');
+  var onChange = function(){ try { renderPlayerGrid(); } catch (e) {} };
+  if (mq.addEventListener) mq.addEventListener('change', onChange);
+  else if (mq.addListener) mq.addListener(onChange);
+})();
 var _rosterFocusField = null; // optional input id to focus after expand re-render
 
 function openPlayerFromRoster(id) {
@@ -4523,19 +4621,44 @@ function rosterPlayerExpandedHtml(p) {
 
   var turnInSection = rosterTurnInSectionHtml(p, markerTotal);
 
-  return '<tr class="roster-expand-row roster-expand-player"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return rosterWrapExpandRow('player', rosterComposePlayerExpandBody(p, lines, summary, houseOwesPayout, buyInForm, creditsForm, priorBalForm, turnInSection));
+}
+
+function rosterComposePlayerExpandBody(p, lines, summary, houseOwesPayout, buyInForm, creditsForm, priorBalForm, turnInSection) {
+  return ''
+    + '<div class="roster-expand-history">'
     + '<div class="roster-form-label" style="margin-bottom:4px">History</div>'
     + lines + summary
+    + '</div>'
+    + '<div class="roster-expand-form-grid">'
     + houseOwesPayout
     + buyInForm
     + creditsForm
     + priorBalForm
     + turnInSection
+    + '</div>'
     + '<div class="roster-expand-actions">'
       + '<button class="btn btn-outline btn-xs" onclick="rosterSettleAction(' + p.id + ')">Settle</button>'
       + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Player</button>'
-    + '</div>'
+    + '</div>';
+}
+
+function rosterWrapExpandRow(kind, bodyHtml) {
+  return '<tr class="roster-expand-row roster-expand-' + kind + '"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+    + bodyHtml
     + '</div></td></tr>';
+}
+
+function rosterTwoPaneActive() {
+  return !!(window.matchMedia && window.matchMedia('(min-width: 1100px)').matches);
+}
+
+/** Build player expand body HTML for inline row or right-pane detail. */
+function rosterPlayerExpandedBodyHtml(p) {
+  var wrap = rosterPlayerExpandedHtml(p);
+  return String(wrap)
+    .replace(/^<tr[^>]*><td[^>]*><div class="roster-expand-inner"[^>]*>/, '')
+    .replace(/<\/div><\/td><\/tr>$/, '');
 }
 
 function staffExpensesTotal(p) {
@@ -4827,7 +4950,11 @@ function rosterStaffExpandedHtml(p) {
     + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
   + '</div>';
 
-  return '<tr class="roster-expand-row roster-expand-staff"><td colspan="4"><div class="roster-expand-inner" onclick="event.stopPropagation()">'
+  return rosterWrapExpandRow('staff', rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm, dropHistorySection, expensesSection, taxForm, summary, payoutForm, p));
+}
+
+function rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm, dropHistorySection, expensesSection, taxForm, summary, payoutForm, p) {
+  return ''
     + rolePaySection
     + '<div class="roster-form-label" style="margin-bottom:4px">Tips History</div>'
     + lines
@@ -4840,8 +4967,48 @@ function rosterStaffExpandedHtml(p) {
     + payoutForm
     + '<div class="roster-expand-actions" style="margin-top:10px">'
       + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Staff</button>'
-    + '</div>'
-    + '</div></td></tr>';
+    + '</div>';
+}
+
+function rosterStaffExpandedBodyHtml(p) {
+  var wrap = rosterStaffExpandedHtml(p);
+  return String(wrap)
+    .replace(/^<tr[^>]*><td[^>]*><div class="roster-expand-inner"[^>]*>/, '')
+    .replace(/<\/div><\/td><\/tr>$/, '');
+}
+
+function rosterExpandKindFor(p) {
+  if (!p) return 'player';
+  if (isHostPlayer(p)) {
+    return (_rosterRoleFilter === 'staff') ? 'staff' : 'player';
+  }
+  if (p.staffRole) return 'staff';
+  return 'player';
+}
+
+function rosterRenderDetailPane(expandedPlayer) {
+  var page = document.getElementById('page-players');
+  var body = document.getElementById('roster-detail-body');
+  var empty = document.getElementById('roster-detail-empty');
+  if (!body) return;
+  var two = rosterTwoPaneActive();
+  if (page) page.classList.toggle('roster-twopane', two);
+  if (!two) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (!expandedPlayer) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  var kind = rosterExpandKindFor(expandedPlayer);
+  var inner = kind === 'staff'
+    ? rosterStaffExpandedBodyHtml(expandedPlayer)
+    : rosterPlayerExpandedBodyHtml(expandedPlayer);
+  body.innerHTML = '<div class="roster-expand-inner roster-expand-' + kind + '" onclick="event.stopPropagation()">' + inner + '</div>';
 }
 
 function voidRosterBuyIn(btn, playerId, index) {
@@ -5225,7 +5392,7 @@ function rosterPlayerRow(p) {
     + '<td>' + rosterPlayerBalCell(p) + '</td>'
     + '<td>' + rosterPlayerStatusBadge(p) + '</td>'
     + '</tr>';
-  if (expanded) html += rosterPlayerExpandedHtml(p);
+  if (expanded && !rosterTwoPaneActive()) html += rosterPlayerExpandedHtml(p);
   return html;
 }
 
@@ -5252,7 +5419,7 @@ function rosterStaffRow(p) {
     + '<td>' + rosterStaffBalCell(p) + '</td>'
     + '<td>' + rosterStaffStatusBadge(p) + '</td>'
     + '</tr>';
-  if (expanded) html += rosterStaffExpandedHtml(p);
+  if (expanded && !rosterTwoPaneActive()) html += rosterStaffExpandedHtml(p);
   return html;
 }
 
@@ -5317,11 +5484,12 @@ function renderPlayerGrid() {
 
   html += '</tbody></table>';
   el.innerHTML = html;
-  if (_expandedRosterId) {
-    var ep = G.players.find(function(pl){ return pl.id === _expandedRosterId; });
-    if (ep && ep.staffRole) {
-      setTimeout(function(){ rosterUpdateStaffTaxPreview(_expandedRosterId); }, 0);
-    }
+  var ep = _expandedRosterId
+    ? G.players.find(function(pl){ return pl.id === _expandedRosterId; })
+    : null;
+  rosterRenderDetailPane(ep || null);
+  if (ep && ep.staffRole) {
+    setTimeout(function(){ rosterUpdateStaffTaxPreview(_expandedRosterId); }, 0);
   }
 
   refreshLucideIcons();
