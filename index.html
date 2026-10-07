@@ -668,6 +668,42 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 .role-card-ico{display:flex;align-items:center;justify-content:center;margin-bottom:4px;color:inherit}
 .role-card-ico svg.lucide{width:22px;height:22px}
 
+
+/* Phone chrome — pixel-match main (wrappers collapse via display:contents) */
+@media(max-width:767px){
+  .header{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto auto;
+    align-items:center;
+    column-gap:10px;
+    row-gap:0;
+    justify-content:normal;
+    padding:6px 16px 6px;
+    padding-top:var(--safe-top);
+    padding-left:16px;
+    padding-right:16px;
+  }
+  .header-inner{
+    display:contents;
+    padding:0;
+    max-width:none;
+    width:auto;
+  }
+  .hdr-menu-btn{margin-right:max(0px, calc(env(safe-area-inset-right, 0px) - 4px))}
+  .nav{
+    justify-content:space-around;
+    padding:6px 4px;
+    padding-bottom:var(--safe-bottom);
+  }
+  .nav-inner{
+    display:contents;
+    padding:0;
+    max-width:none;
+    width:auto;
+  }
+  .nav-btn{flex:1;max-width:none}
+}
 /* ═══ Tablet / iPad layout (phone <768px unchanged) ═══ */
 @media(min-width:768px){
   :root{--main-max:1000px;--main-pad:24px}
@@ -686,7 +722,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   .chip-denom-grid > .chip-denom-cell{grid-column:auto!important}
   .audit-modal-body,.audit-actions{max-width:900px;margin-left:auto;margin-right:auto;width:100%}
   .audit-modal-fullscreen > .modal-title{max-width:900px;margin-left:auto;margin-right:auto;width:100%;box-sizing:border-box}
-  #page-settlement{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+  #page-settlement.active{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
   #page-settlement > .card{margin-bottom:0}
   #page-settlement > .card:first-child{grid-column:1/-1}
   #history-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
@@ -696,8 +732,8 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   .roster-expand-form-grid > .roster-turnin-block{margin-top:0}
   .roster-expand-history{margin-bottom:4px}
 }
-@media(min-width:1100px){
-  :root{--main-max:1320px}
+/* Two-pane Players/Staff from 1024px (iPad landscape 9.7"/10.2") */
+@media(min-width:1024px){
   .roster-split{
     display:grid;
     grid-template-columns:minmax(280px,380px) minmax(0,1fr);
@@ -722,8 +758,15 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   #page-players.roster-twopane .roster-expand-row{display:none!important}
 }
 .roster-pane-detail{display:none}
-@media(min-width:1100px){
+@media(min-width:1024px){
   .roster-pane-detail{display:block}
+}
+/* 1024–1099: right-pane forms single column so pills/buttons don't crowd */
+@media(min-width:1024px) and (max-width:1099px){
+  .roster-pane-detail .roster-expand-form-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(min-width:1100px){
+  :root{--main-max:1320px}
 }
 </style>
 </head>
@@ -3256,7 +3299,7 @@ function rosterPlayerBalCell(p) {
 var _expandedRosterId = null;
 (function(){
   if (!window.matchMedia) return;
-  var mq = window.matchMedia('(min-width: 1100px)');
+  var mq = window.matchMedia('(min-width: 1024px)');
   var onChange = function(){ try { renderPlayerGrid(); } catch (e) {} };
   if (mq.addEventListener) mq.addEventListener('change', onChange);
   else if (mq.addListener) mq.addListener(onChange);
@@ -4650,7 +4693,7 @@ function rosterWrapExpandRow(kind, bodyHtml) {
 }
 
 function rosterTwoPaneActive() {
-  return !!(window.matchMedia && window.matchMedia('(min-width: 1100px)').matches);
+  return !!(window.matchMedia && window.matchMedia('(min-width: 1024px)').matches);
 }
 
 /** Build player expand body HTML for inline row or right-pane detail. */
