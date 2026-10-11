@@ -1550,7 +1550,8 @@ var CLOSE_OUT_TXN_TYPES = {
   CHIP_RECONCILE: 1,
   ECASH_CLOSE: 1,
   ECASH_TO_PERSON: 1,
-  CASH_TO_HOST: 1
+  CASH_TO_HOST: 1,
+  PROFIT_TO_HOST: 1
 };
 
 function isCloseOutTxnType(type) {
@@ -1937,7 +1938,9 @@ function staffCollectsTotal(p) {
 }
 
 /**
- * Close-out account adjust: CASH_TO_HOST / ECASH_TO_PERSON → person −amount
+ * Close-out account adjust:
+ *   CASH_TO_HOST / ECASH_TO_PERSON → person −amount
+ *   PROFIT_TO_HOST → person +amount (signed share; profit credits, loss debits)
  * (+ = house owes them, − = they owe). ECASH_CLOSE does not touch the account.
  */
 function closeOutAccountNet(p) {
@@ -1947,10 +1950,14 @@ function closeOutAccountNet(p) {
   (G.txnLog || []).forEach(function(t) {
     if (!txnIsActive(t)) return;
     var typ = String(t.type || '').toUpperCase();
-    if (typ !== 'CASH_TO_HOST' && typ !== 'ECASH_TO_PERSON') return;
     var tid = t.personId != null && t.personId !== '' ? String(t.personId)
       : (t.playerId != null && t.playerId !== '' ? String(t.playerId) : '');
-    if (tid === pid) total -= (Number(t.amount) || 0);
+    if (tid !== pid) return;
+    if (typ === 'CASH_TO_HOST' || typ === 'ECASH_TO_PERSON') {
+      total -= (Number(t.amount) || 0);
+    } else if (typ === 'PROFIT_TO_HOST') {
+      total += (Number(t.amount) || 0);
+    }
   });
   return Math.round(total * 100) / 100;
 }
@@ -2064,10 +2071,11 @@ function staffEcashUsed(p) {
 
 function staffTipBalance(p) {
   // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By (buy-ins + marker PAY IN)
-  // + hostCash (deposits − withdrawals) + staffCollects + close-out (CASH_TO_HOST / ECASH_TO_PERSON)
+  // + hostCash (deposits − withdrawals) + staffCollects + close-out (CASH_TO_HOST / ECASH_TO_PERSON / PROFIT_TO_HOST)
   // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
   // DROP does NOT affect staff payout / tip balance. No Chef overpay flooring.
   // ECASH_CLOSE does not change this (already via staffEcashUsed).
+  // PROFIT_TO_HOST does not change cash/eCash/chips/expenses/EST. PROFIT — account only.
   var grossTips  = tipsTotal(p);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var reimbursements = staffExpensesTotal(p);
@@ -2248,7 +2256,13 @@ function formatChipReconcileLine(reconcileAmt) {
   return 'Chip reconcile: ' + sign + '$' + fmt(Math.abs(dropEffect)) + ' (' + note + ')';
 }
 
+function markProfitSplitStale() {
+  if (!listActiveProfitToHost().length) return;
+  G.profitSplitStale = true;
+}
+
 function markChipReconcileStale() {
+  markProfitSplitStale();
   G.closeOutChipsAccepted = false;
   if (!getActiveChipReconcile()) return;
   G.chipReconcileStale = true;
@@ -2314,17 +2328,57 @@ function isCloseOutCashDone() {
   return Math.abs(d.cashOnHand || 0) < SETTLE_EPSILON;
 }
 
-function isGameFullyClosedOut() {
-  return isCloseOutChipsDone() && isCloseOutEcashDone() && isCloseOutCashDone();
+function listActiveProfitToHost() {
+  return (G.txnLog || []).filter(function(t) {
+    return txnIsActive(t) && String(t.type || '').toUpperCase() === 'PROFIT_TO_HOST';
+  });
 }
 
-/** Void CHIP_RECONCILE + ECASH_CLOSE + ECASH_TO_PERSON + CASH_TO_HOST for this game. */
+/** Even split to the cent; leftover cent(s) go to the first host. */
+function splitProfitShares(profit, n) {
+  var cents = Math.round((Number(profit) || 0) * 100);
+  n = Math.max(1, Number(n) || 1);
+  var absCents = Math.abs(cents);
+  var base = Math.floor(absCents / n);
+  var rem = absCents - base * n;
+  var sign = cents < 0 ? -1 : 1;
+  var shares = [];
+  for (var i = 0; i < n; i++) {
+    shares.push((sign * (base + (i === 0 ? rem : 0))) / 100);
+  }
+  return shares;
+}
+
+function formatCloseOutSignedMoney(n) {
+  var v = Math.round((Number(n) || 0) * 100) / 100;
+  if (v < 0) return '−$' + fmt(Math.abs(v));
+  return '$' + fmt(v);
+}
+
+function isCloseOutProfitDone() {
+  if (G.profitSplitStale) return false;
+  return listActiveProfitToHost().length > 0;
+}
+
+function voidActiveProfitToHost() {
+  (G.txnLog || []).forEach(function(t) {
+    if (!txnIsActive(t)) return;
+    if (String(t.type || '').toUpperCase() === 'PROFIT_TO_HOST') t.voided = true;
+  });
+}
+
+function isGameFullyClosedOut() {
+  return isCloseOutChipsDone() && isCloseOutEcashDone() && isCloseOutCashDone() && isCloseOutProfitDone();
+}
+
+/** Void CHIP_RECONCILE + ECASH_CLOSE + ECASH_TO_PERSON + CASH_TO_HOST + PROFIT_TO_HOST for this game. */
 function voidAllCloseOutEntries() {
   (G.txnLog || []).forEach(function(t) {
     if (!t || t.voided === true) return;
     if (isCloseOutTxnType(t.type)) t.voided = true;
   });
   G.closeOutChipsAccepted = false;
+  G.profitSplitStale = false;
   clearChipReconcileStale();
 }
 
@@ -2878,6 +2932,10 @@ function buildAuditSnapshot() {
         var cthName = cth.playerName || cth.personName || 'host';
         lines.push({ kind: 'cash-to-host', label: 'Cash to ' + cthName, amount: Number(cth.amount) || 0, name: cthName });
       }
+      listActiveProfitToHost().forEach(function(t) {
+        var pn = t.playerName || t.personName || 'host';
+        lines.push({ kind: 'profit-to-host', label: 'Profit to ' + pn, amount: Number(t.amount) || 0, name: pn });
+      });
       return lines;
     })(),
     expenses: {
@@ -3013,6 +3071,8 @@ function formatAuditPlainText(snap) {
     snap.closeOut.forEach(function(c) {
       if (c.kind === 'cash-to-host') {
         lines.push('Cash to ' + (c.name || 'host') + ' $' + fmt(Math.abs(c.amount || 0)));
+      } else if (c.kind === 'profit-to-host') {
+        lines.push('Profit to ' + (c.name || 'host') + ' ' + formatCloseOutSignedMoney(c.amount || 0));
       } else if (c.kind === 'ecash-close') {
         lines.push('eCash closed' + (c.name ? (' · ' + c.name) : '') + ': ' + formatAuditMoney(c.amount || 0));
       } else {
@@ -3220,6 +3280,8 @@ function renderAuditPanelBody(snap) {
     snap.closeOut.forEach(function(c) {
       if (c.kind === 'cash-to-host') {
         html += auditRowHtml('Cash to ' + (c.name || 'host') + ' $' + fmt(Math.abs(c.amount || 0)), '');
+      } else if (c.kind === 'profit-to-host') {
+        html += auditRowHtml('Profit to ' + (c.name || 'host') + ' ' + formatCloseOutSignedMoney(c.amount || 0), '');
       } else if (c.kind === 'ecash-close') {
         html += auditRowHtml('eCash closed', formatAuditMoney(c.amount || 0));
       } else {
@@ -3483,6 +3545,14 @@ function txnReasonLabel(t) {
         return withNote('Cash to ' + cthName + ' $' + fmt(Math.abs(cthAmt)));
       }
       return withNote('Cash to host');
+    }
+    case 'PROFIT_TO_HOST': {
+      var pthName = String(t.playerName || t.personName || '').trim();
+      var pthAmt = Number(t.amount) || 0;
+      if (pthName) {
+        return withNote('Profit to ' + pthName + ' ' + formatCloseOutSignedMoney(pthAmt));
+      }
+      return withNote('Profit to host');
     }
     case 'STAFF_PAYOUT': {
       var role = t.staffRole || t.role || '';
@@ -4086,6 +4156,7 @@ function renderAll() {
     ECASH_CLOSE:         { label:'ECASH CLS', color:'var(--purple-light)', bg:'var(--purple-dim)' },
     ECASH_TO_PERSON:     { label:'ECASH→P',   color:'var(--purple-light)', bg:'var(--purple-dim)' },
     CASH_TO_HOST:        { label:'CASH→HOST', color:'var(--green)',       bg:'var(--green-dim)' },
+    PROFIT_TO_HOST:      { label:'PROFIT',    color:'var(--gold)',        bg:'var(--gold-dim)' },
     HOUSE_EXPENSE:       { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
     HOUSE_EXPENSE_PAYOUT:{ label:'EXP PAY',   color:'var(--green)',       bg:'var(--green-dim)' },
     PLAYER_EXPENSE:      { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
@@ -4140,6 +4211,8 @@ function renderAll() {
           amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--red)' : 'var(--green)';
         } else if (t.type === 'CASH_TO_HOST' || t.type === 'ECASH_CLOSE' || t.type === 'ECASH_TO_PERSON') {
           amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--red)' : 'var(--green)';
+        } else if (t.type === 'PROFIT_TO_HOST') {
+          amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--green)' : 'var(--red)';
         } else if (String(t.type).indexOf('VOID_') === 0) {
           amtColor = 'var(--text-muted)';
         } else if (TXN_MONEY_OUT[t.type]) {
@@ -4150,7 +4223,7 @@ function renderAll() {
           amtColor = 'var(--text)';
         }
         var amtStr;
-        if (t.type === 'CHIP_RECONCILE') {
+        if (t.type === 'CHIP_RECONCILE' || t.type === 'PROFIT_TO_HOST') {
           var ra = Number(t.amount) || 0;
           amtStr = (ra >= 0 ? '+' : '−') + '$' + fmt(Math.abs(ra));
         } else {
@@ -9889,7 +9962,8 @@ function startFreshGame() {
     location: '', date: '', dealerBanks: [], chipCounts: [], startingChipCount: null,
     gameId: pbNewUuid(), balancesPostedAt: null, postedDeltas: {},
     chipReconcileStale: false, chipReconcileStaleAt: null,
-    closeOutChipsAccepted: false
+    closeOutChipsAccepted: false,
+    profitSplitStale: false
   };
   _activePlayerId = null; _activeStaffId = null;
   setVal('g-location', ''); setVal('g-date', todayLocalYMD());
@@ -10367,7 +10441,7 @@ function saveGameToHistory() {
 
 function runEndGameFlow(afterFn) {
   if (!isGameFullyClosedOut()) {
-    toast('Close out chips, eCash, and cash first');
+    toast('Close out chips, eCash, cash, and profit first');
     openCloseOutModal(afterFn);
     return;
   }
@@ -10425,13 +10499,34 @@ function endGame(btn) {
 }
 
 var _closeOutAfterFn = null;
-var _closeOutStep = 'chips'; // chips | ecash | cash | done
+var _closeOutStep = 'chips'; // chips | ecash | cash | profit | done
+
+function closeOutNextStepAfter(step) {
+  if (step === 'chips') {
+    if (!isCloseOutEcashDone()) return 'ecash';
+    if (!isCloseOutCashDone()) return 'cash';
+    if (!isCloseOutProfitDone()) return 'profit';
+    return 'done';
+  }
+  if (step === 'ecash') {
+    if (!isCloseOutCashDone()) return 'cash';
+    if (!isCloseOutProfitDone()) return 'profit';
+    return 'done';
+  }
+  if (step === 'cash') {
+    if (!isCloseOutProfitDone()) return 'profit';
+    return 'done';
+  }
+  if (step === 'profit') return 'done';
+  return 'done';
+}
 
 function openCloseOutModal(afterFn) {
   _closeOutAfterFn = afterFn || null;
   if (!isCloseOutChipsDone() || needsChipCountBeforeClose()) _closeOutStep = 'chips';
   else if (!isCloseOutEcashDone()) _closeOutStep = 'ecash';
   else if (!isCloseOutCashDone()) _closeOutStep = 'cash';
+  else if (!isCloseOutProfitDone()) _closeOutStep = 'profit';
   else _closeOutStep = 'done';
   renderCloseOutBody();
   openModal('modal-close-out');
@@ -10443,7 +10538,8 @@ function closeOutStepIndicatorHtml(active) {
     var on = active === key;
     var done = (key === 'chips' && isCloseOutChipsDone())
       || (key === 'ecash' && isCloseOutEcashDone())
-      || (key === 'cash' && isCloseOutCashDone());
+      || (key === 'cash' && isCloseOutCashDone())
+      || (key === 'profit' && isCloseOutProfitDone());
     var bg = on ? 'var(--purple)' : (done ? 'var(--green-dim)' : 'var(--bg3)');
     var color = on ? '#fff' : (done ? 'var(--green)' : 'var(--text-muted)');
     return '<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;background:' + bg + ';color:' + color + ';font-size:11px;font-weight:800">'
@@ -10453,12 +10549,14 @@ function closeOutStepIndicatorHtml(active) {
     + pill('chips', 'Chips', 1)
     + pill('ecash', 'eCash', 2)
     + pill('cash', 'Cash', 3)
+    + pill('profit', 'Profit', 4)
     + '</div>';
 }
 
 function closeOutReopenBtnHtml() {
   var hasClose = !!getActiveChipReconcile() || !!getActiveCashToHost()
-    || listActiveEcashCloseEntries().length > 0 || !!G.closeOutChipsAccepted;
+    || listActiveEcashCloseEntries().length > 0 || listActiveProfitToHost().length > 0
+    || !!G.closeOutChipsAccepted;
   if (!hasClose) return '';
   return '<button class="btn btn-outline" style="width:100%;margin-top:8px;color:var(--orange);border-color:var(--orange)" onclick="closeOutReopenGame(this)">Reopen game</button>';
 }
@@ -10479,6 +10577,11 @@ function renderCloseOutBody() {
   if (_closeOutStep === 'cash' || !isCloseOutCashDone()) {
     _closeOutStep = 'cash';
     renderCloseOutCashStep(body);
+    return;
+  }
+  if (_closeOutStep === 'profit' || !isCloseOutProfitDone()) {
+    _closeOutStep = 'profit';
+    renderCloseOutProfitStep(body);
     return;
   }
   _closeOutStep = 'done';
@@ -10553,7 +10656,7 @@ function closeOutAdvanceAfterChips() {
   clearChipReconcileStale();
   autoSave();
   calcAll(); renderAll();
-  _closeOutStep = isCloseOutEcashDone() ? (isCloseOutCashDone() ? 'done' : 'cash') : 'ecash';
+  _closeOutStep = closeOutNextStepAfter('chips');
   renderCloseOutBody();
 }
 
@@ -10720,7 +10823,7 @@ function closeOutEcashClose(btn, receiverId, amount) {
     autoSave();
     calcAll(); renderAll();
     if (isCloseOutEcashDone()) {
-      _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+      _closeOutStep = closeOutNextStepAfter('ecash');
     }
     renderCloseOutBody();
     toast('eCash closed · ' + name + ' ✅');
@@ -10754,7 +10857,7 @@ function closeOutEcashToPerson(btn, receiverId, amount) {
     autoSave();
     calcAll(); renderAll();
     if (isCloseOutEcashDone()) {
-      _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+      _closeOutStep = closeOutNextStepAfter('ecash');
     }
     renderCloseOutBody();
     toast('eCash to ' + pname + ' ✅');
@@ -10767,12 +10870,15 @@ function closeOutEcashContinue() {
     renderCloseOutBody();
     return;
   }
-  _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+  _closeOutStep = closeOutNextStepAfter('ecash');
   renderCloseOutBody();
 }
 
 function closeOutHostCandidates() {
   var hosts = (G.players || []).filter(isHostCashRole);
+  hosts.sort(function(a, b) {
+    return String(personDisplayName(a)).localeCompare(String(personDisplayName(b)));
+  });
   return hosts;
 }
 
@@ -10843,7 +10949,7 @@ function closeOutCashToHost(btn) {
     });
     autoSave();
     calcAll(); renderAll();
-    _closeOutStep = 'done';
+    _closeOutStep = closeOutNextStepAfter('cash');
     renderCloseOutBody();
     toast('Cash to ' + pname + ' $' + fmt(absAmt) + ' ✅');
   }, { name: pname, amount: absAmt });
@@ -10855,6 +10961,109 @@ function closeOutCashContinue() {
     renderCloseOutBody();
     return;
   }
+  _closeOutStep = closeOutNextStepAfter('cash');
+  renderCloseOutBody();
+}
+
+function renderCloseOutProfitStep(body) {
+  var d = calcDashboard();
+  var profit = Math.round((d.profit || 0) * 100) / 100;
+  var hosts = closeOutHostCandidates();
+  var existing = listActiveProfitToHost();
+  var stale = !!G.profitSplitStale;
+  var html = closeOutStepIndicatorHtml('profit')
+    + '<div style="font-size:14px;font-weight:800;margin-bottom:6px">Profit</div>'
+    + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.45">Split EST. PROFIT evenly between hosts (after chip reconcile). Account only — cash and eCash stay $0.</div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">EST. PROFIT</span>'
+    + '<span style="font-weight:900;color:' + (profit >= 0 ? 'var(--green)' : 'var(--red)') + '">' + formatCloseOutSignedMoney(profit) + '</span></div>';
+
+  if (existing.length && !stale) {
+    html += '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Profit split confirmed ✓</div>';
+    existing.forEach(function(t) {
+      html += '<div style="font-size:13px;margin-bottom:6px">' + (t.playerName || t.personName || 'host')
+        + ' · ' + formatCloseOutSignedMoney(t.amount || 0) + '</div>';
+    });
+    html += '<button class="btn btn-purple" style="width:100%;margin:10px 0" onclick="closeOutProfitContinue()">Continue</button>';
+  } else {
+    if (stale) {
+      html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.45;color:var(--orange);font-weight:700">'
+        + 'Profit changed since split — re-confirm before ending the game.</div>';
+    }
+    if (!hosts.length) {
+      html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.45;color:var(--orange);font-weight:700">'
+        + 'No host or host-player in this game — pick one person to take the profit share.</div>'
+        + '<label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Person</label>'
+        + '<select class="inp" id="close-profit-host" style="width:100%;margin-bottom:12px">'
+        + closeOutPersonOptionsHtml(null, true) + '</select>';
+    } else {
+      var shares = splitProfitShares(profit, hosts.length);
+      hosts.forEach(function(p, i) {
+        html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
+          + '<span style="font-weight:800">' + personDisplayName(p) + '</span>'
+          + '<span style="font-weight:900;color:' + (shares[i] >= 0 ? 'var(--green)' : 'var(--red)') + '">'
+          + formatCloseOutSignedMoney(shares[i]) + '</span></div>';
+      });
+    }
+    html += '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutConfirmProfit(this)">Confirm profit split</button>';
+  }
+  html += closeOutReopenBtnHtml()
+    + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  body.innerHTML = html;
+  refreshLucideIcons();
+}
+
+function closeOutConfirmProfit(btn) {
+  var d = calcDashboard();
+  var profit = Math.round((d.profit || 0) * 100) / 100;
+  var hosts = closeOutHostCandidates();
+  var people = hosts.slice();
+  if (!people.length) {
+    var sel = document.getElementById('close-profit-host');
+    var personId = sel ? sel.value : '';
+    if (!personId) { toast('Select who takes the profit'); return; }
+    var picked = (G.players || []).find(function(pl){ return String(pl.id) === String(personId); });
+    if (!picked) { toast('Person not found'); return; }
+    people = [picked];
+  }
+  var shares = splitProfitShares(profit, people.length);
+  var parts = people.map(function(p, i) {
+    var short = String(personDisplayName(p) || '').split(' · ')[0].toUpperCase();
+    var after = Math.round((personAccountBalance(p) + shares[i]) * 100) / 100;
+    return short + ' ' + formatCloseOutSignedMoney(shares[i]) + ' (' + formatSideBalancePhrase(after) + ')';
+  });
+  var confirmMsg = 'Tap again: PROFIT ' + formatCloseOutSignedMoney(profit) + ' → ' + parts.join(' · ');
+  confirmAction(btn, confirmMsg, function(){
+    voidActiveProfitToHost();
+    people.forEach(function(p, i) {
+      var pname = personDisplayName(p);
+      appendTxn({
+        type: 'PROFIT_TO_HOST',
+        amount: shares[i],
+        personId: String(p.id),
+        playerId: String(p.id),
+        playerName: pname,
+        personName: pname,
+        profitTotal: profit,
+        shareIndex: i,
+        shareCount: people.length
+      });
+    });
+    G.profitSplitStale = false;
+    autoSave();
+    calcAll(); renderAll();
+    _closeOutStep = closeOutNextStepAfter('profit');
+    renderCloseOutBody();
+    toast('Profit split confirmed ✅');
+  });
+}
+
+function closeOutProfitContinue() {
+  if (!isCloseOutProfitDone()) {
+    toast('Confirm profit split first');
+    renderCloseOutBody();
+    return;
+  }
   _closeOutStep = 'done';
   renderCloseOutBody();
 }
@@ -10863,11 +11072,13 @@ function renderCloseOutDoneStep(body) {
   var d = calcDashboard();
   var cth = getActiveCashToHost();
   var ecashLines = listActiveEcashCloseEntries();
+  var profitLines = listActiveProfitToHost();
   var html = closeOutStepIndicatorHtml('done')
     + '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Close-out complete ✓</div>'
     + '<div style="font-size:13px;line-height:1.55;margin-bottom:14px;color:var(--text)">'
     + '<div>Cash on hand: <strong>$' + fmt(d.cashOnHand) + '</strong></div>'
-    + '<div>eCash on hand: <strong>$' + fmt(d.eCashOnHand) + '</strong></div>';
+    + '<div>eCash on hand: <strong>$' + fmt(d.eCashOnHand) + '</strong></div>'
+    + '<div>EST. PROFIT: <strong>' + formatCloseOutSignedMoney(d.profit || 0) + '</strong></div>';
   ecashLines.forEach(function(t) {
     if (String(t.type).toUpperCase() === 'ECASH_CLOSE') {
       html += '<div>eCash closed' + (t.receivedByName ? (' · ' + t.receivedByName) : '') + '</div>';
@@ -10878,6 +11089,9 @@ function renderCloseOutDoneStep(body) {
   if (cth) {
     html += '<div>Cash to ' + (cth.playerName || 'host') + ' $' + fmt(Math.abs(cth.amount || 0)) + '</div>';
   }
+  profitLines.forEach(function(t) {
+    html += '<div>Profit to ' + (t.playerName || t.personName || 'host') + ' ' + formatCloseOutSignedMoney(t.amount || 0) + '</div>';
+  });
   html += '</div>'
     + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutFinishEndGame()">End Game</button>'
     + closeOutReopenBtnHtml()
@@ -10899,9 +11113,10 @@ function closeOutFinishEndGame() {
 }
 
 function closeOutReopenGame(btn) {
-  confirmAction(btn, 'Tap again: Reopen game — void chip reconcile, eCash close, and cash-to-host', function(){
+  confirmAction(btn, 'Tap again: Reopen game — void chip reconcile, eCash close, cash-to-host, and profit split', function(){
     voidAllCloseOutEntries();
     G.closeOutChipsAccepted = false;
+    G.profitSplitStale = false;
     _closeOutStep = 'chips';
     autoSave();
     calcAll(); renderAll();
@@ -10947,6 +11162,9 @@ function buildHistorySummary(h) {
     if (cth) {
       lines.push('Cash to ' + (cth.playerName || 'host') + ' $' + fmt(Math.abs(cth.amount || 0)));
     }
+    listActiveProfitToHost().forEach(function(t) {
+      lines.push('Profit to ' + (t.playerName || t.personName || 'host') + ' ' + formatCloseOutSignedMoney(t.amount || 0));
+    });
     return lines;
   });
   var owes = historyWithG(g, function(){
