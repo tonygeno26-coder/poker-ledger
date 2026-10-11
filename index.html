@@ -692,6 +692,9 @@ select.inp{appearance:none;-webkit-appearance:none}
   background:var(--gold-dim);color:var(--gold);cursor:pointer;width:100%;border:0;font:inherit;text-align:left;
 }
 .pb-banner.signin-sync:hover{filter:brightness(1.05)}
+.pb-banner.chip-reconcile-stale{
+  background:var(--red-dim);color:var(--red);
+}
 .pb-auth-not-now{display:none;margin-top:4px}
 #pb-account-modal .modal{max-width:360px}
 
@@ -865,6 +868,9 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
 <button type="button" class="pb-banner balance-sync" id="pb-balance-sync-banner" onclick="retryBalanceSync()" aria-live="polite">
   Balances not posted — tap to retry
 </button>
+<div class="pb-banner chip-reconcile-stale" id="pb-chip-reconcile-stale-banner" aria-live="polite">
+  Chips changed since close — recount before ending
+</div>
 <div id="pb-host-view-banner" aria-live="polite">
   <span class="ico-inline"><i data-lucide="eye" aria-hidden="true"></i> Host View — Live Updates</span>
   <span class="hv-meta" id="pb-host-view-meta">Last updated —</span>
@@ -947,7 +953,9 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <div class="breakdown">
     <div class="breakdown-title"><i data-lucide="landmark" aria-hidden="true"></i> Breakdown</div>
     <div class="breakdown-row">
-      <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div></div>
+      <div class="breakdown-cell"><div class="bc-lbl">Drop</div><div class="bc-val" id="b-drop">$0</div>
+        <div id="b-chip-reconcile" style="display:none;margin-top:6px;font-size:11px;font-weight:700;line-height:1.35;color:var(--text-muted)"></div>
+      </div>
       <div class="breakdown-cell"><div class="bc-lbl">Expenses</div><div class="bc-val" id="b-expenses">$0</div></div>
       <div class="breakdown-cell"><div class="bc-lbl">Staff Tax</div><div class="bc-val" id="b-staff-tax" style="color:var(--green)">$0</div></div>
       <div class="breakdown-cell profit"><div class="bc-lbl">Est. Profit</div><div class="bc-val" id="b-profit">$0</div></div>
@@ -1198,6 +1206,10 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Starting Total</span><span style="font-weight:900;font-size:1.1rem;color:var(--gold)" id="cc-starting-total">$0</span></div>
         </div>
+        <div id="cc-last-closed-ref" style="display:none;margin:0 0 12px;padding:10px 12px;background:var(--bg3);border:1px dashed var(--border);border-radius:10px;font-size:12px;color:var(--text-muted);line-height:1.45">
+          <div id="cc-last-closed-text"></div>
+          <button type="button" class="btn btn-outline btn-xs" id="cc-copy-last-closed-btn" onclick="copyLastClosedIntoStartingCount()" style="margin-top:8px">Copy into count</button>
+        </div>
         <button class="btn btn-purple" style="width:100%" onclick="saveStartingCount()"><i data-lucide="save" class="action-ico" aria-hidden="true"></i> Save Starting Count</button>
       </div>
     </div>
@@ -1252,6 +1264,16 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:13px">No running counts yet</div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: Close Out (chip reconcile) -->
+<div class="modal-bg" id="modal-close-out">
+  <div class="modal">
+    <div class="modal-title"><i data-lucide="flag" aria-hidden="true"></i> Close Out
+      <button class="modal-close" onclick="closeModal('modal-close-out')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <div id="close-out-body"></div>
   </div>
 </div>
 
@@ -1377,6 +1399,9 @@ function markTxnVoided(matchFn) {
     if (!txnIsActive(t)) continue;
     if (matchFn(t, i)) {
       t.voided = true;
+      if (String(t.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+        markChipReconcileStale();
+      }
       return t;
     }
   }
@@ -1891,6 +1916,102 @@ function totalDropLogged() {
   return Math.max(fromTxn, fromArr);
 }
 
+/** Active CHIP_RECONCILE txn (at most one). amount = counted − expected (signed). */
+function getActiveChipReconcile() {
+  var log = G.txnLog || [];
+  for (var i = 0; i < log.length; i++) {
+    var t = log[i];
+    if (!txnIsActive(t)) continue;
+    if (String(t.type || '').toUpperCase() === 'CHIP_RECONCILE') return t;
+  }
+  return null;
+}
+
+/** Signed reconcile amount (counted − expected). 0 when none active. */
+function chipReconcileAmount() {
+  var t = getActiveChipReconcile();
+  return t ? (Number(t.amount) || 0) : 0;
+}
+
+/**
+ * Display line for chip reconcile (drop effect sign).
+ * more chips (reconcile > 0) → "Chip reconcile: −$X (more chips in)"
+ * fewer chips (reconcile < 0) → "Chip reconcile: +$X (fewer chips in)"
+ */
+function formatChipReconcileLine(reconcileAmt) {
+  var r = Number(reconcileAmt) || 0;
+  if (Math.abs(r) < SETTLE_EPSILON) return '';
+  var dropEffect = -r;
+  var sign = dropEffect < 0 ? '−' : '+';
+  var note = r > 0 ? 'more chips in' : 'fewer chips in';
+  return 'Chip reconcile: ' + sign + '$' + fmt(Math.abs(dropEffect)) + ' (' + note + ')';
+}
+
+function markChipReconcileStale() {
+  if (!getActiveChipReconcile()) return;
+  G.chipReconcileStale = true;
+  G.chipReconcileStaleAt = new Date().toISOString();
+}
+
+function clearChipReconcileStale() {
+  G.chipReconcileStale = false;
+  G.chipReconcileStaleAt = null;
+}
+
+function updateChipReconcileStaleBanner() {
+  var ban = document.getElementById('pb-chip-reconcile-stale-banner');
+  if (!ban) return;
+  if (G.chipReconcileStale && getActiveChipReconcile()) ban.classList.add('show');
+  else ban.classList.remove('show');
+}
+
+function getLatestRunningChipCount() {
+  var running = (G.chipCounts || []).filter(function(c) {
+    return String(c.type || '').toUpperCase() === 'RUNNING';
+  });
+  return running.length ? running[0] : null;
+}
+
+/** Latest txn activity timestamp, excluding CHIP_RECONCILE (voided rows still count). */
+function getLatestTxnActivityTs() {
+  var maxTs = 0;
+  (G.txnLog || []).forEach(function(t) {
+    if (!t) return;
+    if (String(t.type || '').toUpperCase() === 'CHIP_RECONCILE') return;
+    var ts = Date.parse(t.timestamp || t.ts || '') || 0;
+    if (ts > maxTs) maxTs = ts;
+  });
+  return maxTs;
+}
+
+/** True when Close Out needs a fresh RUNNING count (or recount after stale). */
+function needsChipCountBeforeClose() {
+  var count = getLatestRunningChipCount();
+  if (!count) return true;
+  var countTs = Date.parse(count.timestamp || '') || 0;
+  if (G.chipReconcileStale) {
+    var staleAt = Date.parse(G.chipReconcileStaleAt || '') || 0;
+    if (countTs <= staleAt) return true;
+  }
+  var txnTs = getLatestTxnActivityTs();
+  return countTs < txnTs;
+}
+
+/** Expected table chips before applying an active reconcile (for close-out diff). */
+function expectedChipsBeforeReconcile() {
+  return getExpectedChips() - chipReconcileAmount();
+}
+
+/** Void every active CHIP_RECONCILE (replace-on-reclose). */
+function voidActiveChipReconciles() {
+  var log = G.txnLog || [];
+  for (var i = 0; i < log.length; i++) {
+    var t = log[i];
+    if (!txnIsActive(t)) continue;
+    if (String(t.type || '').toUpperCase() === 'CHIP_RECONCILE') t.voided = true;
+  }
+}
+
 function migrateStaffRoles() {
   (G.players || []).forEach(function(p) {
     if (!p) return;
@@ -2090,8 +2211,10 @@ function calcDashboard() {
       });
     }
   });
-  // DROP = staff drops only
-  drop = totalDropLogged();
+  // DROP shown = loggedDrop − reconcile (logged drop kept separate)
+  var loggedDrop = totalDropLogged();
+  var reconcile = chipReconcileAmount();
+  drop = loggedDrop - reconcile;
   var eb = getExpenseBreakdown();
   var expenses = getTotalExpenses();
   var cashExpensesPaid = eb.houseCashPaid;   // paid G.expenses via CASH (paidMethod/method)
@@ -2101,15 +2224,17 @@ function calcDashboard() {
     cashOnHand:   bankStart + cashBuyIns + markerPaidCash + priorPaidCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
     // ECASH ON HAND = eCashBuyIns + markerPaidEcash + priorPaidEcash − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
     eCashOnHand:  eCashBuyIns + markerPaidEcash + priorPaidEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
-    // chipsOnHand = FORMULA 4 getExpectedChips()
+    // chipsOnHand = FORMULA 4 getExpectedChips() (includes + reconcile)
     chipsOnHand:  getExpectedChips(),
     drop: drop,
+    loggedDrop: loggedDrop,
+    chipReconcile: reconcile,
     tips: tips,
     expenses: expenses,
     bonusChips: eb.bonusBuyIns,
     staffTax: staffTax,
     expenseBreakdown: eb,
-    // EST. PROFIT = drop + staffTax − expenses (getTotalExpenses)
+    // EST. PROFIT = drop(shown) + staffTax − expenses (getTotalExpenses)
     profit: drop + staffTax - expenses
   };
 }
@@ -2268,8 +2393,13 @@ function buildAuditSnapshot() {
   // last counted = table chips only (actualTotal − bankTotal), matching chip-count modal
   var lastCounted = lastCount ? chipCountTableChips(lastCount) : null;
   var lastInBanks = lastCount ? chipCountBankTotal(lastCount) : null;
-  // variance = count entry's stored variance (same as modal), not recomputed vs live expected
-  var lastVariance = lastCount != null ? chipCountVariance(lastCount) : null;
+  // After CHIP_RECONCILE, variance is live (counted − expected) so it reads 0; else stored
+  var lastVariance;
+  if (lastCount != null && Math.abs(cm.chipsIn.chipReconcile || 0) >= SETTLE_EPSILON) {
+    lastVariance = lastCounted - cm.chipsOnHand;
+  } else {
+    lastVariance = lastCount != null ? chipCountVariance(lastCount) : null;
+  }
 
   return {
     players: players,
@@ -2308,6 +2438,8 @@ function buildAuditSnapshot() {
     },
     profit: {
       drop: d.drop,
+      loggedDrop: d.loggedDrop,
+      chipReconcile: d.chipReconcile,
       staffTax: d.staffTax,
       expenses: d.expenses,
       estProfit: d.profit
@@ -2317,6 +2449,7 @@ function buildAuditSnapshot() {
       chipTurnIns: cm.chipsIn.chipTurnIns,
       tips: cm.chipsIn.tips,
       drop: cm.chipsIn.drop,
+      chipReconcile: cm.chipsIn.chipReconcile || 0,
       buyInsByType: cm.chipsOut.buyInsByType || {},
       allBuyIns: cm.chipsOut.allBuyIns,
       banks: cm.chipsOut.banksPulled,
@@ -2422,6 +2555,9 @@ function formatAuditPlainText(snap) {
 
   lines.push('=== PROFIT ===');
   lines.push('drop:             ' + formatAuditMoney(snap.profit.drop));
+  if (Math.abs(snap.profit.chipReconcile || 0) >= SETTLE_EPSILON) {
+    lines.push(formatChipReconcileLine(snap.profit.chipReconcile));
+  }
   lines.push('staff tax:        ' + formatAuditMoney(snap.profit.staffTax));
   lines.push('expenses:         ' + formatAuditMoney(snap.profit.expenses));
   lines.push('EST. PROFIT:      ' + formatAuditMoney(snap.profit.estProfit));
@@ -2433,6 +2569,9 @@ function formatAuditPlainText(snap) {
   lines.push('chipTurnIns:      ' + formatAuditMoney(cm.chipTurnIns));
   lines.push('tips:             ' + formatAuditMoney(cm.tips));
   lines.push('drop (IN):        ' + formatAuditMoney(cm.drop));
+  if (Math.abs(cm.chipReconcile || 0) >= SETTLE_EPSILON) {
+    lines.push(formatChipReconcileLine(cm.chipReconcile));
+  }
   var byType = cm.buyInsByType || {};
   var typeKeys = Object.keys(byType).sort();
   if (!typeKeys.length) {
@@ -2578,6 +2717,9 @@ function renderAuditPanelBody(snap) {
 
   html += '<div class="audit-sec"><div class="audit-sec-title">Profit</div>';
   html += auditRowHtml('drop', formatAuditMoney(snap.profit.drop));
+  if (Math.abs(snap.profit.chipReconcile || 0) >= SETTLE_EPSILON) {
+    html += auditRowHtml(formatChipReconcileLine(snap.profit.chipReconcile), '');
+  }
   html += auditRowHtml('staff tax', formatAuditMoney(snap.profit.staffTax));
   html += auditRowHtml('expenses', formatAuditMoney(snap.profit.expenses));
   html += auditRowHtml('EST. PROFIT', formatAuditMoney(snap.profit.estProfit), {
@@ -2592,6 +2734,9 @@ function renderAuditPanelBody(snap) {
   html += auditRowHtml('chipTurnIns', formatAuditMoney(cmH.chipTurnIns));
   html += auditRowHtml('tips', formatAuditMoney(cmH.tips));
   html += auditRowHtml('drop (IN)', formatAuditMoney(cmH.drop));
+  if (Math.abs(cmH.chipReconcile || 0) >= SETTLE_EPSILON) {
+    html += auditRowHtml(formatChipReconcileLine(cmH.chipReconcile), '');
+  }
   var byTypeH = cmH.buyInsByType || {};
   var typeKeysH = Object.keys(byTypeH).sort();
   if (!typeKeysH.length) {
@@ -2703,7 +2848,11 @@ function copyAuditReport() {
 
 function appendTxn(entry) {
   G._seq = (G._seq||0)+1;
-  G.txnLog.unshift(Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry));
+  var row = Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry);
+  G.txnLog.unshift(row);
+  if (String(row.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+    markChipReconcileStale();
+  }
 }
 
 /** Format chip denom object into a short summary, e.g. "5×2 · 25×4". */
@@ -2766,6 +2915,13 @@ function txnReasonLabel(t) {
       return withNote('Tips turned in');
     case 'DROP':
       return note ? ('Drop · ' + note) : 'Drop';
+    case 'CHIP_RECONCILE': {
+      var rAmt = Number(t.amount) || 0;
+      if (Math.abs(rAmt) < SETTLE_EPSILON) return withNote('Chip reconcile');
+      return withNote(rAmt > 0
+        ? ('Chip reconcile · more chips in · drop −$' + fmt(Math.abs(rAmt)))
+        : ('Chip reconcile · fewer chips in · drop +$' + fmt(Math.abs(rAmt))));
+    }
     case 'STAFF_PAYOUT': {
       var role = t.staffRole || t.role || '';
       if (!role && t.playerId && G && Array.isArray(G.players)) {
@@ -2986,6 +3142,7 @@ function removeSettlementPayment(txnIdx) {
   var t = G.txnLog[txnIdx];
   if (!t || t.type !== 'SETTLEMENT_PAYMENT') return;
   G.txnLog.splice(txnIdx, 1);
+  markChipReconcileStale();
   calcAll();
   renderAll();
   renderSettleUpModal();
@@ -3242,6 +3399,19 @@ function renderAll() {
 
   // Breakdown + cash on hand
   setText('b-drop',     '$' + fmt(d.drop));
+  var recEl = document.getElementById('b-chip-reconcile');
+  if (recEl) {
+    var recLine = formatChipReconcileLine(d.chipReconcile);
+    if (recLine) {
+      recEl.style.display = 'block';
+      recEl.textContent = recLine;
+      recEl.style.color = (d.chipReconcile || 0) > 0 ? 'var(--red)' : 'var(--green)';
+    } else {
+      recEl.style.display = 'none';
+      recEl.textContent = '';
+    }
+  }
+  updateChipReconcileStaleBanner();
   setText('b-expenses', '$' + fmt(d.expenses));
   var staffTaxEl = document.getElementById('b-staff-tax');
   if (staffTaxEl) {
@@ -3318,6 +3488,7 @@ function renderAll() {
     CHIP_TURN_IN:        { label:'CHIPS IN',  color:'var(--green)',       bg:'var(--green-dim)' },
     TIPS:                { label:'TIPS',      color:'var(--gold)',        bg:'var(--gold-dim)' },
     DROP:                { label:'DROP',      color:'var(--orange)',      bg:'var(--orange-dim)' },
+    CHIP_RECONCILE:      { label:'RECONCILE', color:'var(--gold)',        bg:'var(--gold-dim)' },
     HOUSE_EXPENSE:       { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
     HOUSE_EXPENSE_PAYOUT:{ label:'EXP PAY',   color:'var(--green)',       bg:'var(--green-dim)' },
     PLAYER_EXPENSE:      { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
@@ -3365,6 +3536,8 @@ function renderAll() {
         var amtColor;
         if (t.type === 'SETTLEMENT_PAYMENT') {
           amtColor = t.direction === 'HOUSE_TO_PLAYER' ? 'var(--red)' : 'var(--green)';
+        } else if (t.type === 'CHIP_RECONCILE') {
+          amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--red)' : 'var(--green)';
         } else if (String(t.type).indexOf('VOID_') === 0) {
           amtColor = 'var(--text-muted)';
         } else if (TXN_MONEY_OUT[t.type]) {
@@ -3374,13 +3547,20 @@ function renderAll() {
         } else {
           amtColor = 'var(--text)';
         }
+        var amtStr;
+        if (t.type === 'CHIP_RECONCILE') {
+          var ra = Number(t.amount) || 0;
+          amtStr = (ra >= 0 ? '+' : '−') + '$' + fmt(Math.abs(ra));
+        } else {
+          amtStr = '$' + fmt(t.amount);
+        }
         return '<div class="txn-row">'
           +'<div class="txn-name-col">'
             +'<span class="txn-name-main">'+name+'</span>'
             +(reason ? '<span class="txn-reason">'+reason+'</span>' : '')
           +'</div>'
           +'<span class="badge" style="background:'+meta.bg+';color:'+meta.color+';font-size:10px;text-transform:uppercase;white-space:nowrap;flex-shrink:0">'+meta.label+'</span>'
-          +'<span style="font-weight:800;color:'+amtColor+';text-align:right;min-width:56px;flex-shrink:0">$'+fmt(t.amount)+'</span>'
+          +'<span style="font-weight:800;color:'+amtColor+';text-align:right;min-width:56px;flex-shrink:0">'+amtStr+'</span>'
           +'<span style="font-size:10px;color:var(--text-muted);min-width:40px;text-align:right;flex-shrink:0">'+ts+'</span>'
           +'</div>';
       }).join('')
@@ -5780,7 +5960,12 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
         return;
       }
     }
-    if (txn) txn.voided = true;
+    if (txn) {
+      txn.voided = true;
+      if (String(txn.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+        markChipReconcileStale();
+      }
+    }
 
     if (typ === 'BUY_IN' && p.buyIns) {
       var bi = p.buyIns.findIndex(function(b){ return Number(b.amount) === amt; });
@@ -8105,7 +8290,8 @@ function startFreshGame() {
     players: [], txnLog: [], expenses: [], _seq: 0,
     sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
     location: '', date: '', dealerBanks: [], chipCounts: [], startingChipCount: null,
-    gameId: pbNewUuid(), balancesPostedAt: null, postedDeltas: {}
+    gameId: pbNewUuid(), balancesPostedAt: null, postedDeltas: {},
+    chipReconcileStale: false, chipReconcileStaleAt: null
   };
   _activePlayerId = null; _activeStaffId = null;
   setVal('g-location', ''); setVal('g-date', todayLocalYMD());
@@ -8143,7 +8329,7 @@ function openNewGameChoiceModal() {
 
 function newGameEndAndPost() {
   closeModal('modal-new-game-choice');
-  runEndGameFlow(function(){ startFreshGame(); });
+  openCloseOutModal(function(){ startFreshGame(); });
 }
 
 function newGameDiscardConfirm(btn) {
@@ -8626,8 +8812,137 @@ function endGame(btn) {
     toast('Read-only in host view');
     return;
   }
-  confirmAction(btn, 'Click again to end game, save history & post balances', function(){
-    runEndGameFlow(null);
+  openCloseOutModal(null);
+}
+
+var _closeOutAfterFn = null;
+
+function openCloseOutModal(afterFn) {
+  _closeOutAfterFn = afterFn || null;
+  renderCloseOutBody();
+  openModal('modal-close-out');
+  refreshLucideIcons();
+}
+
+function renderCloseOutBody() {
+  var body = document.getElementById('close-out-body');
+  if (!body) return;
+  if (needsChipCountBeforeClose()) {
+    body.innerHTML = '<div style="font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Count chips first</div>'
+      + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">'
+      + (G.chipReconcileStale
+        ? 'Chips changed since close — save a new running count, then return here to accept.'
+        : 'A running chip count saved after the latest transaction is required before ending the game.')
+      + '</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">'
+      + '<i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Count Chips</button>'
+      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+    refreshLucideIcons();
+    return;
+  }
+
+  var count = getLatestRunningChipCount();
+  var counted = chipCountTableChips(count);
+  var baseExpected = expectedChipsBeforeReconcile();
+  var liveExpected = getExpectedChips();
+  var alreadyOk = !!getActiveChipReconcile() && !G.chipReconcileStale
+    && Math.abs(counted - liveExpected) < SETTLE_EPSILON;
+  var expected = alreadyOk ? liveExpected : baseExpected;
+  var diff = counted - expected;
+  var absDiff = Math.abs(diff);
+
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">'
+    + '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Expected</div>'
+    + '<div style="font-weight:900;color:var(--gold)">$' + fmt(expected) + '</div></div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">'
+    + '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Counted</div>'
+    + '<div style="font-weight:900">$' + fmt(counted) + '</div></div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">'
+    + '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Difference</div>'
+    + '<div style="font-weight:900;color:' + (absDiff < SETTLE_EPSILON ? 'var(--green)' : 'var(--red)') + '">'
+    + (diff >= 0 ? '+' : '−') + '$' + fmt(absDiff) + '</div></div></div>';
+
+  if (absDiff < SETTLE_EPSILON || alreadyOk) {
+    html += '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Chips balanced ✓</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutContinueBalanced()">Continue</button>'
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
+      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  } else if (diff > 0) {
+    html += '<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--red);font-weight:700">'
+      + 'MORE chips than expected: $' + fmt(absDiff) + '. $' + fmt(absDiff) + ' will be DEDUCTED from drop.</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutAcceptReconcile(this)">'
+      + 'Accept &amp; close</button>'
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
+      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  } else {
+    html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--orange);font-weight:700">'
+      + 'FEWER chips than expected: $' + fmt(absDiff) + '. $' + fmt(absDiff) + ' will be ADDED to drop.</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutAcceptReconcile(this)">'
+      + 'Accept &amp; close</button>'
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
+      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  }
+  body.innerHTML = html;
+  refreshLucideIcons();
+}
+
+function closeOutGoCountChips() {
+  closeModal('modal-close-out');
+  openChipCountModal();
+  switchCCTab('running');
+}
+
+function closeOutContinueBalanced() {
+  // Diff 0: do not log CHIP_RECONCILE; keep an existing non-stale reconcile that already balances
+  if (!getActiveChipReconcile() || G.chipReconcileStale) {
+    var cnt = getLatestRunningChipCount();
+    if (cnt && Math.abs(chipCountTableChips(cnt) - expectedChipsBeforeReconcile()) < SETTLE_EPSILON) {
+      voidActiveChipReconciles();
+    }
+  }
+  clearChipReconcileStale();
+  autoSave();
+  calcAll(); renderAll();
+  closeModal('modal-close-out');
+  var afterFn = _closeOutAfterFn;
+  _closeOutAfterFn = null;
+  runEndGameFlow(afterFn);
+}
+
+function closeOutAcceptReconcile(btn) {
+  var count = getLatestRunningChipCount();
+  if (!count || needsChipCountBeforeClose()) {
+    renderCloseOutBody();
+    return;
+  }
+  var counted = chipCountTableChips(count);
+  var baseExpected = expectedChipsBeforeReconcile();
+  var amount = Math.round((counted - baseExpected) * 100) / 100;
+  var absAmt = Math.abs(amount);
+  if (absAmt < SETTLE_EPSILON) {
+    closeOutContinueBalanced();
+    return;
+  }
+  var confirmMsg = amount > 0
+    ? ('Click again: MORE chips $' + fmt(absAmt) + ' — $' + fmt(absAmt) + ' will be DEDUCTED from drop')
+    : ('Click again: FEWER chips $' + fmt(absAmt) + ' — $' + fmt(absAmt) + ' will be ADDED to drop');
+  confirmAction(btn, confirmMsg, function(){
+    voidActiveChipReconciles();
+    appendTxn({
+      type: 'CHIP_RECONCILE',
+      amount: amount,
+      countTimestamp: count.timestamp || null,
+      counted: counted,
+      expected: baseExpected
+    });
+    clearChipReconcileStale();
+    autoSave();
+    calcAll(); renderAll();
+    closeModal('modal-close-out');
+    var afterFn = _closeOutAfterFn;
+    _closeOutAfterFn = null;
+    runEndGameFlow(afterFn);
   });
 }
 
@@ -8654,6 +8969,7 @@ function buildHistorySummary(h) {
   var players = (g.players || []).filter(isPlayerSeat);
   var staff = (g.players || []).filter(isStaffSeat);
   var dash = historyWithG(g, function(){ return calcDashboard(); });
+  var reconcile = historyWithG(g, function(){ return chipReconcileAmount(); });
   var owes = historyWithG(g, function(){
     return players.map(function(p){
       return { name: personDisplayName(p), bal: playerDisplayBalance(p) };
@@ -8682,6 +8998,7 @@ function buildHistorySummary(h) {
     staffCount: staff.length,
     txnCount: (g.txnLog || []).length,
     drop: dash.drop || 0,
+    chipReconcile: reconcile || 0,
     expenses: dash.expenses || 0,
     profit: dash.profit || 0,
     topOwes: owes.slice(0, 3),
@@ -8700,6 +9017,9 @@ function formatHistoryExport(summary) {
   lines.push('Players: ' + summary.playerCount + '  |  Staff: ' + summary.staffCount);
   lines.push('Transactions: ' + summary.txnCount);
   lines.push('Drop: $' + fmt(summary.drop));
+  if (Math.abs(summary.chipReconcile || 0) >= SETTLE_EPSILON) {
+    lines.push(formatChipReconcileLine(summary.chipReconcile));
+  }
   lines.push('Expenses: $' + fmt(summary.expenses));
   lines.push('Profit: $' + fmt(summary.profit));
   lines.push('');
@@ -8815,6 +9135,9 @@ function renderHistory() {
             + '<div class="hist-metric"><div class="hm-lbl">Profit</div><div class="hm-val" style="color:' + profitColor + '">$' + fmt(s.profit) + '</div></div>'
             + '<div class="hist-metric"><div class="hm-lbl">Saved</div><div class="hm-val" style="font-size:12px;font-weight:700">' + (s.savedAt ? s.savedAt.toLocaleDateString() : '—') + '</div></div>'
           + '</div>'
+          + (Math.abs(s.chipReconcile || 0) >= SETTLE_EPSILON
+            ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:0 0 10px;line-height:1.4">' + formatChipReconcileLine(s.chipReconcile) + '</div>'
+            : '')
           + '<div class="hist-owes"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;color:var(--text-muted)">Top owes</div>' + topOwesHtml + '</div>'
           + '<div class="hist-actions">'
             + '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();toggleHistoryExpand(' + h.id + ')">' + (open ? 'Collapse' : 'Expand') + '</button>'
@@ -9022,6 +9345,85 @@ function switchCCTab(tab) {
   }
 }
 
+/** Most recent ended game from history — closing table chips + denom snapshot for Copy. */
+function getLastClosedGameRef() {
+  var history = [];
+  try { history = JSON.parse(ls('pb-history') || '[]'); } catch (_e) { history = []; }
+  if (!history.length) return null;
+  var h = history[0];
+  var g = h && h.G;
+  if (!g) return null;
+  var running = (g.chipCounts || []).filter(function(c) {
+    return String(c.type || '').toUpperCase() === 'RUNNING';
+  });
+  var last = running.length ? running[0] : null;
+  var amount = 0;
+  var chips = null;
+  if (last) {
+    amount = chipCountTableChips(last);
+    chips = last.chips || null;
+    if (!chips && last.denominations) {
+      var den = last.denominations;
+      chips = {
+        5: den.five || 0,
+        25: den.twentyFive || 0,
+        100: den.hundred || 0,
+        500: den.fiveHundred || 0,
+        1000: den.thousand || 0
+      };
+    }
+  } else {
+    amount = historyWithG(g, function(){ return getExpectedChips(); });
+  }
+  var dateLabel = g.date || (h.date ? new Date(h.date).toLocaleDateString() : '');
+  var loc = g.location || '';
+  return {
+    amount: amount,
+    dateLabel: dateLabel,
+    location: loc,
+    chips: chips
+  };
+}
+
+var _lastClosedCopyChips = null;
+
+function refreshLastClosedStartingRef() {
+  var refEl = document.getElementById('cc-last-closed-ref');
+  var textEl = document.getElementById('cc-last-closed-text');
+  if (!refEl || !textEl) return;
+  // Only show on blank starting form (not when a starting count is already saved)
+  if (G.startingChipCount) {
+    refEl.style.display = 'none';
+    _lastClosedCopyChips = null;
+    return;
+  }
+  var ref = getLastClosedGameRef();
+  if (!ref || !(ref.amount > 0)) {
+    refEl.style.display = 'none';
+    _lastClosedCopyChips = null;
+    return;
+  }
+  _lastClosedCopyChips = ref.chips;
+  var meta = [ref.dateLabel, ref.location].filter(Boolean).join(' · ');
+  textEl.textContent = 'Last game closed at $' + fmt(ref.amount)
+    + (meta ? ' (' + meta + ')' : '');
+  refEl.style.display = 'block';
+}
+
+function copyLastClosedIntoStartingCount() {
+  if (!_lastClosedCopyChips) {
+    toast('No denomination breakdown to copy');
+    return;
+  }
+  CC_DENOMS.forEach(function(d){
+    var qty = _lastClosedCopyChips[d];
+    if (qty == null && _lastClosedCopyChips[String(d)] != null) qty = _lastClosedCopyChips[String(d)];
+    setVal('sc-d' + d, qty ? String(qty) : '');
+  });
+  updateStartingTotal();
+  toast('Copied last closed count into inputs');
+}
+
 function openChipCountModal() {
   // Fresh count inputs each open — reset denoms / note only (never seed from last save)
   CC_DENOMS.forEach(function(d){
@@ -9044,6 +9446,8 @@ function openChipCountModal() {
   renderDealerBanks();
   // Show saved starting count if exists
   refreshStartingSavedBanner();
+  // Reference only — never pre-fill denoms unless Copy into count is tapped
+  refreshLastClosedStartingRef();
   // Recalculate expected fresh from live G state (not last saved count)
   updateRunningExpected();
   renderChipCountLog();
@@ -9123,6 +9527,7 @@ function refreshStartingSavedBanner() {
     savedDiv.style.display = 'none';
     formDiv.style.display  = 'block';
   }
+  refreshLastClosedStartingRef();
 }
 
 function sumTipsIn() {
@@ -9137,23 +9542,25 @@ function sumTipsIn() {
 /**
  * FORMULA 4 (locked) chip movement ledger — sole source for expected / on-hand chips.
  *
- *   expectedChips = chipFloat + chipTurnIns + tipChips + drop − allBuyIns − banksPulled
+ *   expectedChips = chipFloat + chipTurnIns + tipChips + loggedDrop − allBuyIns − banksPulled + reconcile
  *
  *   chipFloat   — sessionSettings.chipFloat
  *   chipTurnIns — non-voided p.chipTurnIns[] (chips returned to float; cashOuts are cash, not chips)
  *   tipChips    — tips returned to float (tipsTotal / sumTipsIn once)
- *   drop        — chips IN: raked from player stacks and returned to tray (totalDropLogged)
+ *   loggedDrop  — chips IN: raked from player stacks and returned to tray (totalDropLogged)
+ *   reconcile   — CHIP_RECONCILE amount (counted − expected); kept separate from logged drop
  *   allBuyIns   — all buy-in types chips out (CASH / ECASH / MARKER / BONUS / BALANCE)
  *   banksPulled — G.dealerBanks (or G.banks) via getBankTotal()
  *
- * EST. PROFIT still uses drop as revenue (drop + staffTax − expenses) — unchanged.
+ * Dashboard / audit DROP shown = loggedDrop − reconcile (profit uses shown drop).
  * Callers: getExpectedChips(), calcDashboard().chipsOnHand — nowhere else may invent a parallel formula.
  */
 function calculateChipMovements() {
   var chipFloat = (G.sessionSettings && G.sessionSettings.chipFloat) || 0;
   var chipTurnIns = 0, tipChips = 0, allBuyIns = 0;
   var buyInsByType = { CASH: 0, ECASH: 0, MARKER: 0, BONUS: 0, BALANCE: 0 };
-  var drop = totalDropLogged();
+  var loggedDrop = totalDropLogged();
+  var reconcile = chipReconcileAmount();
   (G.players || []).forEach(function(p) {
     chipTurnIns += playerChipTurnInsTotal(p);
     tipChips += tipsTotal(p);
@@ -9168,8 +9575,8 @@ function calculateChipMovements() {
   var banksPulled = (typeof getBankTotal === 'function')
     ? getBankTotal()
     : ((G.dealerBanks || G.banks || []).reduce(function(s, b) { return s + (b.amount || 0); }, 0));
-  // Drop is chips IN (raked → tray), not chips OUT
-  var chipsOnHand = chipFloat + chipTurnIns + tipChips + drop - allBuyIns - banksPulled;
+  // Drop is chips IN (raked → tray); reconcile adjusts expected so variance hits 0 after close
+  var chipsOnHand = chipFloat + chipTurnIns + tipChips + loggedDrop - allBuyIns - banksPulled + reconcile;
   return {
     chipsIn: {
       float: chipFloat,
@@ -9177,8 +9584,10 @@ function calculateChipMovements() {
       tipChips: tipChips,
       tips: tipChips,
       chipTurnIns: chipTurnIns,
-      drop: drop,
-      total: chipFloat + chipTurnIns + tipChips + drop
+      drop: loggedDrop,
+      loggedDrop: loggedDrop,
+      chipReconcile: reconcile,
+      total: chipFloat + chipTurnIns + tipChips + loggedDrop + reconcile
     },
     chipsOut: {
       buyIns: allBuyIns,
@@ -9193,7 +9602,7 @@ function calculateChipMovements() {
 }
 
 function getExpectedChips() {
-  // FORMULA 4: chipFloat + chipTurnIns + tipChips + drop − allBuyIns − banksPulled
+  // FORMULA 4: chipFloat + chipTurnIns + tipChips + loggedDrop − allBuyIns − banksPulled + reconcile
   return calculateChipMovements().chipsOnHand;
 }
 
