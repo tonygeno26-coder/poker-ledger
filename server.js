@@ -1080,7 +1080,7 @@ app.get('/people/:ownerUserId', async function (req, res) {
     let q = supabase
       .from('people')
       .select(
-        'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, created_at, updated_at, standing_balance, balance_updated_at'
+        'id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, regular, created_at, updated_at, standing_balance, balance_updated_at'
       )
       .eq('owner_user_id', ownerUserId)
       .order('name', { ascending: true })
@@ -1107,7 +1107,7 @@ app.get('/people/:id/balance-history', async function (req, res) {
 
     const { data: person, error: personErr } = await supabase
       .from('people')
-      .select('id, owner_user_id, name, tag, standing_balance, balance_updated_at')
+      .select('id, owner_user_id, name, tag, notes, last_role, last_played_at, archived, regular, standing_balance, balance_updated_at')
       .eq('id', id)
       .maybeSingle();
     if (personErr) throw personErr;
@@ -1121,7 +1121,7 @@ app.get('/people/:id/balance-history', async function (req, res) {
     const { data: entries, error: entErr } = await supabase
       .from('person_balance_entries')
       .select(
-        'id, person_id, owner_user_id, game_id, opening_balance, closing_balance, delta, posted_at, created_at, game_date, location'
+        'id, person_id, owner_user_id, game_id, opening_balance, closing_balance, delta, posted_at, created_at, game_date, location, kind, method, note'
       )
       .eq('person_id', id)
       .order('posted_at', { ascending: false })
@@ -1231,7 +1231,8 @@ app.post('/games/:gameId/post-balances', async function (req, res) {
           delta: roundMoney(ent.closing - ent.opening),
           posted_at: now,
           game_date: gameDate || null,
-          location: location || null
+          location: location || null,
+          kind: 'game'
         };
       });
       const { error: upsertErr } = await supabase
@@ -1330,6 +1331,8 @@ app.post('/people', async function (req, res) {
       : String(body.last_role || body.lastRole || '').trim() || null;
     const lastPlayedAt = body.last_played_at || body.lastPlayedAt || null;
     const archived = body.archived === true;
+    const regular =
+      body.regular === true || body.regular === false ? !!body.regular : null;
     const now = new Date().toISOString();
     const id = String(body.id || '').trim() || undefined;
 
@@ -1350,6 +1353,7 @@ app.post('/people', async function (req, res) {
           last_role: lastRole == null ? existing.last_role : lastRole,
           last_played_at: lastPlayedAt == null ? existing.last_played_at : lastPlayedAt,
           archived: body.archived == null ? existing.archived : archived,
+          regular: regular == null ? existing.regular : regular,
           updated_at: now
         };
         const { data: updated, error: updErr } = await supabase
@@ -1382,6 +1386,7 @@ app.post('/people', async function (req, res) {
       last_role: lastRole,
       last_played_at: lastPlayedAt,
       archived,
+      regular: regular == null ? false : regular,
       created_at: now,
       updated_at: now
     };
@@ -1410,6 +1415,7 @@ app.post('/people', async function (req, res) {
             last_role: lastRole == null ? dup.last_role : lastRole,
             last_played_at: lastPlayedAt == null ? dup.last_played_at : lastPlayedAt,
             archived: body.archived == null ? dup.archived : archived,
+            regular: regular == null ? dup.regular : regular,
             updated_at: now
           };
           const { data: updated, error: updErr } = await supabase
@@ -1477,6 +1483,9 @@ app.patch('/people/:id', async function (req, res) {
     if (Object.prototype.hasOwnProperty.call(body, 'archived')) {
       patch.archived = !!body.archived;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'regular')) {
+      patch.regular = !!body.regular;
+    }
     if (Object.prototype.hasOwnProperty.call(body, 'last_role') || Object.prototype.hasOwnProperty.call(body, 'lastRole')) {
       patch.last_role = String(body.last_role || body.lastRole || '').trim() || null;
     }
@@ -1505,6 +1514,83 @@ app.patch('/people/:id', async function (req, res) {
     console.error('[people PATCH]', err);
     const status = err.status || 500;
     res.status(status).json({ error: err.message || 'Failed to update person' });
+  }
+});
+
+/** Settle between games: payment received (+) or house payout (−). Owner only. */
+app.post('/people/:id/payments', async function (req, res) {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+    const { user } = await requireAuthUser(req);
+    if (user.role === 'host_viewer') {
+      return res.status(403).json({ error: 'Host viewers have read-only access to the player book' });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    const { data: person, error: personErr } = await supabase
+      .from('people')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (personErr) throw personErr;
+    if (!person) return res.status(404).json({ error: 'Person not found' });
+    if (String(person.owner_user_id) !== String(user.id)) {
+      return res.status(403).json({ error: 'Only the owner can record Vault payments' });
+    }
+
+    const body = req.body || {};
+    const amount = roundMoney(body.amount);
+    if (!(amount > 0)) return res.status(400).json({ error: 'amount must be > 0' });
+
+    // direction: 'payment' (they pay house, +delta) | 'payout' (house pays them, −delta)
+    const direction = String(body.direction || body.type || 'payment').toLowerCase();
+    const isPayout = direction === 'payout' || direction === 'pay_out' || direction === 'pay-out';
+    const delta = isPayout ? -amount : amount;
+
+    const methodRaw = String(body.method || 'cash').trim().toLowerCase();
+    const method = methodRaw === 'ecash' || methodRaw === 'e-cash' ? 'ecash' : 'cash';
+    const note = body.note == null || body.note === '' ? null : String(body.note).trim();
+
+    const opening = roundMoney(person.standing_balance);
+    const closing = roundMoney(opening + delta);
+    const now = new Date().toISOString();
+
+    const { error: insErr } = await supabase
+      .from('person_balance_entries')
+      .insert({
+        person_id: id,
+        owner_user_id: person.owner_user_id,
+        game_id: null,
+        opening_balance: opening,
+        closing_balance: closing,
+        delta: delta,
+        posted_at: now,
+        kind: 'payment',
+        method: method,
+        note: note,
+        game_date: null,
+        location: null
+      });
+    if (insErr) throw insErr;
+
+    const updatedPeople = await recomputeStandingBalancesGrouped([id]);
+    const updated = updatedPeople[0] || null;
+    if (!updated) {
+      const { data: refreshed, error: refErr } = await supabase
+        .from('people')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (refErr) throw refErr;
+      return res.json({ person: refreshed, delta: delta, method: method });
+    }
+    res.json({ person: updated, delta: delta, method: method });
+  } catch (err) {
+    console.error('[people payments POST]', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Failed to record payment' });
   }
 });
 

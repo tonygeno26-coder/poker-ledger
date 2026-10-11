@@ -187,11 +187,13 @@ body.host-view-mode .hdr-menu-btn,
 body.host-view-mode .hdr-menu-item.hv-allow,
 body.host-view-mode button.hv-allow{pointer-events:auto;opacity:1}
 body.host-view-mode #hdr-menu-item-book{display:flex!important}
-body.host-view-mode #page-players-book .book-edit-controls{display:none!important}
+body.host-view-mode #page-players-book .book-edit-controls,
+body.host-view-mode #page-players-book .vault-write-controls{display:none!important}
 body.host-view-mode #page-players-book input,
 body.host-view-mode #page-players-book select,
 body.host-view-mode #page-players-book textarea{pointer-events:none;opacity:0.65}
-body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:1}
+body.host-view-mode #page-players-book #book-search,
+body.host-view-mode #page-players-book .vault-filter-chip{pointer-events:auto;opacity:1}
 
 /* Player book */
 .people-match-list{
@@ -227,6 +229,41 @@ body.host-view-mode #page-players-book #book-search{pointer-events:auto;opacity:
 .book-row-name{font-weight:800;font-size:14px}
 .book-row-meta{font-size:11px;color:var(--text-muted);margin-top:3px}
 .book-row-actions{display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0}
+.vault-totals{
+  font-size:12px;font-weight:700;line-height:1.45;color:var(--text-muted);
+  margin-bottom:12px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;
+}
+.vault-filter-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.vault-filter-chip{
+  border:1px solid var(--border);background:var(--bg3);color:var(--text-muted);
+  border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;
+}
+.vault-filter-chip.active{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
+.vault-row{cursor:pointer}
+.vault-row:hover{background:rgba(255,255,255,0.02)}
+.vault-star-btn{
+  border:none;background:transparent;color:var(--text-muted);font-size:18px;line-height:1;
+  cursor:pointer;padding:2px 6px;flex-shrink:0;
+}
+.vault-star-btn.is-regular{color:var(--gold)}
+.vault-picker-section{margin-top:12px}
+.vault-picker-section-title{
+  font-size:11px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;
+  color:var(--text-muted);margin:10px 0 6px;
+}
+.vault-picker-row{
+  display:flex;align-items:flex-start;gap:10px;width:100%;
+  padding:10px 8px;border:none;border-bottom:1px solid var(--border);
+  background:transparent;color:var(--text);text-align:left;cursor:pointer;
+}
+.vault-picker-row:disabled{opacity:0.45;cursor:not-allowed}
+.vault-picker-row-body{flex:1;min-width:0}
+.vault-picker-name{font-size:13px;font-weight:800}
+.vault-picker-meta{font-size:11px;font-weight:600;color:var(--text-muted);margin-top:2px}
+.vault-bal-owes{color:var(--red);font-weight:800}
+.vault-bal-owed{color:var(--green);font-weight:800}
+.vault-bal-even{color:var(--text-muted);font-weight:800}
 
 /* BOTTOM TAB BAR */
 .nav{
@@ -943,7 +980,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-new" onclick="headerMenuNewGame(this)"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="layers" aria-hidden="true"></i></span>New Game</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-save" onclick="headerMenuSave()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="save" aria-hidden="true"></i></span>Save</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-account" onclick="headerMenuAccount()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="user" aria-hidden="true"></i></span>Account</button>
-  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-book" onclick="headerMenuPlayersBook()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="book-user" aria-hidden="true"></i></span>Players book</button>
+  <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-book" onclick="headerMenuPlayersBook()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="book-lock" aria-hidden="true"></i></span>Vault</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-audit" onclick="headerMenuAudit()"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="clipboard-list" aria-hidden="true"></i></span>Audit</button>
   <button type="button" class="hdr-menu-item" role="menuitem" id="hdr-menu-item-retry-balances" onclick="headerMenuRetryBalances()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="refresh-cw" aria-hidden="true"></i></span>Retry balance sync</button>
   <button type="button" class="hdr-menu-item hv-allow" role="menuitem" id="hdr-menu-item-logout" onclick="headerMenuLogout()" style="display:none"><span class="hdr-menu-ico" aria-hidden="true"><i data-lucide="lock" aria-hidden="true"></i></span>Log Out</button>
@@ -1088,6 +1125,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
         <option value="books">Books</option>
         <option value="misc">Misc Staff</option>
       </select>
+      <button class="btn btn-outline" style="flex-shrink:0" type="button" onclick="openFromVaultPicker()"><i data-lucide="book-lock" class="action-ico" aria-hidden="true"></i> From Vault</button>
       <button class="btn btn-purple" style="flex-shrink:0" onclick="openAddPersonModal()"><i data-lucide="plus" class="action-ico" aria-hidden="true"></i> Add</button>
     </div>
   </div>
@@ -1132,19 +1170,25 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
   </div>
 </div>
 
-<!-- ===== PLAYERS BOOK ===== -->
+<!-- ===== VAULT (players book) ===== -->
 <div id="page-players-book" class="page">
   <div class="card">
     <div class="card-title">
-      <i data-lucide="book-user" aria-hidden="true"></i> Players book
+      <i data-lucide="book-lock" aria-hidden="true"></i> Vault
       <button class="btn btn-outline btn-xs ml-auto hv-allow" type="button" onclick="showPage('players')"><i data-lucide="arrow-left" class="action-ico" aria-hidden="true"></i> Back</button>
     </div>
+    <div id="vault-totals" class="vault-totals hv-allow">Owed to house $0 (0 people) · House owes $0 (0 people)</div>
     <div class="inp-group" style="margin-bottom:12px">
       <input class="inp hv-allow" id="book-search" placeholder="Search name or tag" style="text-transform:uppercase" oninput="renderPlayersBook()">
     </div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:12px">
-      <input type="checkbox" id="book-show-archived" class="hv-allow" onchange="renderPlayersBook()"> Show archived
-    </label>
+    <div class="vault-filter-row" id="vault-filter-row" role="tablist" aria-label="Vault filters">
+      <button type="button" class="vault-filter-chip active hv-allow" data-vault-filter="all" onclick="setVaultFilter('all')">All</button>
+      <button type="button" class="vault-filter-chip hv-allow" data-vault-filter="owes" onclick="setVaultFilter('owes')">Owes</button>
+      <button type="button" class="vault-filter-chip hv-allow" data-vault-filter="owed" onclick="setVaultFilter('owed')">Owed</button>
+      <button type="button" class="vault-filter-chip hv-allow" data-vault-filter="regulars" onclick="setVaultFilter('regulars')">Regulars</button>
+      <button type="button" class="vault-filter-chip hv-allow" data-vault-filter="archived" onclick="setVaultFilter('archived')">Archived</button>
+    </div>
+    <input type="hidden" id="book-show-archived" value="0">
     <div id="players-book-list"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading…</div></div>
   </div>
 </div>
@@ -1221,6 +1265,63 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
       <div id="add-person-caps-text" class="ico-inline"><i data-lucide="check-circle" aria-hidden="true"></i> Can buy in · <i data-lucide="check-circle" aria-hidden="true"></i> Can cash out</div>
     </div>
     <button class="btn btn-purple" style="width:100%" onclick="addPerson()">Add</button>
+  </div>
+</div>
+
+<!-- MODAL: From Vault picker -->
+<div class="modal-bg" id="modal-from-vault">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title"><i data-lucide="book-lock" aria-hidden="true"></i> From Vault
+      <button class="modal-close" onclick="closeModal('modal-from-vault')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <div class="inp-group" style="margin-bottom:10px">
+      <input class="inp" id="vault-picker-search" placeholder="Search name or tag" style="text-transform:uppercase" oninput="renderFromVaultPicker()">
+    </div>
+    <div id="vault-picker-list" class="scroll-y" style="max-height:min(50vh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+    <button type="button" class="btn btn-purple" style="width:100%;margin-top:12px" id="vault-picker-add-btn" onclick="addSelectedFromVault()">Add 0 to tonight's game</button>
+  </div>
+</div>
+
+<!-- MODAL: Vault person detail -->
+<div class="modal-bg" id="modal-vault-person">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title"><i data-lucide="user" aria-hidden="true"></i> <span id="vault-person-title">Person</span>
+      <button class="modal-close" onclick="closeModal('modal-vault-person')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <input type="hidden" id="vault-person-id" value="">
+    <div id="vault-person-standing" style="font-size:18px;font-weight:900;margin-bottom:12px">EVEN</div>
+    <div id="vault-person-history" class="scroll-y" style="max-height:min(28vh,220px);overflow-y:auto;margin-bottom:14px;border-top:1px solid var(--border);padding-top:8px"></div>
+    <div class="vault-write-controls">
+      <div class="inp-group" style="margin-bottom:10px"><div class="inp-label">Name</div>
+        <input class="inp" id="vault-edit-name" style="text-transform:uppercase"></div>
+      <div class="inp-group" style="margin-bottom:10px"><div class="inp-label">Tag</div>
+        <input class="inp" id="vault-edit-tag" style="text-transform:uppercase" placeholder="Optional"></div>
+      <div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Notes</div>
+        <input class="inp" id="vault-edit-notes" placeholder="Optional notes"></div>
+      <div class="flex-row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button type="button" class="btn btn-outline btn-xs" id="vault-star-toggle-btn" onclick="toggleVaultPersonRegular(this)">★ Regular</button>
+        <button type="button" class="btn btn-outline btn-xs" id="vault-archive-btn" onclick="toggleVaultPersonArchive(this)">Archive</button>
+        <button type="button" class="btn btn-purple btn-xs" onclick="saveVaultPersonEdit()">Save</button>
+      </div>
+      <div id="vault-settle-block" style="border-top:1px solid var(--border);padding-top:12px;display:none">
+        <div class="inp-label" style="margin-bottom:8px">Settle between games</div>
+        <div class="flex-row" style="gap:8px;margin-bottom:8px">
+          <button type="button" class="btn btn-outline btn-xs" id="vault-settle-dir-payment" onclick="setVaultSettleDirection('payment')">Record payment</button>
+          <button type="button" class="btn btn-outline btn-xs" id="vault-settle-dir-payout" onclick="setVaultSettleDirection('payout')">Record payout</button>
+        </div>
+        <div class="flex-row" style="gap:8px;margin-bottom:8px">
+          <input class="inp" id="vault-settle-amount" type="number" inputmode="decimal" placeholder="Amount" style="flex:1">
+          <select class="inp" id="vault-settle-method" style="flex:1;min-width:100px">
+            <option value="cash">Cash</option>
+            <option value="ecash">eCash</option>
+          </select>
+        </div>
+        <div class="inp-group" style="margin-bottom:10px">
+          <input class="inp" id="vault-settle-note" placeholder="Note (optional)">
+        </div>
+        <button type="button" class="btn btn-accent" style="width:100%" id="vault-settle-confirm-btn" onclick="confirmVaultSettle(this)">Confirm</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -7650,6 +7751,54 @@ function formatStandingLabel(standing) {
   return 'Owed $' + fmt(s);
 }
 
+/** Vault row balance chip: OWES / OWED / EVEN */
+function formatVaultBalanceChip(standing) {
+  var s = Math.round((Number(standing) || 0) * 100) / 100;
+  if (Math.abs(s) <= SETTLE_EPSILON) {
+    return { text: 'EVEN', cls: 'vault-bal-even' };
+  }
+  if (s < 0) return { text: 'OWES $' + fmt(Math.abs(s)), cls: 'vault-bal-owes' };
+  return { text: 'OWED $' + fmt(s), cls: 'vault-bal-owed' };
+}
+
+function formatVaultLastPlayedMd(iso) {
+  if (!iso) return 'Never';
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return 'Never';
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  } catch (_e) { return 'Never'; }
+}
+
+function personIsRegular(row) {
+  return !!(row && (row.regular === true || row.regular === 1 || row.regular === 'true'));
+}
+
+function sortPeopleRecentlyPlayed(a, b) {
+  var ta = a && a.last_played_at ? new Date(a.last_played_at).getTime() : 0;
+  var tb = b && b.last_played_at ? new Date(b.last_played_at).getTime() : 0;
+  if (isNaN(ta)) ta = 0;
+  if (isNaN(tb)) tb = 0;
+  if (tb !== ta) return tb - ta;
+  return bookPersonLabel(a).localeCompare(bookPersonLabel(b));
+}
+
+function vaultTotalsFromPeople(list) {
+  var owesAmt = 0, owesN = 0, owedAmt = 0, owedN = 0;
+  (list || []).forEach(function(p) {
+    if (!p || p.archived) return;
+    var s = personStandingBalance(p);
+    if (s < -SETTLE_EPSILON) { owesAmt += Math.abs(s); owesN++; }
+    else if (s > SETTLE_EPSILON) { owedAmt += s; owedN++; }
+  });
+  return {
+    owesAmt: Math.round(owesAmt * 100) / 100,
+    owesN: owesN,
+    owedAmt: Math.round(owedAmt * 100) / 100,
+    owedN: owedN
+  };
+}
+
 /**
  * Signed opening from non-voided CARRYOVER priors only.
  * + house-owes, − player-owes (same sign as playerBalance / standing).
@@ -7719,6 +7868,9 @@ var _peopleFlushTimer = null;
 var _linkingPlayerId = null;
 var _bookHistoryExpanded = {};
 var _endGameContinueFn = null;
+var _vaultFilter = 'all';
+var _vaultPickerSelected = {};
+var _vaultSettleDirection = 'payment';
 
 function pbPeopleOwnerId() {
   if (pbIsHostViewer()) return pbGetLinkedOwnerId() || '';
@@ -7841,6 +7993,12 @@ async function flushPeopleQueue() {
           body: JSON.stringify(op.body || {})
         });
         if (res2 && res2.person) upsertPeopleCacheRow(res2.person);
+      } else if (op.method === 'PAYMENT' && op.id) {
+        var resPay = await pbApi('/people/' + encodeURIComponent(op.id) + '/payments', {
+          method: 'POST',
+          body: JSON.stringify(op.body || {})
+        });
+        if (resPay && resPay.person) upsertPeopleCacheRow(resPay.person);
       } else {
         remain.push(op);
       }
@@ -7956,6 +8114,11 @@ function renderPeopleMatchList() {
   var matches = getPeopleBook(false).filter(function(p){
     var label = bookPersonLabel(p);
     return label.indexOf(q) === 0 || String(p.name || '').toUpperCase().indexOf(q) === 0;
+  }).sort(function(a, b){
+    var ra = personIsRegular(a) ? 0 : 1;
+    var rb = personIsRegular(b) ? 0 : 1;
+    if (ra !== rb) return ra - rb;
+    return sortPeopleRecentlyPlayed(a, b);
   }).slice(0, 8);
 
   var html = '';
@@ -7965,13 +8128,14 @@ function renderPeopleMatchList() {
     var standingBit = Math.abs(standing) > SETTLE_EPSILON
       ? (' · ' + formatStandingLabel(standing))
       : '';
+    var star = personIsRegular(p) ? '★ ' : '';
     var meta = 'Last played ' + formatBookLastPlayed(p.last_played_at)
       + (p.last_role ? (' · ' + String(p.last_role)) : '')
       + standingBit;
     html += '<button type="button" class="people-match-row' + (disabled ? ' in-game' : '') + '"'
       + (disabled ? ' disabled' : '')
       + ' onclick="selectBookPerson(\'' + String(p.id).replace(/'/g, '') + '\')">'
-      + '<span>' + bookPersonLabel(p) + (disabled ? ' · In game' : '') + '</span>'
+      + '<span>' + star + bookPersonLabel(p) + (disabled ? ' · In game' : '') + '</span>'
       + '<span class="people-match-meta">' + meta + '</span>'
       + '</button>';
   });
@@ -8018,6 +8182,9 @@ function selectNewBookPerson() {
 
 async function persistBookPerson(payload) {
   var ownerId = pbPeopleOwnerId();
+  var existing = payload.id
+    ? getPeopleBook(true).find(function(p){ return String(p.id) === String(payload.id); })
+    : null;
   var row = {
     id: payload.id || pbNewUuid(),
     owner_user_id: ownerId || null,
@@ -8027,8 +8194,12 @@ async function persistBookPerson(payload) {
     last_role: payload.last_role || null,
     last_played_at: payload.last_played_at || new Date().toISOString(),
     archived: !!payload.archived,
+    regular: payload.regular != null ? !!payload.regular : personIsRegular(existing),
     updated_at: new Date().toISOString()
   };
+  if (existing && existing.standing_balance != null && payload.standing_balance == null) {
+    row.standing_balance = existing.standing_balance;
+  }
   upsertPeopleCacheRow(row);
 
   if (_peopleReadOnly || pbIsHostViewer()) {
@@ -8043,7 +8214,8 @@ async function persistBookPerson(payload) {
     notes: row.notes,
     last_role: row.last_role,
     last_played_at: row.last_played_at,
-    archived: row.archived
+    archived: row.archived,
+    regular: row.regular
   };
 
   // Signed out / no token: ALWAYS enqueue POST (never cache-only).
@@ -8170,31 +8342,69 @@ async function pbHealPeopleBook() {
 }
 
 function openPlayersBookScreen() {
+  openVaultScreen();
+}
+
+function openVaultScreen() {
   showPage('players-book');
   refreshPeopleBook({ render: true });
+  renderPlayersBook();
+}
+
+function setVaultFilter(filter) {
+  _vaultFilter = String(filter || 'all');
+  var chips = document.querySelectorAll('#vault-filter-row .vault-filter-chip');
+  for (var i = 0; i < chips.length; i++) {
+    var c = chips[i];
+    c.classList.toggle('active', c.getAttribute('data-vault-filter') === _vaultFilter);
+  }
+  var archEl = document.getElementById('book-show-archived');
+  if (archEl) archEl.value = _vaultFilter === 'archived' ? '1' : '0';
   renderPlayersBook();
 }
 
 function renderPlayersBook() {
   var el = document.getElementById('players-book-list');
   if (!el) return;
+  var totalsEl = document.getElementById('vault-totals');
+  var allPeople = getPeopleBook(true);
+  var totals = vaultTotalsFromPeople(allPeople);
+  if (totalsEl) {
+    totalsEl.textContent =
+      'Owed to house $' + fmt(totals.owesAmt) + ' (' + totals.owesN + ' people) · House owes $'
+      + fmt(totals.owedAmt) + ' (' + totals.owedN + ' people)';
+  }
+
   var q = (document.getElementById('book-search') && document.getElementById('book-search').value || '')
     .trim().toUpperCase();
-  var showArchived = !!(document.getElementById('book-show-archived')
-    && document.getElementById('book-show-archived').checked);
-  var list = getPeopleBook(true).filter(function(p){
-    if (!showArchived && p.archived) return false;
+  var filter = _vaultFilter || 'all';
+  var list = allPeople.filter(function(p){
+    if (filter === 'archived') {
+      if (!p.archived) return false;
+    } else if (p.archived) {
+      return false;
+    }
+    if (filter === 'owes') {
+      if (!(personStandingBalance(p) < -SETTLE_EPSILON)) return false;
+    } else if (filter === 'owed') {
+      if (!(personStandingBalance(p) > SETTLE_EPSILON)) return false;
+    } else if (filter === 'regulars') {
+      if (!personIsRegular(p)) return false;
+    }
     if (!q) return true;
     return bookPersonLabel(p).indexOf(q) !== -1
       || String(p.name || '').toUpperCase().indexOf(q) !== -1
       || String(p.tag || '').toUpperCase().indexOf(q) !== -1;
   }).sort(function(a, b){
-    return bookPersonLabel(a).localeCompare(bookPersonLabel(b));
+    var ra = personIsRegular(a) ? 0 : 1;
+    var rb = personIsRegular(b) ? 0 : 1;
+    if (ra !== rb) return ra - rb;
+    return sortPeopleRecentlyPlayed(a, b);
   });
 
   if (!list.length) {
     el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">'
-      + (q ? 'No matches' : 'No people in your book yet')
+      + (q ? 'No matches' : 'No people in your Vault yet')
       + '</div>';
     return;
   }
@@ -8202,128 +8412,147 @@ function renderPlayersBook() {
   var readOnly = _peopleReadOnly || pbIsHostViewer() || _hostViewMode;
   el.innerHTML = list.map(function(p){
     var standing = personStandingBalance(p);
-    var standColor = Math.abs(standing) <= SETTLE_EPSILON ? 'var(--text-muted)'
-      : (standing < 0 ? 'var(--red)' : 'var(--green)');
+    var chip = formatVaultBalanceChip(standing);
     var meta = (p.last_role ? String(p.last_role) : '—')
-      + ' · Last played ' + formatBookLastPlayed(p.last_played_at)
+      + ' · ' + formatVaultLastPlayedMd(p.last_played_at)
       + (p.archived ? ' · Archived' : '');
-    var actions = '';
-    if (!readOnly) {
-      actions = '<div class="book-row-actions book-edit-controls">'
-        + '<button type="button" class="btn btn-outline btn-xs" onclick="editBookPerson(\'' + p.id + '\')">Edit</button>'
-        + '<button type="button" class="btn btn-outline btn-xs" onclick="toggleArchiveBookPerson(this,\'' + p.id + '\')">'
-        + (p.archived ? 'Unarchive' : 'Archive') + '</button>'
-        + '</div>';
-    }
-    var open = !!_bookHistoryExpanded[String(p.id)];
-    var histId = 'book-hist-' + String(p.id).replace(/[^a-zA-Z0-9_-]/g, '');
-    return '<div class="book-row">'
+    var starCls = personIsRegular(p) ? ' vault-star-btn is-regular' : ' vault-star-btn';
+    var starBtn = readOnly
+      ? ('<span class="' + starCls.trim() + '" aria-hidden="true">' + (personIsRegular(p) ? '★' : '☆') + '</span>')
+      : ('<button type="button" class="' + starCls.trim() + ' vault-write-controls" title="Regular"'
+        + ' onclick="event.stopPropagation();toggleVaultRegular(this,\'' + p.id + '\')">'
+        + (personIsRegular(p) ? '★' : '☆') + '</button>');
+    return '<div class="book-row vault-row" onclick="openVaultPerson(\'' + p.id + '\')">'
+      + starBtn
       + '<div class="book-row-main" style="flex:1;min-width:0">'
       + '<div class="book-row-name">' + bookPersonLabel(p) + '</div>'
       + '<div class="book-row-meta">' + meta + (p.notes ? (' · ' + String(p.notes)) : '') + '</div>'
-      + '<div style="margin-top:4px;font-size:12px;font-weight:800;color:' + standColor + '">Standing: '
-        + formatStandingLabel(standing) + '</div>'
-      + '<button type="button" class="btn btn-outline btn-xs" style="margin-top:6px" onclick="toggleBookBalanceHistory(\'' + p.id + '\')">'
-        + (open ? 'Hide history' : 'History') + '</button>'
-      + '<div id="' + histId + '" class="book-balance-history" style="margin-top:8px;'
-        + (open ? '' : 'display:none;') + '"></div>'
       + '</div>'
-      + actions
+      + '<div class="' + chip.cls + '" style="flex-shrink:0;font-size:12px">' + chip.text + '</div>'
       + '</div>';
   }).join('');
   refreshLucideIcons();
-  list.forEach(function(p){
-    if (_bookHistoryExpanded[String(p.id)]) loadBookBalanceHistory(p.id);
-  });
 }
 
-async function toggleBookBalanceHistory(personId) {
-  var key = String(personId);
-  _bookHistoryExpanded[key] = !_bookHistoryExpanded[key];
-  renderPlayersBook();
+function formatVaultHistoryEntry(e) {
+  var kind = String((e && e.kind) || 'game').toLowerCase();
+  var dlt = Math.round((Number(e.delta) || 0) * 100) / 100;
+  var dColor = Math.abs(dlt) <= SETTLE_EPSILON ? 'var(--text-muted)'
+    : (dlt < 0 ? 'var(--red)' : 'var(--green)');
+  if (kind === 'payment') {
+    var method = String((e && e.method) || 'cash').toLowerCase();
+    var note = e && e.note ? String(e.note) : '';
+    var when = formatBookHistoryWhen(e) || (e && e.posted_at
+      ? formatVaultLastPlayedMd(e.posted_at) : '');
+    var line = 'Payment · ' + method + (note ? (' · ' + note) : '');
+    return '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--border)">'
+      + '<div style="color:var(--text-muted)">' + when + '</div>'
+      + '<div>' + line + ' · <strong style="color:' + dColor + '">'
+      + (dlt > 0 ? '+' : '') + '$' + fmt(Math.abs(dlt)) + '</strong></div>'
+      + '</div>';
+  }
+  var whenG = formatBookHistoryWhen(e);
+  return '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--border)">'
+    + '<div style="color:var(--text-muted)">' + whenG + '</div>'
+    + '<div>Open <strong>$' + fmt(e.opening_balance) + '</strong> → Close <strong>$'
+    + fmt(e.closing_balance) + '</strong> · Δ <strong style="color:' + dColor + '">'
+    + (dlt > 0 ? '+' : '') + '$' + fmt(dlt) + '</strong></div>'
+    + '</div>';
 }
 
 async function loadBookBalanceHistory(personId) {
-  var histId = 'book-hist-' + String(personId).replace(/[^a-zA-Z0-9_-]/g, '');
-  var el = document.getElementById(histId);
+  var el = document.getElementById('vault-person-history');
   if (!el) return;
-  if (_peopleReadOnly || pbIsHostViewer()) {
-    // read-only OK — history is readable
-  }
   el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Loading…</div>';
   try {
     var data = await pbApi('/people/' + encodeURIComponent(personId) + '/balance-history', { method: 'GET' });
     var entries = (data && data.entries) || [];
+    if (data && data.person) upsertPeopleCacheRow(data.person);
     if (!entries.length) {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No posted games yet</div>';
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No history yet</div>';
       return;
     }
-    el.innerHTML = entries.map(function(e){
-      var dlt = Math.round((Number(e.delta) || 0) * 100) / 100;
-      var dColor = Math.abs(dlt) <= SETTLE_EPSILON ? 'var(--text-muted)'
-        : (dlt < 0 ? 'var(--red)' : 'var(--green)');
-      var when = formatBookHistoryWhen(e);
-      return '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--border)">'
-        + '<div style="color:var(--text-muted)">' + when + '</div>'
-        + '<div>Open <strong>$' + fmt(e.opening_balance) + '</strong> → Close <strong>$'
-        + fmt(e.closing_balance) + '</strong> · Δ <strong style="color:' + dColor + '">'
-        + (dlt > 0 ? '+' : '') + '$' + fmt(dlt) + '</strong></div>'
-        + '</div>';
-    }).join('');
+    el.innerHTML = entries.map(formatVaultHistoryEntry).join('');
   } catch (_e) {
     el.innerHTML = '<div style="color:var(--red);font-size:12px">Unable to load history</div>';
   }
 }
 
 function editBookPerson(id) {
+  openVaultPerson(id);
+}
+
+function openVaultPerson(id) {
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (!row) return;
+  setVal('vault-person-id', row.id);
+  var titleEl = document.getElementById('vault-person-title');
+  if (titleEl) titleEl.textContent = bookPersonLabel(row);
+  var standEl = document.getElementById('vault-person-standing');
+  var standing = personStandingBalance(row);
+  var chip = formatVaultBalanceChip(standing);
+  if (standEl) {
+    standEl.textContent = chip.text;
+    standEl.className = chip.cls;
+  }
+  setVal('vault-edit-name', row.name || '');
+  setVal('vault-edit-tag', row.tag || '');
+  setVal('vault-edit-notes', row.notes || '');
+  var starBtn = document.getElementById('vault-star-toggle-btn');
+  if (starBtn) starBtn.textContent = personIsRegular(row) ? '★ Regular' : '☆ Regular';
+  var archBtn = document.getElementById('vault-archive-btn');
+  if (archBtn) archBtn.textContent = row.archived ? 'Unarchive' : 'Archive';
+
+  var readOnly = _peopleReadOnly || pbIsHostViewer() || _hostViewMode;
+  var writeBlock = document.querySelector('#modal-vault-person .vault-write-controls');
+  if (writeBlock) writeBlock.style.display = readOnly ? 'none' : '';
+
+  var settle = document.getElementById('vault-settle-block');
+  if (settle) {
+    var showSettle = !readOnly && Math.abs(standing) > SETTLE_EPSILON;
+    settle.style.display = showSettle ? 'block' : 'none';
+    if (showSettle) {
+      _vaultSettleDirection = standing < 0 ? 'payment' : 'payout';
+      setVaultSettleDirection(_vaultSettleDirection);
+      setVal('vault-settle-amount', '');
+      setVal('vault-settle-note', '');
+      var methodEl = document.getElementById('vault-settle-method');
+      if (methodEl) methodEl.value = 'cash';
+    }
+  }
+  openModal('modal-vault-person');
+  refreshLucideIcons();
+  loadBookBalanceHistory(row.id);
+}
+
+function setVaultSettleDirection(dir) {
+  _vaultSettleDirection = dir === 'payout' ? 'payout' : 'payment';
+  var payBtn = document.getElementById('vault-settle-dir-payment');
+  var outBtn = document.getElementById('vault-settle-dir-payout');
+  if (payBtn) {
+    payBtn.style.borderColor = _vaultSettleDirection === 'payment' ? 'var(--gold)' : '';
+    payBtn.style.color = _vaultSettleDirection === 'payment' ? 'var(--gold)' : '';
+  }
+  if (outBtn) {
+    outBtn.style.borderColor = _vaultSettleDirection === 'payout' ? 'var(--gold)' : '';
+    outBtn.style.color = _vaultSettleDirection === 'payout' ? 'var(--gold)' : '';
+  }
+}
+
+async function saveVaultPersonEdit() {
   if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
     toast('Read-only in host view');
     return;
   }
-  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
-  if (!row) return;
-  openBookEditModal(row);
-}
-
-function openBookEditModal(row) {
-  var existing = document.getElementById('modal-book-edit');
-  if (!existing) {
-    var wrap = document.createElement('div');
-    wrap.className = 'modal-bg';
-    wrap.id = 'modal-book-edit';
-    wrap.innerHTML = '<div class="modal">'
-      + '<div class="modal-title"><i data-lucide="pencil" aria-hidden="true"></i> Edit person'
-      + '<button class="modal-close" onclick="closeModal(\'modal-book-edit\')" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>'
-      + '<input type="hidden" id="book-edit-id">'
-      + '<div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Name</div>'
-      + '<input class="inp" id="book-edit-name" style="text-transform:uppercase"></div>'
-      + '<div class="inp-group" style="margin-bottom:12px"><div class="inp-label">Tag</div>'
-      + '<input class="inp" id="book-edit-tag" style="text-transform:uppercase" placeholder="Optional"></div>'
-      + '<div class="inp-group" style="margin-bottom:16px"><div class="inp-label">Notes</div>'
-      + '<input class="inp" id="book-edit-notes" placeholder="Optional notes"></div>'
-      + '<button class="btn btn-purple" style="width:100%" onclick="saveBookEdit()">Save</button>'
-      + '</div>';
-    document.body.appendChild(wrap);
-  }
-  setVal('book-edit-id', row.id);
-  setVal('book-edit-name', row.name || '');
-  setVal('book-edit-tag', row.tag || '');
-  setVal('book-edit-notes', row.notes || '');
-  openModal('modal-book-edit');
-  refreshLucideIcons();
-}
-
-async function saveBookEdit() {
-  var id = getVal('book-edit-id');
-  var name = getVal('book-edit-name').trim().toUpperCase();
-  var tag = getVal('book-edit-tag').trim().toUpperCase() || null;
-  var notes = getVal('book-edit-notes').trim();
+  var id = getVal('vault-person-id');
+  var name = getVal('vault-edit-name').trim().toUpperCase();
+  var tag = getVal('vault-edit-tag').trim().toUpperCase() || null;
+  var notes = getVal('vault-edit-notes').trim();
   if (!id || !name) { toast('Name required'); return; }
   var patch = { name: name, tag: tag, notes: notes };
   upsertPeopleCacheRow(Object.assign({}, getPeopleBook(true).find(function(p){ return String(p.id) === String(id); }) || { id: id }, patch, {
     updated_at: new Date().toISOString()
   }));
-  // Keep in-game seats in sync for display
   (G.players || []).forEach(function(p){
     if (p && String(p.personId) === String(id)) {
       p.name = name;
@@ -8331,11 +8560,12 @@ async function saveBookEdit() {
       if (notes) p.notes = notes;
     }
   });
-  closeModal('modal-book-edit');
   renderPlayersBook();
   calcAll(); renderAll(); autoSave();
+  var titleEl = document.getElementById('vault-person-title');
+  if (titleEl) titleEl.textContent = bookPersonLabel({ name: name, tag: tag });
 
-  if (_peopleReadOnly || pbIsHostViewer() || !pbPeopleOwnerId() || !pbAccessToken()) {
+  if (!pbPeopleOwnerId() || !pbAccessToken()) {
     enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
     toast(pbAccessToken() ? 'Saved locally — will sync when online' : 'Not signed in — saved on this phone');
     return;
@@ -8358,6 +8588,47 @@ async function saveBookEdit() {
   renderPlayersBook();
 }
 
+function toggleVaultRegular(btn, id) {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (!row) return;
+  var next = !personIsRegular(row);
+  upsertPeopleCacheRow(Object.assign({}, row, { regular: next, updated_at: new Date().toISOString() }));
+  renderPlayersBook();
+  var patch = { regular: next };
+  if (!pbPeopleOwnerId() || !pbAccessToken()) {
+    enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+    toast(next ? 'Marked regular (local)' : 'Regular cleared (local)');
+    return;
+  }
+  pbApi('/people/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    body: JSON.stringify(patch)
+  }).then(function(res){
+    if (res && res.person) upsertPeopleCacheRow(res.person);
+    renderPlayersBook();
+  }).catch(function(){
+    enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
+  });
+}
+
+function toggleVaultPersonRegular(btn) {
+  var id = getVal('vault-person-id');
+  if (!id) return;
+  toggleVaultRegular(btn, id);
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (btn && row) btn.textContent = personIsRegular(row) ? '★ Regular' : '☆ Regular';
+}
+
+function toggleVaultPersonArchive(btn) {
+  var id = getVal('vault-person-id');
+  if (!id) return;
+  toggleArchiveBookPerson(btn, id);
+}
+
 function toggleArchiveBookPerson(btn, id) {
   if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
     toast('Read-only in host view');
@@ -8369,6 +8640,8 @@ function toggleArchiveBookPerson(btn, id) {
   confirmAction(btn, next ? 'Click again to archive' : 'Click again to unarchive', function(){
     upsertPeopleCacheRow(Object.assign({}, row, { archived: next, updated_at: new Date().toISOString() }));
     renderPlayersBook();
+    var archBtn = document.getElementById('vault-archive-btn');
+    if (archBtn) archBtn.textContent = next ? 'Unarchive' : 'Archive';
     var patch = { archived: next };
     if (_peopleReadOnly || !pbPeopleOwnerId() || !pbAccessToken()) {
       enqueuePeopleMutation({ method: 'PATCH', id: id, body: patch });
@@ -8387,6 +8660,246 @@ function toggleArchiveBookPerson(btn, id) {
       toast(next ? 'Archived locally' : 'Unarchived locally');
     });
   });
+}
+
+async function saveBookEdit() {
+  return saveVaultPersonEdit();
+}
+
+function confirmVaultSettle(btn) {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  var id = getVal('vault-person-id');
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+  if (!row) return;
+  var amount = Math.round((Number(String(getVal('vault-settle-amount')).replace(/,/g, '')) || 0) * 100) / 100;
+  if (!(amount > 0)) { toast('Enter an amount'); return; }
+  var method = (document.getElementById('vault-settle-method')
+    && document.getElementById('vault-settle-method').value) || 'cash';
+  var note = getVal('vault-settle-note').trim();
+  var direction = _vaultSettleDirection === 'payout' ? 'payout' : 'payment';
+  var standing = personStandingBalance(row);
+  var delta = direction === 'payout' ? -amount : amount;
+  var nextStanding = Math.round((standing + delta) * 100) / 100;
+  var effect = direction === 'payment'
+    ? ('Record $' + fmt(amount) + ' ' + method + ' payment from ' + bookPersonLabel(row)
+      + ' → standing ' + formatStandingLabel(nextStanding))
+    : ('Record $' + fmt(amount) + ' ' + method + ' payout to ' + bookPersonLabel(row)
+      + ' → standing ' + formatStandingLabel(nextStanding));
+  confirmAction(btn, effect, function(){
+    recordVaultPayment(id, { amount: amount, direction: direction, method: method, note: note });
+  }, { name: bookPersonLabel(row), amount: amount });
+}
+
+async function recordVaultPayment(personId, opts) {
+  opts = opts || {};
+  var amount = Math.round((Number(opts.amount) || 0) * 100) / 100;
+  var direction = opts.direction === 'payout' ? 'payout' : 'payment';
+  var method = String(opts.method || 'cash').toLowerCase() === 'ecash' ? 'ecash' : 'cash';
+  var note = opts.note ? String(opts.note) : '';
+  var delta = direction === 'payout' ? -amount : amount;
+  var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(personId); });
+  if (!row) return;
+  var opening = personStandingBalance(row);
+  var closing = Math.round((opening + delta) * 100) / 100;
+  upsertPeopleCacheRow(Object.assign({}, row, {
+    standing_balance: closing,
+    balance_updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }));
+  renderPlayersBook();
+  openVaultPerson(personId);
+
+  var body = { amount: amount, direction: direction, method: method, note: note || null };
+  if (_peopleReadOnly || pbIsHostViewer() || !pbPeopleOwnerId() || !pbAccessToken()) {
+    enqueuePeopleMutation({ method: 'PAYMENT', id: personId, body: body });
+    toast('Payment saved locally — will sync when online');
+    return;
+  }
+  try {
+    var res = await pbApi('/people/' + encodeURIComponent(personId) + '/payments', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    if (res && res.person) upsertPeopleCacheRow(res.person);
+    toast(direction === 'payment' ? 'Payment recorded ✅' : 'Payout recorded ✅');
+    renderPlayersBook();
+    openVaultPerson(personId);
+  } catch (_e) {
+    enqueuePeopleMutation({ method: 'PAYMENT', id: personId, body: body });
+    toast('Payment saved locally — will sync when online');
+  }
+}
+
+function openFromVaultPicker() {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  _vaultPickerSelected = {};
+  var inGame = inGamePersonIds();
+  Object.keys(inGame).forEach(function(id){ _vaultPickerSelected[id] = true; });
+  setVal('vault-picker-search', '');
+  openModal('modal-from-vault');
+  refreshPeopleBook({ render: false }).then(function(){
+    renderFromVaultPicker();
+  });
+  renderFromVaultPicker();
+  refreshLucideIcons();
+}
+
+function toggleVaultPickerPerson(personId, checked) {
+  var inGame = inGamePersonIds();
+  if (inGame[String(personId)]) return;
+  if (checked) _vaultPickerSelected[String(personId)] = true;
+  else delete _vaultPickerSelected[String(personId)];
+  updateVaultPickerAddBtn();
+}
+
+function updateVaultPickerAddBtn() {
+  var inGame = inGamePersonIds();
+  var n = 0;
+  Object.keys(_vaultPickerSelected).forEach(function(id){
+    if (!inGame[id]) n++;
+  });
+  var btn = document.getElementById('vault-picker-add-btn');
+  if (btn) btn.textContent = 'Add ' + n + ' to tonight\'s game';
+}
+
+function renderFromVaultPicker() {
+  var el = document.getElementById('vault-picker-list');
+  if (!el) return;
+  var q = (document.getElementById('vault-picker-search')
+    && document.getElementById('vault-picker-search').value || '').trim().toUpperCase();
+  var inGame = inGamePersonIds();
+  var people = getPeopleBook(false).filter(function(p){
+    if (!q) return true;
+    return bookPersonLabel(p).indexOf(q) !== -1
+      || String(p.name || '').toUpperCase().indexOf(q) !== -1
+      || String(p.tag || '').toUpperCase().indexOf(q) !== -1;
+  });
+
+  function section(title, rows) {
+    if (!rows.length) return '';
+    var html = '<div class="vault-picker-section"><div class="vault-picker-section-title">'
+      + title + '</div>';
+    rows.sort(sortPeopleRecentlyPlayed).forEach(function(p){
+      var id = String(p.id);
+      var disabled = !!inGame[id];
+      var checked = disabled || !!_vaultPickerSelected[id];
+      var chip = formatVaultBalanceChip(personStandingBalance(p));
+      var lastBit = formatVaultLastPlayedMd(p.last_played_at);
+      var meta = (p.last_role ? String(p.last_role) : '—') + ' · ' + lastBit;
+      html += '<label class="vault-picker-row"' + (disabled ? ' style="opacity:0.45"' : '') + '>'
+        + '<input type="checkbox" ' + (checked ? 'checked ' : '') + (disabled ? 'disabled ' : '')
+        + 'onchange="toggleVaultPickerPerson(\'' + id.replace(/'/g, '') + '\', this.checked)">'
+        + '<div class="vault-picker-row-body">'
+        + '<div class="vault-picker-name">' + bookPersonLabel(p) + '</div>'
+        + '<div class="vault-picker-meta">' + meta + '</div>'
+        + '</div>'
+        + '<div class="' + chip.cls + '" style="font-size:11px;flex-shrink:0">' + chip.text + '</div>'
+        + '</label>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  var regulars = people.filter(function(p){ return personIsRegular(p); });
+  var owes = people.filter(function(p){
+    return !personIsRegular(p) && personStandingBalance(p) < -SETTLE_EPSILON;
+  });
+  var owed = people.filter(function(p){
+    return !personIsRegular(p) && personStandingBalance(p) > SETTLE_EPSILON;
+  });
+  var rest = people.filter(function(p){
+    if (personIsRegular(p)) return false;
+    var s = personStandingBalance(p);
+    return Math.abs(s) <= SETTLE_EPSILON;
+  });
+
+  var html = section('★ Regulars', regulars)
+    + section('Owes', owes)
+    + section('Owed', owed)
+    + section('Everyone else', rest);
+  if (!html) {
+    html = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">'
+      + (q ? 'No matches' : 'No people in your Vault yet') + '</div>';
+  }
+  el.innerHTML = html;
+  updateVaultPickerAddBtn();
+}
+
+function addPersonFromVaultRow(row) {
+  if (!row || !row.id) return { added: false, carried: false };
+  if (inGamePersonIds()[String(row.id)]) return { added: false, carried: false };
+  var role = String(row.last_role || 'player');
+  if (!(role === 'player' || role === 'host-player' || STAFF_ROLE_KEYS.indexOf(role) >= 0)) {
+    role = 'player';
+  }
+  var isPlayer = role === 'player';
+  var isDual = role === 'host-player';
+  var staffRole = isPlayer ? '' : normalizeStaffRole(role);
+  var plays = isPlayer || isDual;
+  var newP = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    personId: String(row.id),
+    name: String(row.name || '').trim().toUpperCase(),
+    tag: row.tag || '',
+    role: isPlayer ? 'player' : staffRole,
+    staffRole: staffRole,
+    plays: !!plays,
+    notes: row.notes || '',
+    capabilities: {
+      canBuyIn: plays,
+      canCashOut: plays,
+      canLogTips: !isPlayer,
+      canLogDrop: staffRole === 'dealer',
+      canReceiveECash: true
+    },
+    buyIns: [], cashOuts: [], chipTurnIns: [], drops: [], tips: [], expenses: [], credits: [], markerCredits: [], priorBalances: [], priorPayments: [],
+    hostCash: [], staffCollects: []
+  };
+  if (staffRole === 'chef') newP.basePay = 0;
+  if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
+  G.players.push(newP);
+  ensureGameId();
+  var carried = applyCarryoverPrior(newP, personStandingBalance(row));
+  persistBookPerson({
+    id: row.id,
+    name: newP.name,
+    tag: newP.tag || null,
+    notes: newP.notes || null,
+    last_role: isPlayer ? 'player' : (isDual ? 'host-player' : staffRole),
+    last_played_at: new Date().toISOString(),
+    regular: personIsRegular(row)
+  }).catch(function(){});
+  return { added: true, carried: !!carried, player: newP };
+}
+
+function addSelectedFromVault() {
+  if (_peopleReadOnly || pbIsHostViewer() || _hostViewMode) {
+    toast('Read-only in host view');
+    return;
+  }
+  var inGame = inGamePersonIds();
+  var ids = Object.keys(_vaultPickerSelected).filter(function(id){ return !inGame[id]; });
+  if (!ids.length) { toast('Select people to add'); return; }
+  var added = 0;
+  var carried = 0;
+  ids.forEach(function(id){
+    var row = getPeopleBook(true).find(function(p){ return String(p.id) === String(id); });
+    if (!row) return;
+    var result = addPersonFromVaultRow(row);
+    if (result.added) {
+      added++;
+      if (result.carried) carried++;
+    }
+  });
+  closeModal('modal-from-vault');
+  calcAll(); renderAll(); autoSave();
+  toast('Added ' + added + (carried ? (' · ' + carried + ' with carried balances') : ''));
 }
 
 function openLinkPersonPicker(playerId) {
