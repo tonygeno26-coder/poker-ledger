@@ -1443,6 +1443,18 @@ function txnIsActive(t) {
   return true;
 }
 
+/** Close-out txn types — do not stale chip reconcile or count as post-close activity. */
+var CLOSE_OUT_TXN_TYPES = {
+  CHIP_RECONCILE: 1,
+  ECASH_CLOSE: 1,
+  ECASH_TO_PERSON: 1,
+  CASH_TO_HOST: 1
+};
+
+function isCloseOutTxnType(type) {
+  return !!CLOSE_OUT_TXN_TYPES[String(type || '').toUpperCase()];
+}
+
 /** Mark the first matching active txn as voided:true (no phantom VOID_* counter rows). */
 function markTxnVoided(matchFn) {
   var log = G.txnLog || [];
@@ -1451,7 +1463,7 @@ function markTxnVoided(matchFn) {
     if (!txnIsActive(t)) continue;
     if (matchFn(t, i)) {
       t.voided = true;
-      if (String(t.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+      if (!isCloseOutTxnType(t.type)) {
         markChipReconcileStale();
       }
       return t;
@@ -1823,15 +1835,38 @@ function staffCollectsTotal(p) {
 }
 
 /**
- * One account per person: playing + working.
+ * Close-out account adjust: CASH_TO_HOST / ECASH_TO_PERSON → person −amount
+ * (+ = house owes them, − = they owe). ECASH_CLOSE does not touch the account.
+ */
+function closeOutAccountNet(p) {
+  if (!p) return 0;
+  var pid = String(p.id);
+  var total = 0;
+  (G.txnLog || []).forEach(function(t) {
+    if (!txnIsActive(t)) return;
+    var typ = String(t.type || '').toUpperCase();
+    if (typ !== 'CASH_TO_HOST' && typ !== 'ECASH_TO_PERSON') return;
+    var tid = t.personId != null && t.personId !== '' ? String(t.personId)
+      : (t.playerId != null && t.playerId !== '' ? String(t.playerId) : '');
+    if (tid === pid) total -= (Number(t.amount) || 0);
+  });
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * One account per person: playing + working (+ close-out inside staff tip balance).
+ * Pure players can still receive CASH_TO_HOST / ECASH_TO_PERSON (fallback pick).
  * + = house owes them, − = they owe the house.
- * Does not alter playerBalance / staffTipBalance formulas — sums them.
+ * Does not alter playerBalance formula — sums play + work/close.
  */
 function personAccountBalance(p) {
   if (!p) return 0;
   var play = playerBalance(p);
-  var work = p.staffRole ? staffTipBalance(p) : 0;
-  return Math.round((play + work) * 100) / 100;
+  if (p.staffRole) {
+    return Math.round((play + staffTipBalance(p)) * 100) / 100;
+  }
+  var closeAdj = closeOutAccountNet(p);
+  return Math.round((play + closeAdj) * 100) / 100;
 }
 
 function personAccountStateWord(bal) {
@@ -1868,6 +1903,10 @@ function staffTipBalanceReceiptTerms(p) {
     terms.push({ label: 'Host cash', signedAmount: hostNet });
   }
   if (collects > SETTLE_EPSILON) terms.push({ label: 'Staff collect', signedAmount: collects });
+  var closeAdj = closeOutAccountNet(p);
+  if (Math.abs(closeAdj) > SETTLE_EPSILON) {
+    terms.push({ label: 'Close-out', signedAmount: closeAdj });
+  }
   return terms;
 }
 
@@ -1923,9 +1962,10 @@ function staffEcashUsed(p) {
 
 function staffTipBalance(p) {
   // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By (buy-ins + marker PAY IN)
-  // + hostCash (deposits − withdrawals) + staffCollects
+  // + hostCash (deposits − withdrawals) + staffCollects + close-out (CASH_TO_HOST / ECASH_TO_PERSON)
   // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
   // DROP does NOT affect staff payout / tip balance. No Chef overpay flooring.
+  // ECASH_CLOSE does not change this (already via staffEcashUsed).
   var grossTips  = tipsTotal(p);
   var taxPaid    = (p.staffTaxLog||[]).reduce(function(s,t){ return s + t.taxAmount; }, 0);
   var reimbursements = staffExpensesTotal(p);
@@ -1937,7 +1977,8 @@ function staffTipBalance(p) {
   else if (role === 'books') base = staffHourlyPay(p);
   var hostNet = hostCashNet(p);
   var collects = staffCollectsTotal(p);
-  return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed + hostNet + collects;
+  var closeAdj = closeOutAccountNet(p);
+  return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed + hostNet + collects + closeAdj;
 }
 function calcStaffBalance(p) { return staffTipBalance(p); }
 
@@ -2106,6 +2147,7 @@ function formatChipReconcileLine(reconcileAmt) {
 }
 
 function markChipReconcileStale() {
+  G.closeOutChipsAccepted = false;
   if (!getActiveChipReconcile()) return;
   G.chipReconcileStale = true;
   G.chipReconcileStaleAt = new Date().toISOString();
@@ -2114,6 +2156,74 @@ function markChipReconcileStale() {
 function clearChipReconcileStale() {
   G.chipReconcileStale = false;
   G.chipReconcileStaleAt = null;
+}
+
+/** Sum of active close-out txn amounts of a given type (signed as stored). */
+function sumActiveCloseOutAmount(type) {
+  var want = String(type || '').toUpperCase();
+  var total = 0;
+  (G.txnLog || []).forEach(function(t) {
+    if (!txnIsActive(t)) return;
+    if (String(t.type || '').toUpperCase() !== want) return;
+    total += (Number(t.amount) || 0);
+  });
+  return Math.round(total * 100) / 100;
+}
+
+function cashToHostTotal() {
+  return sumActiveCloseOutAmount('CASH_TO_HOST');
+}
+
+function ecashCloseTotal() {
+  return Math.round((sumActiveCloseOutAmount('ECASH_CLOSE') + sumActiveCloseOutAmount('ECASH_TO_PERSON')) * 100) / 100;
+}
+
+function getActiveCashToHost() {
+  var log = G.txnLog || [];
+  for (var i = 0; i < log.length; i++) {
+    var t = log[i];
+    if (!txnIsActive(t)) continue;
+    if (String(t.type || '').toUpperCase() === 'CASH_TO_HOST') return t;
+  }
+  return null;
+}
+
+function listActiveEcashCloseEntries() {
+  return (G.txnLog || []).filter(function(t) {
+    if (!txnIsActive(t)) return false;
+    var typ = String(t.type || '').toUpperCase();
+    return typ === 'ECASH_CLOSE' || typ === 'ECASH_TO_PERSON';
+  });
+}
+
+function isCloseOutChipsDone() {
+  if (G.chipReconcileStale) return false;
+  if (G.closeOutChipsAccepted) return true;
+  return !!getActiveChipReconcile() && !needsChipCountBeforeClose();
+}
+
+function isCloseOutEcashDone() {
+  var d = calcDashboard();
+  return Math.abs(d.eCashOnHand || 0) < SETTLE_EPSILON;
+}
+
+function isCloseOutCashDone() {
+  var d = calcDashboard();
+  return Math.abs(d.cashOnHand || 0) < SETTLE_EPSILON;
+}
+
+function isGameFullyClosedOut() {
+  return isCloseOutChipsDone() && isCloseOutEcashDone() && isCloseOutCashDone();
+}
+
+/** Void CHIP_RECONCILE + ECASH_CLOSE + ECASH_TO_PERSON + CASH_TO_HOST for this game. */
+function voidAllCloseOutEntries() {
+  (G.txnLog || []).forEach(function(t) {
+    if (!t || t.voided === true) return;
+    if (isCloseOutTxnType(t.type)) t.voided = true;
+  });
+  G.closeOutChipsAccepted = false;
+  clearChipReconcileStale();
 }
 
 function updateChipReconcileStaleBanner() {
@@ -2130,12 +2240,12 @@ function getLatestRunningChipCount() {
   return running.length ? running[0] : null;
 }
 
-/** Latest txn activity timestamp, excluding CHIP_RECONCILE (voided rows still count). */
+/** Latest txn activity timestamp, excluding close-out types (voided rows still count). */
 function getLatestTxnActivityTs() {
   var maxTs = 0;
   (G.txnLog || []).forEach(function(t) {
     if (!t) return;
-    if (String(t.type || '').toUpperCase() === 'CHIP_RECONCILE') return;
+    if (isCloseOutTxnType(t.type)) return;
     var ts = Date.parse(t.timestamp || t.ts || '') || 0;
     if (ts > maxTs) maxTs = ts;
   });
@@ -2413,6 +2523,8 @@ function calcDashboard() {
   var expenses = getTotalExpenses();
   var cashExpensesPaid = eb.houseCashPaid;   // paid G.expenses via CASH (paidMethod/method)
   var eCashExpensesPaid = eb.houseECashPaid; // paid G.expenses via ECASH
+  var cashToHost = cashToHostTotal();
+  var ecashClosed = ecashCloseTotal();
   return {
     hostDepositCash: hostDepositCash,
     hostDepositEcash: hostDepositEcash,
@@ -2420,10 +2532,12 @@ function calcDashboard() {
     hostWithdrawEcash: hostWithdrawEcash,
     staffCollectCash: staffCollectCash,
     staffCollectEcash: staffCollectEcash,
-    // CASH ON HAND = bankStart + cashBuyIns + markerPaidCash + priorPaidCash + host deposits − host withdrawals + staff collects − cashPaidOut − cashExpensesPaid − staffPaidOutCash
-    cashOnHand:   bankStart + cashBuyIns + markerPaidCash + priorPaidCash + hostDepositCash - hostWithdrawCash + staffCollectCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
-    // ECASH ON HAND = eCashBuyIns + markerPaidEcash + priorPaidEcash + host deposits − host withdrawals + staff collects − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
-    eCashOnHand:  eCashBuyIns + markerPaidEcash + priorPaidEcash + hostDepositEcash - hostWithdrawEcash + staffCollectEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
+    cashToHost: cashToHost,
+    ecashClosed: ecashClosed,
+    // CASH ON HAND = bankStart + cashBuyIns + markerPaidCash + priorPaidCash + host deposits − host withdrawals + staff collects − cashPaidOut − cashExpensesPaid − staffPaidOutCash − CASH_TO_HOST
+    cashOnHand:   bankStart + cashBuyIns + markerPaidCash + priorPaidCash + hostDepositCash - hostWithdrawCash + staffCollectCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash - cashToHost,
+    // ECASH ON HAND = eCashBuyIns + markerPaidEcash + priorPaidEcash + host deposits − host withdrawals + staff collects − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash − ECASH_CLOSE − ECASH_TO_PERSON
+    eCashOnHand:  eCashBuyIns + markerPaidEcash + priorPaidEcash + hostDepositEcash - hostWithdrawEcash + staffCollectEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash - ecashClosed,
     // chipsOnHand = FORMULA 4 getExpectedChips() (includes + reconcile)
     chipsOnHand:  getExpectedChips(),
     drop: drop,
@@ -2628,6 +2742,7 @@ function buildAuditSnapshot() {
       paidOut: cashPaidOut,
       expenses: cashExpensesPaid,
       staffPaid: staffPaidOutCash,
+      cashToHost: d.cashToHost || 0,
       onHand: d.cashOnHand
     },
     ecash: {
@@ -2643,8 +2758,26 @@ function buildAuditSnapshot() {
       paidOut: eCashPaidOut,
       expenses: eCashExpensesPaid,
       staffPaid: staffPaidOutEcash,
+      ecashClosed: d.ecashClosed || 0,
       onHand: d.eCashOnHand
     },
+    closeOut: (function() {
+      var lines = [];
+      listActiveEcashCloseEntries().forEach(function(t) {
+        var typ = String(t.type || '').toUpperCase();
+        if (typ === 'ECASH_CLOSE') {
+          lines.push({ kind: 'ecash-close', label: 'eCash closed', amount: Number(t.amount) || 0, name: t.receivedByName || t.receiverName || '' });
+        } else {
+          lines.push({ kind: 'ecash-to-person', label: 'eCash to ' + (t.playerName || t.personName || 'person'), amount: Number(t.amount) || 0, name: t.playerName || '' });
+        }
+      });
+      var cth = getActiveCashToHost();
+      if (cth) {
+        var cthName = cth.playerName || cth.personName || 'host';
+        lines.push({ kind: 'cash-to-host', label: 'Cash to ' + cthName, amount: Number(cth.amount) || 0, name: cthName });
+      }
+      return lines;
+    })(),
     expenses: {
       house: eb.houseUnpaid,
       houseCashPaid: eb.houseCashPaid,
@@ -2735,6 +2868,9 @@ function formatAuditPlainText(snap) {
   lines.push('cash paid out:    ' + formatAuditMoney(snap.cash.paidOut));
   lines.push('cash expenses:    ' + formatAuditMoney(snap.cash.expenses));
   lines.push('staff cash paid:  ' + formatAuditMoney(snap.cash.staffPaid));
+  if (Math.abs(snap.cash.cashToHost || 0) >= SETTLE_EPSILON) {
+    lines.push('cash to host:     ' + formatAuditMoney(snap.cash.cashToHost || 0));
+  }
   lines.push('CASH ON HAND:     ' + formatAuditMoney(snap.cash.onHand));
   lines.push('');
 
@@ -2764,8 +2900,25 @@ function formatAuditPlainText(snap) {
   lines.push('eCash paid out:   ' + formatAuditMoney(snap.ecash.paidOut));
   lines.push('eCash expenses:   ' + formatAuditMoney(snap.ecash.expenses));
   lines.push('staff eCash paid: ' + formatAuditMoney(snap.ecash.staffPaid));
+  if (Math.abs(snap.ecash.ecashClosed || 0) >= SETTLE_EPSILON) {
+    lines.push('eCash closed:     ' + formatAuditMoney(snap.ecash.ecashClosed || 0));
+  }
   lines.push('ECASH ON HAND:    ' + formatAuditMoney(snap.ecash.onHand));
   lines.push('');
+
+  if (snap.closeOut && snap.closeOut.length) {
+    lines.push('=== CLOSE OUT ===');
+    snap.closeOut.forEach(function(c) {
+      if (c.kind === 'cash-to-host') {
+        lines.push('Cash to ' + (c.name || 'host') + ' $' + fmt(Math.abs(c.amount || 0)));
+      } else if (c.kind === 'ecash-close') {
+        lines.push('eCash closed' + (c.name ? (' · ' + c.name) : '') + ': ' + formatAuditMoney(c.amount || 0));
+      } else {
+        lines.push((c.label || 'eCash to person') + ': ' + formatAuditMoney(c.amount || 0));
+      }
+    });
+    lines.push('');
+  }
 
   lines.push('=== EXPENSES ===');
   lines.push('house (unpaid):   ' + formatAuditMoney(snap.expenses.house));
@@ -2917,6 +3070,9 @@ function renderAuditPanelBody(snap) {
   html += auditRowHtml('cash paid out', formatAuditMoney(snap.cash.paidOut));
   html += auditRowHtml('cash expenses', formatAuditMoney(snap.cash.expenses));
   html += auditRowHtml('staff cash paid', formatAuditMoney(snap.cash.staffPaid));
+  if (Math.abs(snap.cash.cashToHost || 0) >= SETTLE_EPSILON) {
+    html += auditRowHtml('cash to host', formatAuditMoney(snap.cash.cashToHost || 0));
+  }
   html += auditRowHtml('CASH ON HAND', formatAuditMoney(snap.cash.onHand), {
     total: true,
     color: snap.cash.onHand >= 0 ? 'var(--green)' : 'var(--red)'
@@ -2948,11 +3104,28 @@ function renderAuditPanelBody(snap) {
   html += auditRowHtml('eCash paid out', formatAuditMoney(snap.ecash.paidOut));
   html += auditRowHtml('eCash expenses', formatAuditMoney(snap.ecash.expenses));
   html += auditRowHtml('staff eCash paid', formatAuditMoney(snap.ecash.staffPaid));
+  if (Math.abs(snap.ecash.ecashClosed || 0) >= SETTLE_EPSILON) {
+    html += auditRowHtml('eCash closed', formatAuditMoney(snap.ecash.ecashClosed || 0));
+  }
   html += auditRowHtml('ECASH ON HAND', formatAuditMoney(snap.ecash.onHand), {
     total: true,
     color: snap.ecash.onHand >= 0 ? 'var(--green)' : 'var(--red)'
   });
   html += '</div>';
+
+  if (snap.closeOut && snap.closeOut.length) {
+    html += '<div class="audit-sec"><div class="audit-sec-title">Close Out</div>';
+    snap.closeOut.forEach(function(c) {
+      if (c.kind === 'cash-to-host') {
+        html += auditRowHtml('Cash to ' + (c.name || 'host') + ' $' + fmt(Math.abs(c.amount || 0)), '');
+      } else if (c.kind === 'ecash-close') {
+        html += auditRowHtml('eCash closed', formatAuditMoney(c.amount || 0));
+      } else {
+        html += auditRowHtml(c.label || 'eCash to person', formatAuditMoney(c.amount || 0));
+      }
+    });
+    html += '</div>';
+  }
 
   html += '<div class="audit-sec"><div class="audit-sec-title">Expenses</div>';
   html += auditRowHtml('house (unpaid)', formatAuditMoney(snap.expenses.house));
@@ -3120,7 +3293,7 @@ function appendTxn(entry) {
   G._seq = (G._seq||0)+1;
   var row = Object.assign({ id:'T'+Date.now(), seq:G._seq, timestamp:new Date().toISOString() }, entry);
   G.txnLog.unshift(row);
-  if (String(row.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+  if (!isCloseOutTxnType(row.type)) {
     markChipReconcileStale();
   }
 }
@@ -3191,6 +3364,23 @@ function txnReasonLabel(t) {
       return withNote(rAmt > 0
         ? ('Chip reconcile · more chips in · drop −$' + fmt(Math.abs(rAmt)))
         : ('Chip reconcile · fewer chips in · drop +$' + fmt(Math.abs(rAmt))));
+    }
+    case 'ECASH_CLOSE': {
+      var ecRecv = String(t.receivedByName || t.receiverName || t.playerName || '').trim();
+      if (ecRecv) ecRecv = ecRecv.replace(/\s*\([^)]*\)\s*$/, '').trim() || ecRecv;
+      return withNote(ecRecv ? ('eCash closed · ' + ecRecv) : 'eCash closed');
+    }
+    case 'ECASH_TO_PERSON': {
+      var etpName = String(t.playerName || t.personName || '').trim();
+      return withNote(etpName ? ('eCash to ' + etpName) : 'eCash to person');
+    }
+    case 'CASH_TO_HOST': {
+      var cthName = String(t.playerName || t.personName || '').trim();
+      var cthAmt = Number(t.amount) || 0;
+      if (cthName) {
+        return withNote('Cash to ' + cthName + ' $' + fmt(Math.abs(cthAmt)));
+      }
+      return withNote('Cash to host');
     }
     case 'STAFF_PAYOUT': {
       var role = t.staffRole || t.role || '';
@@ -3791,6 +3981,9 @@ function renderAll() {
     TIPS:                { label:'TIPS',      color:'var(--gold)',        bg:'var(--gold-dim)' },
     DROP:                { label:'DROP',      color:'var(--orange)',      bg:'var(--orange-dim)' },
     CHIP_RECONCILE:      { label:'RECONCILE', color:'var(--gold)',        bg:'var(--gold-dim)' },
+    ECASH_CLOSE:         { label:'ECASH CLS', color:'var(--purple-light)', bg:'var(--purple-dim)' },
+    ECASH_TO_PERSON:     { label:'ECASH→P',   color:'var(--purple-light)', bg:'var(--purple-dim)' },
+    CASH_TO_HOST:        { label:'CASH→HOST', color:'var(--green)',       bg:'var(--green-dim)' },
     HOUSE_EXPENSE:       { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
     HOUSE_EXPENSE_PAYOUT:{ label:'EXP PAY',   color:'var(--green)',       bg:'var(--green-dim)' },
     PLAYER_EXPENSE:      { label:'EXP',       color:'var(--red)',         bg:'var(--red-dim)' },
@@ -3818,7 +4011,7 @@ function renderAll() {
     VOID_PLAYER_CREDIT:  { label:'VOID CR',   color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
   var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, BALANCE_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1, PRIOR_PAYMENT:1, STAFF_COLLECT:1, HOST_DEPOSIT:1 };
-  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1, HOST_WITHDRAW:1 };
+  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1, HOST_WITHDRAW:1, ECASH_CLOSE:1, ECASH_TO_PERSON:1, CASH_TO_HOST:1 };
 
   var txnEl = document.getElementById('txn-log');
   var activeTxns = (G.txnLog || []).filter(txnIsActive);
@@ -3842,6 +4035,8 @@ function renderAll() {
         if (t.type === 'SETTLEMENT_PAYMENT') {
           amtColor = t.direction === 'HOUSE_TO_PLAYER' ? 'var(--red)' : 'var(--green)';
         } else if (t.type === 'CHIP_RECONCILE') {
+          amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--red)' : 'var(--green)';
+        } else if (t.type === 'CASH_TO_HOST' || t.type === 'ECASH_CLOSE' || t.type === 'ECASH_TO_PERSON') {
           amtColor = (Number(t.amount) || 0) >= 0 ? 'var(--red)' : 'var(--green)';
         } else if (String(t.type).indexOf('VOID_') === 0) {
           amtColor = 'var(--text-muted)';
@@ -5798,6 +5993,7 @@ function formatSideBalancePhrase(signed) {
 function rosterPlayerBalanceCardHtml(p) {
   var playBal = playerBalance(p);
   var workBal = p.staffRole ? staffTipBalance(p) : 0;
+  var closeOnly = !p.staffRole ? closeOutAccountNet(p) : 0;
   var bal = personAccountBalance(p);
   var word = personAccountStateWord(bal);
   var abs = Math.abs(bal);
@@ -5805,6 +6001,7 @@ function rosterPlayerBalanceCardHtml(p) {
   var headTxt = word + ' $' + fmt(word === 'EVEN' ? 0 : abs);
   var showPlaying = isPlayerSeat(p);
   var showWorking = !!p.staffRole;
+  var showCloseOnly = !p.staffRole && Math.abs(closeOnly) > SETTLE_EPSILON;
   var playTerms = showPlaying ? playerBalanceReceiptTerms(p) : [];
   var workTerms = showWorking ? staffTipBalanceReceiptTerms(p) : [];
   var sectionHtml = '';
@@ -5824,6 +6021,11 @@ function rosterPlayerBalanceCardHtml(p) {
     sectionHtml += '<div class="pp-receipt-side"' + (showPlaying ? ' style="margin-top:8px"' : '') + '>'
       + '<div class="pp-receipt-row" style="font-weight:800"><span class="pp-lbl">Working</span><span class="pp-val">' + formatSideBalancePhrase(workBal) + '</span></div>'
       + (workRows || '<div class="pp-receipt-row"><span class="pp-lbl">No working terms</span><span class="pp-val">$0</span></div>')
+      + '</div>';
+  }
+  if (showCloseOnly) {
+    sectionHtml += '<div class="pp-receipt-side"' + ((showPlaying || showWorking) ? ' style="margin-top:8px"' : '') + '>'
+      + '<div class="pp-receipt-row" style="font-weight:800"><span class="pp-lbl">Close-out</span><span class="pp-val">' + formatSideBalancePhrase(closeOnly) + '</span></div>'
       + '</div>';
   }
   var totalLbl = word === 'OWES' ? 'Owes' : (word === 'OWED' ? 'Owed' : 'Even');
@@ -6741,7 +6943,7 @@ function voidRosterHistoryTxn(btn, playerId, txnId, kind, amount) {
     }
     if (txn) {
       txn.voided = true;
-      if (String(txn.type || '').toUpperCase() !== 'CHIP_RECONCILE') {
+      if (!isCloseOutTxnType(txn.type)) {
         markChipReconcileStale();
       }
     }
@@ -9160,7 +9362,8 @@ function startFreshGame() {
     sessionSettings: { bankStart: 0, chipFloat: 0, taxPct: 0 },
     location: '', date: '', dealerBanks: [], chipCounts: [], startingChipCount: null,
     gameId: pbNewUuid(), balancesPostedAt: null, postedDeltas: {},
-    chipReconcileStale: false, chipReconcileStaleAt: null
+    chipReconcileStale: false, chipReconcileStaleAt: null,
+    closeOutChipsAccepted: false
   };
   _activePlayerId = null; _activeStaffId = null;
   setVal('g-location', ''); setVal('g-date', todayLocalYMD());
@@ -9637,6 +9840,17 @@ function saveGameToHistory() {
 }
 
 function runEndGameFlow(afterFn) {
+  if (!isGameFullyClosedOut()) {
+    toast('Close out chips, eCash, and cash first');
+    openCloseOutModal(afterFn);
+    return;
+  }
+  var d = calcDashboard();
+  if (Math.abs(d.cashOnHand || 0) >= SETTLE_EPSILON || Math.abs(d.eCashOnHand || 0) >= SETTLE_EPSILON) {
+    toast('Cash and eCash must be $0 before ending');
+    openCloseOutModal(afterFn);
+    return;
+  }
   var unlinked = unlinkedPlayersWithBalance();
   if (unlinked.length) {
     openUnlinkedBalanceWarn(unlinked, function(){
@@ -9685,19 +9899,70 @@ function endGame(btn) {
 }
 
 var _closeOutAfterFn = null;
+var _closeOutStep = 'chips'; // chips | ecash | cash | done
 
 function openCloseOutModal(afterFn) {
   _closeOutAfterFn = afterFn || null;
+  if (!isCloseOutChipsDone() || needsChipCountBeforeClose()) _closeOutStep = 'chips';
+  else if (!isCloseOutEcashDone()) _closeOutStep = 'ecash';
+  else if (!isCloseOutCashDone()) _closeOutStep = 'cash';
+  else _closeOutStep = 'done';
   renderCloseOutBody();
   openModal('modal-close-out');
   refreshLucideIcons();
 }
 
+function closeOutStepIndicatorHtml(active) {
+  function pill(key, label, n) {
+    var on = active === key;
+    var done = (key === 'chips' && isCloseOutChipsDone())
+      || (key === 'ecash' && isCloseOutEcashDone())
+      || (key === 'cash' && isCloseOutCashDone());
+    var bg = on ? 'var(--purple)' : (done ? 'var(--green-dim)' : 'var(--bg3)');
+    var color = on ? '#fff' : (done ? 'var(--green)' : 'var(--text-muted)');
+    return '<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;background:' + bg + ';color:' + color + ';font-size:11px;font-weight:800">'
+      + n + '. ' + label + '</div>';
+  }
+  return '<div style="display:flex;gap:6px;margin-bottom:14px">'
+    + pill('chips', 'Chips', 1)
+    + pill('ecash', 'eCash', 2)
+    + pill('cash', 'Cash', 3)
+    + '</div>';
+}
+
+function closeOutReopenBtnHtml() {
+  var hasClose = !!getActiveChipReconcile() || !!getActiveCashToHost()
+    || listActiveEcashCloseEntries().length > 0 || !!G.closeOutChipsAccepted;
+  if (!hasClose) return '';
+  return '<button class="btn btn-outline" style="width:100%;margin-top:8px;color:var(--orange);border-color:var(--orange)" onclick="closeOutReopenGame(this)">Reopen game</button>';
+}
+
 function renderCloseOutBody() {
   var body = document.getElementById('close-out-body');
   if (!body) return;
+  if (_closeOutStep === 'chips' || !isCloseOutChipsDone() || needsChipCountBeforeClose()) {
+    _closeOutStep = 'chips';
+    renderCloseOutChipsStep(body);
+    return;
+  }
+  if (_closeOutStep === 'ecash' || !isCloseOutEcashDone()) {
+    _closeOutStep = 'ecash';
+    renderCloseOutEcashStep(body);
+    return;
+  }
+  if (_closeOutStep === 'cash' || !isCloseOutCashDone()) {
+    _closeOutStep = 'cash';
+    renderCloseOutCashStep(body);
+    return;
+  }
+  _closeOutStep = 'done';
+  renderCloseOutDoneStep(body);
+}
+
+function renderCloseOutChipsStep(body) {
   if (needsChipCountBeforeClose()) {
-    body.innerHTML = '<div style="font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Count chips first</div>'
+    body.innerHTML = closeOutStepIndicatorHtml('chips')
+      + '<div style="font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Count chips first</div>'
       + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">'
       + (G.chipReconcileStale
         ? 'Chips changed since close — save a new running count, then return here to accept.'
@@ -9705,7 +9970,8 @@ function renderCloseOutBody() {
       + '</div>'
       + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">'
       + '<i data-lucide="layers" class="action-ico" aria-hidden="true"></i> Count Chips</button>'
-      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+      + closeOutReopenBtnHtml()
+      + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
     refreshLucideIcons();
     return;
   }
@@ -9720,7 +9986,8 @@ function renderCloseOutBody() {
   var diff = counted - expected;
   var absDiff = Math.abs(diff);
 
-  var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
+  var html = closeOutStepIndicatorHtml('chips')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
     + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">'
     + '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Expected</div>'
     + '<div style="font-weight:900;color:var(--gold)">$' + fmt(expected) + '</div></div>'
@@ -9735,25 +10002,33 @@ function renderCloseOutBody() {
   if (absDiff < SETTLE_EPSILON || alreadyOk) {
     html += '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Chips balanced ✓</div>'
       + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutContinueBalanced()">Continue</button>'
-      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
-      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>';
   } else if (diff > 0) {
     html += '<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--red);font-weight:700">'
       + 'MORE chips than expected: $' + fmt(absDiff) + '. $' + fmt(absDiff) + ' will be DEDUCTED from drop.</div>'
       + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutAcceptReconcile(this)">'
       + 'Accept &amp; close</button>'
-      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
-      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>';
   } else {
     html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--orange);font-weight:700">'
       + 'FEWER chips than expected: $' + fmt(absDiff) + '. $' + fmt(absDiff) + ' will be ADDED to drop.</div>'
       + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutAcceptReconcile(this)">'
       + 'Accept &amp; close</button>'
-      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>'
-      + '<button class="btn btn-outline" style="width:100%" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+      + '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="closeOutGoCountChips()">Recount</button>';
   }
+  html += closeOutReopenBtnHtml()
+    + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
   body.innerHTML = html;
   refreshLucideIcons();
+}
+
+function closeOutAdvanceAfterChips() {
+  G.closeOutChipsAccepted = true;
+  clearChipReconcileStale();
+  autoSave();
+  calcAll(); renderAll();
+  _closeOutStep = isCloseOutEcashDone() ? (isCloseOutCashDone() ? 'done' : 'cash') : 'ecash';
+  renderCloseOutBody();
 }
 
 function closeOutGoCountChips() {
@@ -9770,13 +10045,7 @@ function closeOutContinueBalanced() {
       voidActiveChipReconciles();
     }
   }
-  clearChipReconcileStale();
-  autoSave();
-  calcAll(); renderAll();
-  closeModal('modal-close-out');
-  var afterFn = _closeOutAfterFn;
-  _closeOutAfterFn = null;
-  runEndGameFlow(afterFn);
+  closeOutAdvanceAfterChips();
 }
 
 function closeOutAcceptReconcile(btn) {
@@ -9805,13 +10074,313 @@ function closeOutAcceptReconcile(btn) {
       counted: counted,
       expected: baseExpected
     });
-    clearChipReconcileStale();
+    closeOutAdvanceAfterChips();
+  });
+}
+
+function closeOutListEcashReceivers() {
+  var map = calcEcashByReceiver();
+  var rows = [];
+  Object.keys(map).forEach(function(rid) {
+    var bal = Math.round((map[rid].balance || 0) * 100) / 100;
+    if (Math.abs(bal) < SETTLE_EPSILON) return;
+    rows.push({
+      id: rid,
+      name: map[rid].name || rid,
+      balance: bal,
+      isHouse: String(rid) === 'house'
+    });
+  });
+  rows.sort(function(a, b) {
+    if (a.isHouse !== b.isHouse) return a.isHouse ? 1 : -1;
+    return String(a.name).localeCompare(String(b.name));
+  });
+  return rows;
+}
+
+function closeOutPersonOptionsHtml(selectedId, hostsFirst) {
+  var people = (G.players || []).slice();
+  if (hostsFirst) {
+    people.sort(function(a, b) {
+      var ah = isHostCashRole(a) ? 0 : 1;
+      var bh = isHostCashRole(b) ? 0 : 1;
+      if (ah !== bh) return ah - bh;
+      return String(personDisplayName(a)).localeCompare(String(personDisplayName(b)));
+    });
+  } else {
+    people.sort(function(a, b) {
+      return String(personDisplayName(a)).localeCompare(String(personDisplayName(b)));
+    });
+  }
+  return '<option value="">— Select person —</option>' + people.map(function(p) {
+    var role = p.staffRole ? (' · ' + staffRoleLabel(normalizeStaffRole(p.staffRole))) : '';
+    var sel = selectedId != null && String(selectedId) === String(p.id) ? ' selected' : '';
+    return '<option value="' + p.id + '"' + sel + '>' + personDisplayName(p) + role + '</option>';
+  }).join('');
+}
+
+function renderCloseOutEcashStep(body) {
+  var rows = closeOutListEcashReceivers();
+  var d = calcDashboard();
+  var html = closeOutStepIndicatorHtml('ecash')
+    + '<div style="font-size:14px;font-weight:800;margin-bottom:6px">eCash to $0</div>'
+    + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.45">Close every receiver. ECASH ON HAND must end at $0.</div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">ECASH ON HAND</span>'
+    + '<span style="font-weight:900;color:' + (Math.abs(d.eCashOnHand) < SETTLE_EPSILON ? 'var(--green)' : 'var(--purple-light)') + '">$' + fmt(d.eCashOnHand) + '</span></div>';
+
+  if (!rows.length && Math.abs(d.eCashOnHand) < SETTLE_EPSILON) {
+    html += '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">eCash at $0 ✓</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutEcashContinue()">Continue</button>';
+  } else if (!rows.length && Math.abs(d.eCashOnHand) >= SETTLE_EPSILON) {
+    html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.45;color:var(--orange);font-weight:700">'
+      + 'eCash on hand is $' + fmt(d.eCashOnHand) + ' but no open receivers remain. Reopen or adjust transactions.</div>';
+  } else {
+    rows.forEach(function(r) {
+      var shortName = String(r.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || r.name;
+      html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">';
+      if (r.isHouse) {
+        html += '<div style="font-weight:800;margin-bottom:8px">House / Bookkeeper holds $' + fmt(r.balance) + '</div>'
+          + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Assign to a person (hosts listed first). They will owe the house.</div>'
+          + '<select class="inp" id="close-ecash-person-' + r.id + '" style="width:100%;margin-bottom:8px">'
+          + closeOutPersonOptionsHtml(null, true) + '</select>'
+          + '<button class="btn btn-purple" style="width:100%" onclick="closeOutEcashToPerson(this,\'house\',' + r.balance + ')">'
+          + 'Close $' + fmt(r.balance) + ' House eCash</button>';
+      } else {
+        html += '<div style="font-weight:800;margin-bottom:4px">' + shortName + ' holds $' + fmt(r.balance) + '</div>'
+          + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Already on ' + shortName + '\'s account</div>'
+          + '<button class="btn btn-purple" style="width:100%" onclick="closeOutEcashClose(this,\'' + r.id + '\',' + r.balance + ')">'
+          + 'Close $' + fmt(r.balance) + ' eCash · ' + shortName.toUpperCase() + '</button>';
+      }
+      html += '</div>';
+    });
+  }
+  html += closeOutReopenBtnHtml()
+    + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  body.innerHTML = html;
+  refreshLucideIcons();
+}
+
+function closeOutVoidReceiverCloses(receiverId) {
+  var rid = String(receiverId);
+  (G.txnLog || []).forEach(function(t) {
+    if (!txnIsActive(t)) return;
+    var typ = String(t.type || '').toUpperCase();
+    if (typ !== 'ECASH_CLOSE' && typ !== 'ECASH_TO_PERSON') return;
+    var tr = t.receiverId != null && t.receiverId !== '' ? String(t.receiverId)
+      : (t.receivedById != null && t.receivedById !== '' ? String(t.receivedById) : '');
+    if (tr === rid) t.voided = true;
+  });
+}
+
+function closeOutEcashClose(btn, receiverId, amount) {
+  var p = (G.players || []).find(function(pl){ return String(pl.id) === String(receiverId); });
+  var name = p ? personDisplayName(p) : String(receiverId);
+  var amt = Math.round((Number(amount) || 0) * 100) / 100;
+  if (Math.abs(amt) < SETTLE_EPSILON) { renderCloseOutBody(); return; }
+  var confirmMsg = 'Tap again: close $' + fmt(amt) + ' eCash · ' + name.toUpperCase()
+    + ' → eCash on hand −$' + fmt(amt) + ' · account unchanged';
+  confirmAction(btn, confirmMsg, function(){
+    closeOutVoidReceiverCloses(receiverId);
+    appendTxn({
+      type: 'ECASH_CLOSE',
+      amount: amt,
+      receiverId: String(receiverId),
+      receivedById: String(receiverId),
+      receivedByName: name,
+      playerId: String(receiverId),
+      playerName: name
+    });
     autoSave();
     calcAll(); renderAll();
-    closeModal('modal-close-out');
-    var afterFn = _closeOutAfterFn;
-    _closeOutAfterFn = null;
-    runEndGameFlow(afterFn);
+    if (isCloseOutEcashDone()) {
+      _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+    }
+    renderCloseOutBody();
+    toast('eCash closed · ' + name + ' ✅');
+  }, { name: name, amount: amt });
+}
+
+function closeOutEcashToPerson(btn, receiverId, amount) {
+  var sel = document.getElementById('close-ecash-person-' + receiverId);
+  var personId = sel ? sel.value : '';
+  if (!personId) { toast('Select who takes the House eCash'); return; }
+  var p = (G.players || []).find(function(pl){ return String(pl.id) === String(personId); });
+  if (!p) { toast('Person not found'); return; }
+  var amt = Math.round((Number(amount) || 0) * 100) / 100;
+  if (Math.abs(amt) < SETTLE_EPSILON) { renderCloseOutBody(); return; }
+  var pname = personDisplayName(p);
+  var confirmMsg = 'Tap again: $' + fmt(amt) + ' House eCash → ' + pname.toUpperCase()
+    + ' · eCash on hand $0 effect · ' + pname.toUpperCase() + ' owes house $' + fmt(amt);
+  confirmAction(btn, confirmMsg, function(){
+    closeOutVoidReceiverCloses(receiverId);
+    appendTxn({
+      type: 'ECASH_TO_PERSON',
+      amount: amt,
+      receiverId: String(receiverId),
+      receivedById: String(receiverId),
+      receivedByName: 'House / Bookkeeper',
+      personId: String(p.id),
+      playerId: String(p.id),
+      playerName: pname,
+      personName: pname
+    });
+    autoSave();
+    calcAll(); renderAll();
+    if (isCloseOutEcashDone()) {
+      _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+    }
+    renderCloseOutBody();
+    toast('eCash to ' + pname + ' ✅');
+  }, { name: pname, amount: amt });
+}
+
+function closeOutEcashContinue() {
+  if (!isCloseOutEcashDone()) {
+    toast('Close all eCash receivers first');
+    renderCloseOutBody();
+    return;
+  }
+  _closeOutStep = isCloseOutCashDone() ? 'done' : 'cash';
+  renderCloseOutBody();
+}
+
+function closeOutHostCandidates() {
+  var hosts = (G.players || []).filter(isHostCashRole);
+  return hosts;
+}
+
+function renderCloseOutCashStep(body) {
+  var d = calcDashboard();
+  var cash = Math.round((d.cashOnHand || 0) * 100) / 100;
+  var hosts = closeOutHostCandidates();
+  var html = closeOutStepIndicatorHtml('cash')
+    + '<div style="font-size:14px;font-weight:800;margin-bottom:6px">Cash to a host</div>'
+    + '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.45">Whole cash on hand goes to one host. Does not set next game\'s starting bank.</div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">CASH ON HAND</span>'
+    + '<span style="font-weight:900;color:' + (Math.abs(cash) < SETTLE_EPSILON ? 'var(--green)' : (cash >= 0 ? 'var(--green)' : 'var(--red)')) + '">$' + fmt(cash) + '</span></div>';
+
+  if (Math.abs(cash) < SETTLE_EPSILON) {
+    html += '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Cash at $0 ✓</div>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutCashContinue()">Continue</button>';
+  } else {
+    if (!hosts.length) {
+      html += '<div style="background:var(--orange-dim);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.45;color:var(--orange);font-weight:700">'
+        + 'No host or host-player in this game — pick any person (they will carry the cash balance).</div>';
+    }
+    html += '<label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Host</label>'
+      + '<select class="inp" id="close-cash-host" style="width:100%;margin-bottom:12px">'
+      + closeOutPersonOptionsHtml(null, true) + '</select>'
+      + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutCashToHost(this)">'
+      + 'Send $' + fmt(Math.abs(cash)) + ' cash to host</button>';
+  }
+  html += closeOutReopenBtnHtml()
+    + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  body.innerHTML = html;
+  refreshLucideIcons();
+}
+
+function closeOutCashToHost(btn) {
+  var d = calcDashboard();
+  var amount = Math.round((d.cashOnHand || 0) * 100) / 100;
+  if (Math.abs(amount) < SETTLE_EPSILON) {
+    closeOutCashContinue();
+    return;
+  }
+  var sel = document.getElementById('close-cash-host');
+  var personId = sel ? sel.value : '';
+  if (!personId) { toast('Select a host'); return; }
+  var p = (G.players || []).find(function(pl){ return String(pl.id) === String(personId); });
+  if (!p) { toast('Person not found'); return; }
+  var pname = personDisplayName(p);
+  var absAmt = Math.abs(amount);
+  var confirmMsg;
+  if (amount >= 0) {
+    confirmMsg = 'Tap again: $' + fmt(absAmt) + ' CASH to ' + pname.toUpperCase()
+      + ' → cash on hand $0 · ' + pname.toUpperCase() + ' owes house $' + fmt(absAmt);
+  } else {
+    confirmMsg = 'Tap again: $' + fmt(absAmt) + ' CASH shortfall to ' + pname.toUpperCase()
+      + ' → cash on hand $0 · house owes ' + pname.toUpperCase() + ' $' + fmt(absAmt);
+  }
+  confirmAction(btn, confirmMsg, function(){
+    var existing = getActiveCashToHost();
+    if (existing) existing.voided = true;
+    appendTxn({
+      type: 'CASH_TO_HOST',
+      amount: amount,
+      personId: String(p.id),
+      playerId: String(p.id),
+      playerName: pname,
+      personName: pname,
+      signed: amount
+    });
+    autoSave();
+    calcAll(); renderAll();
+    _closeOutStep = 'done';
+    renderCloseOutBody();
+    toast('Cash to ' + pname + ' $' + fmt(absAmt) + ' ✅');
+  }, { name: pname, amount: absAmt });
+}
+
+function closeOutCashContinue() {
+  if (!isCloseOutCashDone()) {
+    toast('Send cash to a host first');
+    renderCloseOutBody();
+    return;
+  }
+  _closeOutStep = 'done';
+  renderCloseOutBody();
+}
+
+function renderCloseOutDoneStep(body) {
+  var d = calcDashboard();
+  var cth = getActiveCashToHost();
+  var ecashLines = listActiveEcashCloseEntries();
+  var html = closeOutStepIndicatorHtml('done')
+    + '<div style="background:var(--green-dim);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">Close-out complete ✓</div>'
+    + '<div style="font-size:13px;line-height:1.55;margin-bottom:14px;color:var(--text)">'
+    + '<div>Cash on hand: <strong>$' + fmt(d.cashOnHand) + '</strong></div>'
+    + '<div>eCash on hand: <strong>$' + fmt(d.eCashOnHand) + '</strong></div>';
+  ecashLines.forEach(function(t) {
+    if (String(t.type).toUpperCase() === 'ECASH_CLOSE') {
+      html += '<div>eCash closed' + (t.receivedByName ? (' · ' + t.receivedByName) : '') + '</div>';
+    } else {
+      html += '<div>eCash to ' + (t.playerName || 'person') + ' $' + fmt(t.amount || 0) + '</div>';
+    }
+  });
+  if (cth) {
+    html += '<div>Cash to ' + (cth.playerName || 'host') + ' $' + fmt(Math.abs(cth.amount || 0)) + '</div>';
+  }
+  html += '</div>'
+    + '<button class="btn btn-purple" style="width:100%;margin-bottom:10px" onclick="closeOutFinishEndGame()">End Game</button>'
+    + closeOutReopenBtnHtml()
+    + '<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="closeModal(\'modal-close-out\')">Cancel</button>';
+  body.innerHTML = html;
+  refreshLucideIcons();
+}
+
+function closeOutFinishEndGame() {
+  if (!isGameFullyClosedOut()) {
+    toast('Finish all close-out steps first');
+    renderCloseOutBody();
+    return;
+  }
+  closeModal('modal-close-out');
+  var afterFn = _closeOutAfterFn;
+  _closeOutAfterFn = null;
+  runEndGameFlow(afterFn);
+}
+
+function closeOutReopenGame(btn) {
+  confirmAction(btn, 'Tap again: Reopen game — void chip reconcile, eCash close, and cash-to-host', function(){
+    voidAllCloseOutEntries();
+    G.closeOutChipsAccepted = false;
+    _closeOutStep = 'chips';
+    autoSave();
+    calcAll(); renderAll();
+    renderCloseOutBody();
+    toast('Game reopened — close-out voided');
   });
 }
 
@@ -9839,6 +10408,21 @@ function buildHistorySummary(h) {
   var staff = (g.players || []).filter(isStaffSeat);
   var dash = historyWithG(g, function(){ return calcDashboard(); });
   var reconcile = historyWithG(g, function(){ return chipReconcileAmount(); });
+  var closeLines = historyWithG(g, function(){
+    var lines = [];
+    listActiveEcashCloseEntries().forEach(function(t) {
+      if (String(t.type || '').toUpperCase() === 'ECASH_CLOSE') {
+        lines.push('eCash closed' + (t.receivedByName ? (' · ' + t.receivedByName) : ''));
+      } else {
+        lines.push('eCash to ' + (t.playerName || 'person') + ' $' + fmt(t.amount || 0));
+      }
+    });
+    var cth = getActiveCashToHost();
+    if (cth) {
+      lines.push('Cash to ' + (cth.playerName || 'host') + ' $' + fmt(Math.abs(cth.amount || 0)));
+    }
+    return lines;
+  });
   var owes = historyWithG(g, function(){
     return players.map(function(p){
       return { name: personDisplayName(p), bal: playerDisplayBalance(p) };
@@ -9868,6 +10452,7 @@ function buildHistorySummary(h) {
     txnCount: (g.txnLog || []).length,
     drop: dash.drop || 0,
     chipReconcile: reconcile || 0,
+    closeOutLines: closeLines,
     expenses: dash.expenses || 0,
     profit: dash.profit || 0,
     topOwes: owes.slice(0, 3),
@@ -9888,6 +10473,9 @@ function formatHistoryExport(summary) {
   lines.push('Drop: $' + fmt(summary.drop));
   if (Math.abs(summary.chipReconcile || 0) >= SETTLE_EPSILON) {
     lines.push(formatChipReconcileLine(summary.chipReconcile));
+  }
+  if (summary.closeOutLines && summary.closeOutLines.length) {
+    summary.closeOutLines.forEach(function(line){ lines.push(line); });
   }
   lines.push('Expenses: $' + fmt(summary.expenses));
   lines.push('Profit: $' + fmt(summary.profit));
@@ -10006,6 +10594,11 @@ function renderHistory() {
           + '</div>'
           + (Math.abs(s.chipReconcile || 0) >= SETTLE_EPSILON
             ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:0 0 10px;line-height:1.4">' + formatChipReconcileLine(s.chipReconcile) + '</div>'
+            : '')
+          + ((s.closeOutLines && s.closeOutLines.length)
+            ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:0 0 10px;line-height:1.4">'
+              + s.closeOutLines.map(function(line){ return '<div>' + line + '</div>'; }).join('')
+              + '</div>'
             : '')
           + '<div class="hist-owes"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;color:var(--text-muted)">Top owes</div>' + topOwesHtml + '</div>'
           + '<div class="hist-actions">'
@@ -10155,7 +10748,7 @@ function toggleEcashReceiver(playerId, buyType) {
 }
 
 // E-Cash on Hand per receiver: sum ECASH buy-ins + eCash marker/prior PAY INs by receivedById,
-// minus ECASH cash-outs, staff eCash payouts, and settlement payments.
+// minus ECASH cash-outs, staff eCash payouts, settlement payments, and close-out closes.
 // Skip ANY txn with voided===true (voided buy-ins / marker payments must not count).
 function calcEcashByReceiver() {
   var map = {};
@@ -10185,6 +10778,14 @@ function calcEcashByReceiver() {
     if (t.type === 'SETTLEMENT_PAYMENT' && t.settlementKind === 'ECASH' && t.playerId) {
       if (!map[t.playerId]) map[t.playerId] = { name: t.playerName || t.playerId, balance: 0, owes: 0 };
       map[t.playerId].balance -= (t.amount || 0);
+    }
+    if (t.type === 'ECASH_CLOSE' || t.type === 'ECASH_TO_PERSON') {
+      var closeRid = t.receiverId != null && t.receiverId !== '' ? String(t.receiverId)
+        : (t.receivedById != null && t.receivedById !== '' ? String(t.receivedById) : '');
+      if (closeRid) {
+        if (!map[closeRid]) map[closeRid] = { name: t.receivedByName || t.receiverName || closeRid, balance: 0, owes: 0 };
+        map[closeRid].balance -= (Number(t.amount) || 0);
+      }
     }
   });
   Object.keys(map).forEach(function(k) {
