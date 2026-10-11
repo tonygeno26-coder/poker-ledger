@@ -1710,11 +1710,19 @@ function isHostPlayer(p) {
   return normalizeStaffRole(raw) === 'host-player';
 }
 
-/** Appears in Players tab / settle lists (pure players + host-player). */
+/** Host cash Deposit/Withdraw — roles host and host-player only. */
+function isHostCashRole(p) {
+  if (!p) return false;
+  var key = normalizeStaffRole(p.staffRole || p.role);
+  return key === 'host' || key === 'host-player';
+}
+
+/** Appears in Players tab / settle lists (pure players, host-player, or plays=true). */
 function isPlayerSeat(p) {
   if (!p) return false;
-  // Empty/null staffRole = pure player; host-player is dual-listed
+  // Empty/null staffRole = pure player; host-player / p.plays = dual-listed
   if (!p.staffRole) return true;
+  if (p.plays === true) return true;
   return isHostPlayer(p);
 }
 
@@ -1724,6 +1732,91 @@ function isStaffSeat(p) {
   if (p.staffRole) return true;
   // Recover dual-seat if only role was saved as host-player
   return isHostPlayer(p);
+}
+
+/** Net host cash: deposits − withdrawals (+ = house owes host). */
+function hostCashNet(p) {
+  return Math.round((p.hostCash || []).reduce(function(s, h) {
+    if (!h || h.voided === true) return s;
+    var amt = Number(h.amount) || 0;
+    var kind = String(h.kind || '').toUpperCase();
+    if (kind === 'DEPOSIT') return s + amt;
+    if (kind === 'WITHDRAW') return s - amt;
+    return s;
+  }, 0) * 100) / 100;
+}
+
+function hostCashDeposited(p) {
+  return Math.round((p.hostCash || []).reduce(function(s, h) {
+    if (!h || h.voided === true) return s;
+    if (String(h.kind || '').toUpperCase() !== 'DEPOSIT') return s;
+    return s + (Number(h.amount) || 0);
+  }, 0) * 100) / 100;
+}
+
+function hostCashWithdrawn(p) {
+  return Math.round((p.hostCash || []).reduce(function(s, h) {
+    if (!h || h.voided === true) return s;
+    if (String(h.kind || '').toUpperCase() !== 'WITHDRAW') return s;
+    return s + (Number(h.amount) || 0);
+  }, 0) * 100) / 100;
+}
+
+/** STAFF_COLLECT totals — raise working side when staff owes house. */
+function staffCollectsTotal(p) {
+  return Math.round((p.staffCollects || []).reduce(function(s, c) {
+    if (!c || c.voided === true) return s;
+    return s + (Number(c.amount) || 0);
+  }, 0) * 100) / 100;
+}
+
+/**
+ * One account per person: playing + working.
+ * + = house owes them, − = they owe the house.
+ * Does not alter playerBalance / staffTipBalance formulas — sums them.
+ */
+function personAccountBalance(p) {
+  if (!p) return 0;
+  var play = playerBalance(p);
+  var work = p.staffRole ? staffTipBalance(p) : 0;
+  return Math.round((play + work) * 100) / 100;
+}
+
+function personAccountStateWord(bal) {
+  return playerBalanceStateWord(bal);
+}
+
+function formatPersonAccountAfter(bal) {
+  return formatPlayerBalanceAfter(bal);
+}
+
+/** Receipt terms for working side — sum === staffTipBalance(p) when staff. */
+function staffTipBalanceReceiptTerms(p) {
+  if (!p || !p.staffRole) return [];
+  var grossTips = tipsTotal(p);
+  var taxPaid = (p.staffTaxLog || []).reduce(function(s, t) { return s + (t.taxAmount || 0); }, 0);
+  var reimbursements = staffExpensesTotal(p);
+  var paidOut = staffPayoutsTotal(p);
+  var ecashUsed = staffEcashUsed(p);
+  var role = normalizeStaffRole(p.staffRole);
+  var base = 0;
+  var baseLabel = null;
+  if (role === 'chef') { base = staffBasePay(p); baseLabel = 'Base pay'; }
+  else if (role === 'books') { base = staffHourlyPay(p); baseLabel = 'Hourly pay'; }
+  var hostNet = hostCashNet(p);
+  var collects = staffCollectsTotal(p);
+  var terms = [];
+  if (base > SETTLE_EPSILON && baseLabel) terms.push({ label: baseLabel, signedAmount: base });
+  if (grossTips > SETTLE_EPSILON) terms.push({ label: 'Tips', signedAmount: grossTips });
+  if (taxPaid > SETTLE_EPSILON) terms.push({ label: 'Tax', signedAmount: -taxPaid });
+  if (reimbursements > SETTLE_EPSILON) terms.push({ label: 'Reimbursements', signedAmount: reimbursements });
+  if (paidOut > SETTLE_EPSILON) terms.push({ label: 'Paid out', signedAmount: -paidOut });
+  if (ecashUsed > SETTLE_EPSILON) terms.push({ label: 'eCash received', signedAmount: -ecashUsed });
+  if (Math.abs(hostNet) > SETTLE_EPSILON) {
+    terms.push({ label: 'Host cash', signedAmount: hostNet });
+  }
+  if (collects > SETTLE_EPSILON) terms.push({ label: 'Staff collect', signedAmount: collects });
+  return terms;
 }
 
 function staffIsDealer(p) {
@@ -1740,7 +1833,7 @@ function staffHourlyPay(p) {
   return Math.round(rate * hours * 100) / 100;
 }
 
-/** Sum of eCash attributed to this person as Received By: ECASH buy-ins + non-voided MARKER_PAYMENT / PRIOR_PAYMENT method ECASH. */
+/** Sum of eCash attributed to this person as Received By: ECASH buy-ins + non-voided MARKER_PAYMENT / PRIOR_PAYMENT / HOST_DEPOSIT method ECASH. */
 function staffEcashUsed(p) {
   if (!p) return 0;
   var rid = String(p.id);
@@ -1751,15 +1844,25 @@ function staffEcashUsed(p) {
         total += (Number(b.amount) || 0);
       }
     });
+    (pl.hostCash || []).forEach(function(h) {
+      if (!h || h.voided === true) return;
+      if (String(h.kind || '').toUpperCase() !== 'DEPOSIT') return;
+      if (String(h.method || '').toUpperCase() !== 'ECASH') return;
+      if (h.receivedById && String(h.receivedById) === rid) {
+        total += (Number(h.amount) || 0);
+      }
+    });
   });
-  // Marker / prior PAY IN eCash (same as ECASH_BUYIN for staff netting). Skip voided.
+  // Marker / prior PAY IN / host deposit eCash (same as ECASH_BUYIN for staff netting). Skip voided.
   (G.txnLog || []).forEach(function(t) {
     if (!t || t.voided === true) return;
     var typ = String(t.type || '');
-    if ((typ === 'MARKER_PAYMENT' || typ === 'PRIOR_PAYMENT')
+    if ((typ === 'MARKER_PAYMENT' || typ === 'PRIOR_PAYMENT' || typ === 'HOST_DEPOSIT')
         && String(t.method || '').toUpperCase() === 'ECASH'
         && t.receivedById
         && String(t.receivedById) === rid) {
+      // Prefer array source for HOST_DEPOSIT when present (avoid double-count with hostCash loop)
+      if (typ === 'HOST_DEPOSIT') return;
       total += (Number(t.amount) || 0);
     }
   });
@@ -1768,6 +1871,7 @@ function staffEcashUsed(p) {
 
 function staffTipBalance(p) {
   // tips − tax + reimbursements(p.expenses) − payouts − eCash Received By (buy-ins + marker PAY IN)
+  // + hostCash (deposits − withdrawals) + staffCollects
   // Alias: calcStaffBalance — net house-owes-staff after eCash held by this person
   // DROP does NOT affect staff payout / tip balance. No Chef overpay flooring.
   var grossTips  = tipsTotal(p);
@@ -1779,7 +1883,9 @@ function staffTipBalance(p) {
   var base = 0;
   if (role === 'chef') base = staffBasePay(p);
   else if (role === 'books') base = staffHourlyPay(p);
-  return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed;
+  var hostNet = hostCashNet(p);
+  var collects = staffCollectsTotal(p);
+  return base + grossTips - taxPaid + reimbursements - paidOut - ecashUsed + hostNet + collects;
 }
 function calcStaffBalance(p) { return staffTipBalance(p); }
 
@@ -2019,7 +2125,21 @@ function migrateStaffRoles() {
     if (!p.staffRole && p.role && normalizeStaffRole(p.role) === 'host-player') {
       p.staffRole = 'host-player';
     }
-    if (!p.staffRole) return;
+    // One account: migrate plays flag (pure players + host-player + legacy dual)
+    if (p.plays == null) {
+      if (!p.staffRole) p.plays = true;
+      else if (normalizeStaffRole(p.staffRole) === 'host-player') p.plays = true;
+      else p.plays = false;
+    }
+    if (!p.hostCash) p.hostCash = [];
+    if (!p.staffCollects) p.staffCollects = [];
+    if (!p.staffRole) {
+      if (p.capabilities && p.plays) {
+        p.capabilities.canBuyIn = true;
+        p.capabilities.canCashOut = true;
+      }
+      return;
+    }
     var next = normalizeStaffRole(p.staffRole);
     p.staffRole = next;
     if (p.role && p.role !== 'player') p.role = next;
@@ -2028,19 +2148,19 @@ function migrateStaffRoles() {
       if (p.hourlyRate == null) p.hourlyRate = 0;
       if (p.hoursWorked == null) p.hoursWorked = 0;
     }
+    var seatPlays = p.plays === true || next === 'host-player';
+    if (seatPlays) p.plays = true;
     if (!p.capabilities) {
-      var plays = next === 'host-player';
       p.capabilities = {
-        canBuyIn: plays,
-        canCashOut: plays,
+        canBuyIn: seatPlays,
+        canCashOut: seatPlays,
         canLogTips: true,
         canLogDrop: next === 'dealer',
         canReceiveECash: true
       };
     } else {
       p.capabilities.canLogDrop = next === 'dealer';
-      var dual = next === 'host-player';
-      if (dual) {
+      if (seatPlays) {
         p.capabilities.canBuyIn = true;
         p.capabilities.canCashOut = true;
       }
@@ -2164,13 +2284,16 @@ function getTotalExpenses() {
 }
 
 function calcDashboard() {
-  // FORMULA 3 (locked)
+  // FORMULA 3 (locked) + host cash deposits/withdrawals + staff collects
   var bankStart = (G.sessionSettings && G.sessionSettings.bankStart) || 0;
   var cashBuyIns = 0, eCashBuyIns = 0, cashPaidOut = 0, eCashPaidOut = 0;
   var staffPaidOutCash = 0, staffPaidOutEcash = 0;
   var drop = 0, tips = 0, staffTax = 0;
   var markerPaidCash = 0, markerPaidEcash = 0;
   var priorPaidCash = 0, priorPaidEcash = 0;
+  var hostDepositCash = 0, hostDepositEcash = 0;
+  var hostWithdrawCash = 0, hostWithdrawEcash = 0;
+  var staffCollectCash = 0, staffCollectEcash = 0;
   G.players.forEach(function(p) {
     (p.buyIns||[]).forEach(function(b) {
       if (b.type==='CASH')  cashBuyIns  += b.amount;
@@ -2202,6 +2325,25 @@ function calcDashboard() {
       if (pm === 'ECASH') priorPaidEcash += Number(c.amount) || 0;
       else priorPaidCash += Number(c.amount) || 0;
     });
+    (p.hostCash || []).forEach(function(h) {
+      if (!h || h.voided === true) return;
+      var ha = Number(h.amount) || 0;
+      var hm = String(h.method || 'CASH').toUpperCase();
+      var hk = String(h.kind || '').toUpperCase();
+      if (hk === 'DEPOSIT') {
+        if (hm === 'ECASH') hostDepositEcash += ha;
+        else hostDepositCash += ha;
+      } else if (hk === 'WITHDRAW') {
+        if (hm === 'ECASH') hostWithdrawEcash += ha;
+        else hostWithdrawCash += ha;
+      }
+    });
+    (p.staffCollects || []).forEach(function(c) {
+      if (!c || c.voided === true) return;
+      var ca = Number(c.amount) || 0;
+      if (String(c.method || 'CASH').toUpperCase() === 'ECASH') staffCollectEcash += ca;
+      else staffCollectCash += ca;
+    });
     tips += tipsTotal(p); // dashboard tips total only — chips via getExpectedChips once
     // STAFF TAX = sum staffTaxLog.taxAmount (towardMarker excluded — not house cash income)
     if (p.staffRole) {
@@ -2220,10 +2362,16 @@ function calcDashboard() {
   var cashExpensesPaid = eb.houseCashPaid;   // paid G.expenses via CASH (paidMethod/method)
   var eCashExpensesPaid = eb.houseECashPaid; // paid G.expenses via ECASH
   return {
-    // CASH ON HAND = bankStart + cashBuyIns + markerPaidCash + priorPaidCash − cashPaidOut − cashExpensesPaid − staffPaidOutCash
-    cashOnHand:   bankStart + cashBuyIns + markerPaidCash + priorPaidCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
-    // ECASH ON HAND = eCashBuyIns + markerPaidEcash + priorPaidEcash − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
-    eCashOnHand:  eCashBuyIns + markerPaidEcash + priorPaidEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
+    hostDepositCash: hostDepositCash,
+    hostDepositEcash: hostDepositEcash,
+    hostWithdrawCash: hostWithdrawCash,
+    hostWithdrawEcash: hostWithdrawEcash,
+    staffCollectCash: staffCollectCash,
+    staffCollectEcash: staffCollectEcash,
+    // CASH ON HAND = bankStart + cashBuyIns + markerPaidCash + priorPaidCash + host deposits − host withdrawals + staff collects − cashPaidOut − cashExpensesPaid − staffPaidOutCash
+    cashOnHand:   bankStart + cashBuyIns + markerPaidCash + priorPaidCash + hostDepositCash - hostWithdrawCash + staffCollectCash - cashPaidOut - cashExpensesPaid - staffPaidOutCash,
+    // ECASH ON HAND = eCashBuyIns + markerPaidEcash + priorPaidEcash + host deposits − host withdrawals + staff collects − eCashPaidOut − eCashExpensesPaid − staffPaidOutEcash
+    eCashOnHand:  eCashBuyIns + markerPaidEcash + priorPaidEcash + hostDepositEcash - hostWithdrawEcash + staffCollectEcash - eCashPaidOut - eCashExpensesPaid - staffPaidOutEcash,
     // chipsOnHand = FORMULA 4 getExpectedChips() (includes + reconcile)
     chipsOnHand:  getExpectedChips(),
     drop: drop,
@@ -2258,6 +2406,7 @@ function buildAuditSnapshot() {
   var priorPaidEcashLines = [];
   var players = [];
   var staff = [];
+  var accounts = [];
 
   (G.players || []).forEach(function(p) {
     (p.buyIns || []).forEach(function(b) {
@@ -2365,9 +2514,20 @@ function buildAuditSnapshot() {
         reimbursements: reimbursements,
         ecashReceived: ecashUsed,
         paidOut: staffPaid,
+        hostCashNet: hostCashNet(p),
+        staffCollects: staffCollectsTotal(p),
         balance: staffTipBalance(p)
       });
     }
+
+    accounts.push({
+      name: personDisplayName(p) || 'Person',
+      playing: playerBalance(p),
+      working: p.staffRole ? staffTipBalance(p) : 0,
+      account: personAccountBalance(p),
+      plays: isPlayerSeat(p),
+      works: isStaffSeat(p)
+    });
   });
 
   var eb = getExpenseBreakdown();
@@ -2403,12 +2563,16 @@ function buildAuditSnapshot() {
 
   return {
     players: players,
+    accounts: accounts,
     cash: {
       bankStart: bankStart,
       buyIns: cashBuyInLines,
       buyInsTotal: cashBuyIns,
       markerPaid: markerPaidCash,
       priorPaid: priorPaidCash,
+      hostDeposits: d.hostDepositCash || 0,
+      hostWithdrawals: d.hostWithdrawCash || 0,
+      staffCollects: d.staffCollectCash || 0,
       paidOut: cashPaidOut,
       expenses: cashExpensesPaid,
       staffPaid: staffPaidOutCash,
@@ -2421,6 +2585,9 @@ function buildAuditSnapshot() {
       markerPaidLines: markerPaidEcashLines,
       priorPaid: priorPaidEcash,
       priorPaidLines: priorPaidEcashLines,
+      hostDeposits: d.hostDepositEcash || 0,
+      hostWithdrawals: d.hostWithdrawEcash || 0,
+      staffCollects: d.staffCollectEcash || 0,
       paidOut: eCashPaidOut,
       expenses: eCashExpensesPaid,
       staffPaid: staffPaidOutEcash,
@@ -2510,6 +2677,9 @@ function formatAuditPlainText(snap) {
   }
   lines.push('marker paid in:   ' + formatAuditMoney(snap.cash.markerPaid || 0));
   lines.push('prior paid in:    ' + formatAuditMoney(snap.cash.priorPaid || 0));
+  lines.push('host deposits:    ' + formatAuditMoney(snap.cash.hostDeposits || 0));
+  lines.push('host withdrawals: ' + formatAuditMoney(snap.cash.hostWithdrawals || 0));
+  lines.push('staff collects:   ' + formatAuditMoney(snap.cash.staffCollects || 0));
   lines.push('cash paid out:    ' + formatAuditMoney(snap.cash.paidOut));
   lines.push('cash expenses:    ' + formatAuditMoney(snap.cash.expenses));
   lines.push('staff cash paid:  ' + formatAuditMoney(snap.cash.staffPaid));
@@ -2536,6 +2706,9 @@ function formatAuditPlainText(snap) {
     var plabel = m.receivedBy ? (m.name + ' → ' + m.receivedBy) : m.name;
     lines.push('  ' + plabel + ': ' + formatAuditMoney(m.amount));
   });
+  lines.push('host deposits:    ' + formatAuditMoney(snap.ecash.hostDeposits || 0));
+  lines.push('host withdrawals: ' + formatAuditMoney(snap.ecash.hostWithdrawals || 0));
+  lines.push('staff collects:   ' + formatAuditMoney(snap.ecash.staffCollects || 0));
   lines.push('eCash paid out:   ' + formatAuditMoney(snap.ecash.paidOut));
   lines.push('eCash expenses:   ' + formatAuditMoney(snap.ecash.expenses));
   lines.push('staff eCash paid: ' + formatAuditMoney(snap.ecash.staffPaid));
@@ -2605,8 +2778,27 @@ function formatAuditPlainText(snap) {
       if (s.ecashReceived > SETTLE_EPSILON) {
         lines.push('  eCash received:  ' + formatAuditMoney(s.ecashReceived));
       }
+      if (Math.abs(s.hostCashNet || 0) > SETTLE_EPSILON) {
+        lines.push('  host cash net:   ' + formatAuditMoney(s.hostCashNet || 0));
+      }
+      if ((s.staffCollects || 0) > SETTLE_EPSILON) {
+        lines.push('  staff collects:  ' + formatAuditMoney(s.staffCollects || 0));
+      }
       lines.push('  paid out:        ' + formatAuditMoney(s.paidOut));
       lines.push('  balance:         ' + formatAuditMoney(s.balance));
+    });
+  }
+  lines.push('');
+
+  lines.push('=== ACCOUNTS ===');
+  if (!(snap.accounts || []).length) {
+    lines.push('(none)');
+  } else {
+    (snap.accounts || []).forEach(function(a) {
+      lines.push(a.name);
+      lines.push('  playing:         ' + formatAuditMoney(a.playing));
+      lines.push('  working:         ' + formatAuditMoney(a.working));
+      lines.push('  account:         ' + formatAuditMoney(a.account));
     });
   }
   lines.push('');
@@ -2667,6 +2859,9 @@ function renderAuditPanelBody(snap) {
   }
   html += auditRowHtml('marker paid in', formatAuditMoney(snap.cash.markerPaid || 0));
   html += auditRowHtml('prior paid in', formatAuditMoney(snap.cash.priorPaid || 0));
+  html += auditRowHtml('host deposits', formatAuditMoney(snap.cash.hostDeposits || 0));
+  html += auditRowHtml('host withdrawals', formatAuditMoney(snap.cash.hostWithdrawals || 0));
+  html += auditRowHtml('staff collects', formatAuditMoney(snap.cash.staffCollects || 0));
   html += auditRowHtml('cash paid out', formatAuditMoney(snap.cash.paidOut));
   html += auditRowHtml('cash expenses', formatAuditMoney(snap.cash.expenses));
   html += auditRowHtml('staff cash paid', formatAuditMoney(snap.cash.staffPaid));
@@ -2695,6 +2890,9 @@ function renderAuditPanelBody(snap) {
     var plabel = m.receivedBy ? (m.name + ' → ' + m.receivedBy) : m.name;
     html += auditRowHtml(plabel, formatAuditMoney(m.amount), { sub: true });
   });
+  html += auditRowHtml('host deposits', formatAuditMoney(snap.ecash.hostDeposits || 0));
+  html += auditRowHtml('host withdrawals', formatAuditMoney(snap.ecash.hostWithdrawals || 0));
+  html += auditRowHtml('staff collects', formatAuditMoney(snap.ecash.staffCollects || 0));
   html += auditRowHtml('eCash paid out', formatAuditMoney(snap.ecash.paidOut));
   html += auditRowHtml('eCash expenses', formatAuditMoney(snap.ecash.expenses));
   html += auditRowHtml('staff eCash paid', formatAuditMoney(snap.ecash.staffPaid));
@@ -2772,8 +2970,28 @@ function renderAuditPanelBody(snap) {
       if (s.ecashReceived > SETTLE_EPSILON) {
         html += auditRowHtml('eCash received', formatAuditMoney(s.ecashReceived), { sub: true });
       }
+      if (Math.abs(s.hostCashNet || 0) > SETTLE_EPSILON) {
+        html += auditRowHtml('host cash net', formatAuditMoney(s.hostCashNet || 0), { sub: true });
+      }
+      if ((s.staffCollects || 0) > SETTLE_EPSILON) {
+        html += auditRowHtml('staff collects', formatAuditMoney(s.staffCollects || 0), { sub: true });
+      }
       html += auditRowHtml('paid out', formatAuditMoney(s.paidOut), { sub: true });
       html += auditRowHtml('balance', formatAuditMoney(s.balance), { sub: true, total: true, color: balColor });
+    });
+  }
+  html += '</div>';
+
+  html += '<div class="audit-sec"><div class="audit-sec-title">Accounts</div>';
+  if (!(snap.accounts || []).length) {
+    html += '<div class="audit-empty">(none)</div>';
+  } else {
+    (snap.accounts || []).forEach(function(a) {
+      var aColor = a.account > SETTLE_EPSILON ? 'var(--green)' : (a.account < -SETTLE_EPSILON ? 'var(--red)' : '');
+      html += '<div class="audit-person">' + a.name + '</div>';
+      html += auditRowHtml('playing', formatAuditMoney(a.playing), { sub: true });
+      html += auditRowHtml('working', formatAuditMoney(a.working), { sub: true });
+      html += auditRowHtml('account', formatAuditMoney(a.account), { sub: true, total: true, color: aColor });
     });
   }
   html += '</div>';
@@ -2931,6 +3149,21 @@ function txnReasonLabel(t) {
       var roleLbl = role ? staffRoleLabel(normalizeStaffRole(role)) : '';
       var staffBase = roleLbl ? ('Staff payout · ' + roleLbl) : 'Staff payout';
       return note ? (staffBase + ' · ' + note) : staffBase;
+    }
+    case 'STAFF_COLLECT': {
+      var scM = String(t.method || 'CASH').toUpperCase() === 'ECASH' ? 'eCash' : 'Cash';
+      return withNote('Staff collect · ' + scM);
+    }
+    case 'HOST_DEPOSIT': {
+      var hdM = String(t.method || 'CASH').toUpperCase() === 'ECASH' ? 'eCash' : 'Cash';
+      var hdRecv = String(t.receivedByName || t.receivedBy || '').trim();
+      if (hdRecv) hdRecv = hdRecv.replace(/\s*\([^)]*\)\s*$/, '').trim() || hdRecv;
+      var hdBase = hdRecv ? ('Host deposit · ' + hdM + ' · ' + hdRecv) : ('Host deposit · ' + hdM);
+      return note ? (hdBase + ' · ' + note) : hdBase;
+    }
+    case 'HOST_WITHDRAW': {
+      var hwM = String(t.method || 'CASH').toUpperCase() === 'ECASH' ? 'eCash' : 'Cash';
+      return withNote('Host withdraw · ' + hwM);
     }
     case 'HOUSE_EXPENSE':
     case 'PLAYER_EXPENSE':
@@ -3441,14 +3674,13 @@ function renderAll() {
   }
   renderExpenseList();
 
-  // Owes/owed — same playerBalance() as expanded roster row (no parallel formula)
-  // Host/Player dual role is included (isPlayerSeat); pure staff excluded
-  // Still-playing cash/eCash/bonus never enter House Owes (playerBalance === 0 + explicit gate)
+  // Owes/owed — personAccountBalance (one account: playing + working)
+  // Pure mid-game cash/eCash/bonus still early-zero on playing side
   var owingPlayers = G.players.filter(function(p){
-    return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p) < -SETTLE_EPSILON;
+    return personAccountBalance(p) < -SETTLE_EPSILON;
   });
   var owedPlayers  = G.players.filter(function(p){
-    return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p) > SETTLE_EPSILON;
+    return personAccountBalance(p) > SETTLE_EPSILON;
   });
   var ocEl = document.getElementById('owes-count');
   var odEl = document.getElementById('owed-count');
@@ -3459,7 +3691,7 @@ function renderAll() {
   var owedListEl = document.getElementById('owed-list');
   owesListEl.innerHTML = owingPlayers.length
     ? owingPlayers.map(function(p){
-        var bal = playerBalance(p);
+        var bal = personAccountBalance(p);
         return '<div class="owed-row" onclick="showPage(\'players\');expandRosterTo('+p.id+')">'
           +'<span class="owed-name">'+personDisplayName(p)+'</span>'
           +'<span class="owed-amt">$'+fmt(Math.abs(bal))+'</span>'
@@ -3469,7 +3701,7 @@ function renderAll() {
 
   owedListEl.innerHTML = owedPlayers.length
     ? owedPlayers.map(function(p){
-        var bal = playerBalance(p);
+        var bal = personAccountBalance(p);
         return '<div class="green-row">'
           +'<span style="font-weight:700;font-size:13px">'+personDisplayName(p)+'</span>'
           +'<span style="font-weight:800;font-size:16px;color:var(--green)">$'+fmt(Math.abs(bal))+'</span>'
@@ -3501,6 +3733,9 @@ function renderAll() {
     // CARRYOVER uses type PRIOR_BALANCE; label overridden at render when source=carryover
 
     STAFF_PAYOUT:        { label:'STAFF OUT', color:'var(--gold)',        bg:'var(--gold-dim)' },
+    STAFF_COLLECT:       { label:'STAFF IN',  color:'var(--green)',       bg:'var(--green-dim)' },
+    HOST_DEPOSIT:        { label:'HOST DEP',  color:'var(--green)',       bg:'var(--green-dim)' },
+    HOST_WITHDRAW:       { label:'HOST WD',   color:'var(--orange)',      bg:'var(--orange-dim)' },
     SETTLEMENT_PAYMENT:  { label:'SETTLED',   color:'var(--green)',       bg:'var(--green-dim)' },
     VOID_CASH_BUYIN:     { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_ECASH_BUYIN:    { label:'VOID IN',   color:'var(--text-muted)',  bg:'var(--bg3)' },
@@ -3512,8 +3747,8 @@ function renderAll() {
     VOID_EXPENSE:        { label:'VOID EXP',  color:'var(--text-muted)',  bg:'var(--bg3)' },
     VOID_PLAYER_CREDIT:  { label:'VOID CR',   color:'var(--text-muted)',  bg:'var(--bg3)' }
   };
-  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, BALANCE_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1, PRIOR_PAYMENT:1 };
-  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1 };
+  var TXN_MONEY_IN  = { CASH_BUYIN:1, ECASH_BUYIN:1, MARKER_BUYIN:1, BONUS_BUYIN:1, BALANCE_BUYIN:1, CHIP_TURN_IN:1, TIPS:1, DROP:1, STAFF_TAX:1, PLAYER_CREDIT:1, MARKER_PAYMENT:1, PRIOR_PAYMENT:1, STAFF_COLLECT:1, HOST_DEPOSIT:1 };
+  var TXN_MONEY_OUT = { CASH_OUT:1, HOUSE_EXPENSE:1, HOUSE_EXPENSE_PAYOUT:1, PLAYER_EXPENSE:1, STAFF_PAYOUT:1, HOST_WITHDRAW:1 };
 
   var txnEl = document.getElementById('txn-log');
   var activeTxns = (G.txnLog || []).filter(txnIsActive);
@@ -3632,20 +3867,16 @@ function tipsTotal(p) {
 }
 
 function rosterPlayerStatusBadge(p) {
-  // LEDGER RULE: red OWES / green OWED / neutral EVEN only (no tilde / yellow estimate badges)
-  var bal = playerBalance(p);
+  // LEDGER RULE: red OWES / green OWED / neutral EVEN — account total
+  var bal = personAccountBalance(p);
   if (Math.abs(bal) <= SETTLE_EPSILON) return '<span class="badge badge-gray">Even</span>';
   if (bal < 0) return '<span class="badge badge-red">Owes</span>';
   return '<span class="badge badge-green">Owed</span>';
 }
 
 function rosterStaffStatusBadge(p) {
-  var unpaid = staffTipBalance(p);
-  var paidOut = staffPayoutsTotal(p);
-  if (unpaid < -SETTLE_EPSILON) return '<span class="badge badge-red">Owes</span>';
-  if (unpaid <= SETTLE_EPSILON) return '<span class="badge badge-green">Paid</span>';
-  if (paidOut > SETTLE_EPSILON) return '<span class="badge badge-yellow">Partial</span>';
-  return '<span class="badge badge-red">Unpaid</span>';
+  // Same account badge as Players row (one balance per person)
+  return rosterPlayerStatusBadge(p);
 }
 
 function rosterBalAmt(bal) {
@@ -3659,9 +3890,9 @@ function rosterBalAmt(bal) {
   return '<span class="roster-amt pos">$' + fmt(bal) + '</span>';
 }
 
-/** Roster header balance: red OWES / green OWED / neutral $0 EVEN (no tilde/~). */
+/** Roster header balance: red OWES / green OWED / neutral $0 EVEN (account total). */
 function rosterPlayerBalCell(p) {
-  return rosterBalAmt(playerBalance(p));
+  return rosterBalAmt(personAccountBalance(p));
 }
 
 var _expandedRosterId = null;
@@ -3782,7 +4013,186 @@ function rosterTurnInAction(id) {
 function rosterSettleAction(id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) return;
-  openSettleUpModal(p.id, personDisplayName(p), playerBalance(p), 'BALANCE');
+  openSettleUpModal(p.id, personDisplayName(p), personAccountBalance(p), 'BALANCE');
+}
+
+function rosterStartWorking(btn, id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p) return;
+  if (p.staffRole) { toast('Already working'); return; }
+  var sel = document.getElementById('rx-start-work-role-' + id);
+  var role = sel ? normalizeStaffRole(sel.value) : '';
+  if (!role) { toast('Pick a staff role'); return; }
+  confirmAction(btn, 'Tap again: start working as ' + staffRoleLabel(role) + ' (keeps playing)', function(){
+    p.staffRole = role;
+    p.role = role;
+    p.plays = true;
+    if (!p.capabilities) p.capabilities = {};
+    p.capabilities.canBuyIn = true;
+    p.capabilities.canCashOut = true;
+    p.capabilities.canLogTips = true;
+    p.capabilities.canLogDrop = role === 'dealer';
+    p.capabilities.canReceiveECash = true;
+    if (role === 'chef' && p.basePay == null) p.basePay = 0;
+    if (role === 'books') {
+      if (p.hourlyRate == null) p.hourlyRate = 0;
+      if (p.hoursWorked == null) p.hoursWorked = 0;
+    }
+    if (!p.hostCash) p.hostCash = [];
+    if (!p.staffCollects) p.staffCollects = [];
+    _playerProfileTabs[String(id)] = 'work';
+    rosterKeepExpanded(id);
+    calcAll(); renderAll(); autoSave();
+    toast('Now working as ' + staffRoleLabel(role) + ' ✅');
+  });
+}
+
+function rosterToggleAlsoPlaying(id, on) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p || !p.staffRole) return;
+  p.plays = !!on;
+  if (!p.capabilities) p.capabilities = {};
+  p.capabilities.canBuyIn = !!on;
+  p.capabilities.canCashOut = !!on;
+  if (normalizeStaffRole(p.staffRole) === 'host-player') p.plays = true;
+  rosterKeepExpanded(id);
+  calcAll(); renderAll(); autoSave();
+  toast(p.plays ? 'Also playing ✅' : 'Playing off — staff only');
+}
+
+function rosterSetHostCashKind(id, kind) {
+  var hid = document.getElementById('rx-host-cash-kind-' + id);
+  if (hid) hid.value = kind || '';
+  var wrap = document.getElementById('rx-host-cash-kind-pills-' + id);
+  if (wrap) {
+    var pills = wrap.querySelectorAll('.roster-pill');
+    for (var i = 0; i < pills.length; i++) {
+      pills[i].classList.toggle('active', pills[i].getAttribute('data-kind') === kind);
+    }
+  }
+  rosterRefreshHostCashUi(id);
+}
+
+function rosterSetHostCashMethod(id, method) {
+  var hid = document.getElementById('rx-host-cash-method-' + id);
+  if (hid) hid.value = method || '';
+  var wrap = document.getElementById('rx-host-cash-method-pills-' + id);
+  if (wrap) {
+    var pills = wrap.querySelectorAll('.roster-pill');
+    for (var i = 0; i < pills.length; i++) {
+      pills[i].classList.toggle('active', pills[i].getAttribute('data-method') === method);
+    }
+  }
+  rosterRefreshHostCashUi(id);
+}
+
+function rosterRefreshHostCashUi(id) {
+  var kindEl = document.getElementById('rx-host-cash-kind-' + id);
+  var methodEl = document.getElementById('rx-host-cash-method-' + id);
+  var kind = kindEl ? String(kindEl.value || '').toUpperCase() : '';
+  var method = methodEl ? String(methodEl.value || '').toUpperCase() : '';
+  var row = document.getElementById('rx-host-cash-receiver-row-' + id);
+  if (row) row.style.display = (kind === 'DEPOSIT' && method === 'ECASH') ? 'block' : 'none';
+  var hint = document.getElementById('rx-host-cash-choose-' + id);
+  if (hint) hint.style.display = (kind && method) ? 'none' : '';
+  var btn = document.getElementById('rx-host-cash-btn-' + id);
+  if (btn) btn.disabled = !(kind && method);
+}
+
+function rosterAddHostCash(btn, id) {
+  var p = G.players.find(function(pl){ return pl.id === id; });
+  if (!p || !isHostCashRole(p)) { toast('Host cash is for host roles only'); return; }
+  var kindEl = document.getElementById('rx-host-cash-kind-' + id);
+  var methodEl = document.getElementById('rx-host-cash-method-' + id);
+  var amtEl = document.getElementById('rx-host-cash-amount-' + id);
+  var noteEl = document.getElementById('rx-host-cash-note-' + id);
+  var kind = kindEl ? String(kindEl.value || '').toUpperCase() : '';
+  var method = methodEl ? String(methodEl.value || '').toUpperCase() : '';
+  var amount = amtEl ? (Number(amtEl.value) || 0) : 0;
+  var note = noteEl ? String(noteEl.value || '').trim() : '';
+  if (kind !== 'DEPOSIT' && kind !== 'WITHDRAW') { toast('Choose Deposit or Withdraw'); return; }
+  if (method !== 'CASH' && method !== 'ECASH') { toast('Choose Cash or eCash'); return; }
+  if (!amount || amount <= 0) { toast('Enter amount'); return; }
+  var receivedById = '', receivedByName = '';
+  if (kind === 'DEPOSIT' && method === 'ECASH') {
+    var recEl = document.getElementById('rx-host-cash-receiver-' + id);
+    receivedById = recEl ? recEl.value : '';
+    if (!receivedById) { toast('Select who received the eCash'); return; }
+    var recOpt = recEl && recEl.options[recEl.selectedIndex];
+    receivedByName = recOpt ? recOpt.text : receivedById;
+  }
+  var shortName = (personDisplayName(p) || 'HOST').split(' · ')[0];
+  var sign = kind === 'DEPOSIT' ? 1 : -1;
+  var afterAcct = personAccountBalance(p) + sign * amount;
+  var cohDelta = (kind === 'DEPOSIT' ? '+' : '−') + '$' + fmt(amount);
+  var cohLabel = method === 'CASH' ? 'cash on hand' : 'eCash on hand';
+  var effect = kind === 'DEPOSIT'
+    ? (cohLabel + ' ' + cohDelta + ' · ' + shortName + ' ' + formatPersonAccountAfter(afterAcct))
+    : (cohLabel + ' ' + cohDelta + ' · ' + shortName + ' ' + formatPersonAccountAfter(afterAcct));
+  var confirmMsg = 'Tap again: ' + kind + ' $' + fmt(amount) + ' ' + method
+    + (kind === 'WITHDRAW' ? ' by ' : ' by ') + shortName + ' → ' + effect;
+  confirmAction(btn, confirmMsg, function(){
+    var ts = new Date().toISOString();
+    var seq = (G._seq || 0) + 1;
+    if (!p.hostCash) p.hostCash = [];
+    p.hostCash.push({
+      kind: kind,
+      amount: amount,
+      method: method,
+      receivedById: receivedById || undefined,
+      receivedByName: receivedByName || undefined,
+      note: note || undefined,
+      seq: seq,
+      timestamp: ts,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    });
+    appendTxn({
+      type: kind === 'DEPOSIT' ? 'HOST_DEPOSIT' : 'HOST_WITHDRAW',
+      amount: amount,
+      method: method,
+      note: note || undefined,
+      playerId: String(p.id),
+      playerName: personDisplayName(p),
+      staffId: String(p.id),
+      staffName: p.name,
+      receivedById: receivedById || undefined,
+      receivedByName: receivedByName || undefined,
+      timestamp: ts
+    });
+    rosterKeepExpanded(id);
+    calcAll(); renderAll(); autoSave();
+    toastUndo((kind === 'DEPOSIT' ? 'Host deposit' : 'Host withdraw') + ' $' + fmt(amount), function(){
+      undoHostCashByKey(id, seq, ts);
+    });
+  });
+}
+
+function undoHostCashByKey(playerId, seq, ts) {
+  var p = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p || !p.hostCash) return false;
+  var idx = -1;
+  for (var i = p.hostCash.length - 1; i >= 0; i--) {
+    var h = p.hostCash[i];
+    if (!h || h.voided === true) continue;
+    if ((seq != null && h.seq === seq) || (ts && String(h.timestamp || '') === String(ts))) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx < 0) return false;
+  var entry = p.hostCash[idx];
+  entry.voided = true;
+  var typ = String(entry.kind || '').toUpperCase() === 'DEPOSIT' ? 'HOST_DEPOSIT' : 'HOST_WITHDRAW';
+  markTxnVoided(function(t) {
+    return t && String(t.type || '').toUpperCase() === typ
+      && String(t.playerId) === String(p.id)
+      && Number(t.amount) === Number(entry.amount)
+      && String(t.timestamp || '') === String(entry.timestamp || '');
+  });
+  rosterKeepExpanded(playerId);
+  calcAll(); renderAll(); autoSave();
+  toast('Host cash voided');
+  return true;
 }
 
 function rosterStaffTipsAction(id) {
@@ -4310,8 +4720,8 @@ function playerPayOutAnywayCap(p) {
 function rosterPayOutAnyway(btn, id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) { toast('Player not found'); return; }
-  var bal = playerBalance(p);
-  if (bal >= -SETTLE_EPSILON) { toast('Player does not owe'); return; }
+  var bal = personAccountBalance(p);
+  if (bal >= -SETTLE_EPSILON) { toast('Account does not owe'); return; }
   var el = document.getElementById('rx-anyway-amount-' + id);
   var mEl = document.getElementById('rx-anyway-method-' + id);
   var amount = el ? (Number(el.value) || 0) : 0;
@@ -4334,9 +4744,8 @@ function rosterPayOutAnyway(btn, id) {
   var name = personDisplayName(p);
   var shortName = name.split(' · ')[0];
   var afterBal = bal - amount;
-  var cohNote = method === 'CASH' ? ' · cash on hand −$' + fmt(amount) : ' · eCash on hand −$' + fmt(amount);
   var confirmMsg = 'Tap again: PAY OUT $' + fmt(amount) + ' ' + method + ' to ' + shortName
-    + ' → ' + shortName + ' ' + formatPlayerBalanceAfter(afterBal) + cohNote;
+    + ' → ' + shortName + ' ' + formatPersonAccountAfter(afterBal) + ' (working unchanged)';
   confirmAction(btn, confirmMsg, function(){
     var ts = new Date().toISOString();
     var seq = (G._seq || 0) + 1;
@@ -4372,7 +4781,7 @@ function rosterPayOutAnyway(btn, id) {
 
 function rosterSetProfileTab(id, tab) {
   var t = String(tab || 'buyin');
-  if (t !== 'buyin' && t !== 'turnin' && t !== 'settle' && t !== 'more') t = 'buyin';
+  if (t !== 'buyin' && t !== 'turnin' && t !== 'work' && t !== 'settle' && t !== 'more') t = 'buyin';
   _playerProfileTabs[String(id)] = t;
   var root = document.getElementById('rx-profile-' + id);
   if (!root) {
@@ -4421,19 +4830,23 @@ function rosterProfileNextStep(id, tab) {
 }
 
 /**
- * Balance settle section (Settle tab):
- *   bal > 0 → PAYOUT / green PAY OUT
- *   bal < 0 → COLLECT / PAY IN
- *   bal ≈ 0 → Settled ✓ (after settlement-relevant activity)
+ * Balance settle section (Settle tab) — acts on personAccountBalance:
+ *   account > 0 → PAYOUT (STAFF_PAYOUT then CASH_OUT)
+ *   account < 0 → COLLECT (PRIOR / MARKER / STAFF_COLLECT)
+ *   account ≈ 0 → Settled ✓
  * No pre-selected Cash/eCash — PAY IN / PAY OUT disabled until method picked.
  */
 function rosterHouseOwesPayoutHtml(p) {
-  if (playerIsStillPlaying(p) && !rosterChipTurnInLogged(p)) {
+  var playBal = playerBalance(p);
+  var workBal = p.staffRole ? staffTipBalance(p) : 0;
+  var bal = personAccountBalance(p);
+  var needsTurnIn = isPlayerSeat(p) && playerIsStillPlaying(p) && !rosterChipTurnInLogged(p)
+    && Math.abs(workBal) <= SETTLE_EPSILON && Math.abs(playBal) <= SETTLE_EPSILON;
+  if (needsTurnIn) {
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
       + '<div class="roster-expand-meta">No settlement yet — turn in chips first</div>'
       + '</div>';
   }
-  var bal = playerBalance(p);
   var flash = (_balPayoutFlashId === p.id && Date.now() < _balPayoutFlashUntil);
   if (flash) {
     var flashLabel = _balPayoutFlashKind === 'collect'
@@ -4451,7 +4864,11 @@ function rosterHouseOwesPayoutHtml(p) {
       || playerMarkerCreditsTotal(p) > 0
       || playerPriorOwedGross(p) > 0
       || playerPriorCredit(p) > 0
-      || playerPriorPaymentsTotal(p) > 0;
+      || playerPriorPaymentsTotal(p) > 0
+      || tipsTotal(p) > 0
+      || staffPayoutsTotal(p) > 0
+      || staffCollectsTotal(p) > 0
+      || Math.abs(hostCashNet(p)) > SETTLE_EPSILON;
     if (!hasActivity) {
       return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
         + '<div class="roster-expand-meta">Nothing to settle</div>'
@@ -4461,21 +4878,21 @@ function rosterHouseOwesPayoutHtml(p) {
       + '<div class="roster-expand-summary" style="margin:0;color:var(--green);font-weight:800">Settled ✓</div>'
     + '</div>';
   }
-  // Pending chip turn-in + house owes → clear pending via rosterAddCashOut
-  if (bal > SETTLE_EPSILON && rosterChipTurnInLogged(p)) {
+  // Pending chip turn-in + account owed → account payout waterfall (also clears pending turn-in)
+  if (bal > SETTLE_EPSILON && rosterChipTurnInLogged(p) && playBal > SETTLE_EPSILON) {
     var netPayout = Math.round(bal * 100) / 100;
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
       + '<div class="roster-form-label">PAYOUT</div>'
-      + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--green)">Owed $' + fmt(netPayout) + ' — pay player</div>'
-      + '<input type="hidden" id="rx-cashout-method-' + p.id + '" value="">'
-      + '<div class="roster-pill-row" id="rx-cashout-method-pills-' + p.id + '">'
-        + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'CASH\')">Cash</button>'
-        + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetCashOutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+      + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--green)">Account owed $' + fmt(netPayout) + ' — pay out</div>'
+      + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="">'
+      + '<div class="roster-pill-row" id="rx-bal-payout-method-pills-' + p.id + '">'
+        + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
+        + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
       + '</div>'
-      + '<div class="pp-choose-hint" id="rx-cashout-choose-' + p.id + '">Choose a method</div>'
+      + '<div class="pp-choose-hint" id="rx-bal-payout-choose-' + p.id + '">Choose a method</div>'
       + '<div class="roster-turnin-input-row">'
-        + '<input type="number" class="roster-turnin-input" id="rx-cashout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
-        + '<button id="rx-cashout-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" disabled onclick="rosterAddCashOut(this,' + p.id + ')">PAY OUT</button>'
+        + '<input type="number" class="roster-turnin-input" id="rx-bal-payout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
+        + '<button id="rx-bal-payout-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" disabled onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT</button>'
       + '</div>'
     + '</div>';
   }
@@ -4486,7 +4903,7 @@ function rosterHouseOwesPayoutHtml(p) {
     if (payoutCap > SETTLE_EPSILON) {
       anywayHtml = '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">'
         + '<div class="roster-form-label" style="color:var(--text-muted)">Pay out anyway</div>'
-        + '<div class="roster-expand-meta" style="margin:0 0 8px">Cap $' + fmt(payoutCap) + ' (chips in − paid out)</div>'
+        + '<div class="roster-expand-meta" style="margin:0 0 8px">Cap $' + fmt(payoutCap) + ' (chips in − paid out) · working side unchanged</div>'
         + '<input type="hidden" id="rx-anyway-method-' + p.id + '" value="">'
         + '<div class="roster-pill-row" id="rx-anyway-method-pills-' + p.id + '">'
           + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetAnywayPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
@@ -4507,7 +4924,7 @@ function rosterHouseOwesPayoutHtml(p) {
     }
     return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
       + '<div class="roster-form-label">COLLECT</div>'
-      + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--red)">Owes $' + fmt(oweAmt) + ' — collect from player</div>'
+      + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--red)">Account owes $' + fmt(oweAmt) + ' — collect</div>'
       + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="">'
       + '<div class="roster-inline-row">'
         + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + oweAmt + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
@@ -4530,6 +4947,7 @@ function rosterHouseOwesPayoutHtml(p) {
   var prefill = Math.round(bal * 100) / 100;
   return '<div class="roster-form-block" id="rx-bal-payout-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
     + '<div class="roster-form-label">PAYOUT</div>'
+    + '<div class="roster-expand-summary" style="margin:0 0 10px;color:var(--green)">Account owed $' + fmt(prefill) + ' — pay out</div>'
     + '<input type="hidden" id="rx-bal-payout-method-' + p.id + '" value="">'
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-bal-payout-amount-' + p.id + '" value="' + prefill + '" min="0" step="0.01" inputmode="decimal" style="flex:1.2">'
@@ -4547,53 +4965,104 @@ function rosterHouseOwesPayoutHtml(p) {
 function rosterPayHouseOwes(btn, id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) { toast('Player not found'); return; }
-  if (rosterChipTurnInLogged(p)) {
-    toast('Finish chip turn-in payout first');
-    return;
-  }
-  var bal = playerBalance(p);
+  var bal = personAccountBalance(p);
   if (bal <= SETTLE_EPSILON) { toast('Nothing to pay out'); return; }
-  var el = document.getElementById('rx-bal-payout-amount-' + id);
-  var mEl = document.getElementById('rx-bal-payout-method-' + id);
+  var el = document.getElementById('rx-bal-payout-amount-' + id)
+    || document.getElementById('rx-cashout-amount-' + id);
+  var mEl = document.getElementById('rx-bal-payout-method-' + id)
+    || document.getElementById('rx-cashout-method-' + id);
   var amount = el ? (Number(el.value) || 0) : 0;
   var method = mEl ? String(mEl.value || '').toUpperCase() : '';
   if (method !== 'CASH' && method !== 'ECASH') { toast('Choose a method'); return; }
   if (!amount || amount <= 0) { toast('Enter payout amount'); return; }
   if (amount > bal + SETTLE_EPSILON) {
-    toast('Amount exceeds house-owes balance ($' + fmt(bal) + ')');
+    toast('Amount exceeds account balance ($' + fmt(bal) + ')');
     return;
   }
+  var receivedById = '', receivedByName = '';
+  if (method === 'ECASH') {
+    var recEl = document.getElementById('rx-bal-payout-receiver-' + id)
+      || document.getElementById('rx-cashout-receiver-' + id);
+    if (recEl) {
+      receivedById = recEl.value || '';
+      if (!receivedById) { toast('Select who received the E-Cash'); return; }
+      var recOpt = recEl.options[recEl.selectedIndex];
+      receivedByName = recOpt ? recOpt.text : receivedById;
+    }
+  }
   var name = personDisplayName(p);
+  var shortName = name.split(' · ')[0];
   var afterBal = bal - amount;
-  var cohNote = method === 'CASH' ? ' · cash on hand −$' + fmt(amount) : ' · eCash on hand −$' + fmt(amount);
-  var confirmMsg = 'Tap again: Pay out $' + fmt(amount) + ' ' + method + ' to ' + name
-    + ' → ' + name.split(' · ')[0] + ' ' + formatPlayerBalanceAfter(afterBal) + cohNote;
+  var confirmMsg = 'Tap again: PAY OUT $' + fmt(amount) + ' ' + method + ' to ' + shortName
+    + ' → ' + shortName + ' ' + formatPersonAccountAfter(afterBal);
   confirmAction(btn, confirmMsg, function(){
     var ts = new Date().toISOString();
-    var seq = (G._seq || 0) + 1;
-    if (!p.cashOuts) p.cashOuts = [];
-    p.cashOuts.push({
-      method: method,
-      amount: amount,
-      seq: seq,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      timestamp: ts
-    });
-    appendTxn({
-      type: 'CASH_OUT',
-      amount: amount,
-      playerId: String(p.id),
-      playerName: personDisplayName(p),
-      method: method,
-      timestamp: ts
-    });
+    var timeLbl = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    var remaining = amount;
+    // Account OWED → working side first (STAFF_PAYOUT), remainder CASH_OUT on playing
+    var workPos = p.staffRole ? Math.max(0, staffTipBalance(p)) : 0;
+    var staffApply = Math.min(remaining, workPos);
+    var undoKeys = { ts: ts, staffSeq: null, cashSeq: null };
+    if (staffApply > SETTLE_EPSILON) {
+      if (!p.staffPayouts) p.staffPayouts = [];
+      var sSeq = (G._seq || 0) + 1;
+      undoKeys.staffSeq = sSeq;
+      p.staffPayouts.push({
+        amount: staffApply,
+        method: method,
+        receivedBy: receivedByName || null,
+        receivedById: receivedById || null,
+        timestamp: ts,
+        time: timeLbl,
+        seq: sSeq
+      });
+      appendTxn({
+        type: 'STAFF_PAYOUT',
+        amount: staffApply,
+        method: method,
+        receivedBy: receivedByName || null,
+        receivedById: receivedById || null,
+        playerId: String(p.id),
+        playerName: personDisplayName(p),
+        staffRole: p.staffRole || p.role || null,
+        timestamp: ts
+      });
+      remaining = Math.round((remaining - staffApply) * 100) / 100;
+    }
+    if (remaining > SETTLE_EPSILON) {
+      if (!p.cashOuts) p.cashOuts = [];
+      var cSeq = (G._seq || 0) + 1;
+      undoKeys.cashSeq = cSeq;
+      p.cashOuts.push({
+        method: method,
+        amount: remaining,
+        seq: cSeq,
+        time: timeLbl,
+        timestamp: ts,
+        receivedById: receivedById || undefined,
+        receivedByName: receivedByName || undefined
+      });
+      appendTxn({
+        type: 'CASH_OUT',
+        amount: remaining,
+        playerId: String(p.id),
+        playerName: personDisplayName(p),
+        method: method,
+        timestamp: ts,
+        receivedById: receivedById || undefined,
+        receivedByName: receivedByName || undefined
+      });
+    }
+    if (rosterChipTurnInLogged(p) && Math.abs(personAccountBalance(p)) <= SETTLE_EPSILON) {
+      p.chipTurnIn = 0;
+    }
     _balPayoutFlashId = id;
     _balPayoutFlashUntil = Date.now() + 2500;
     _balPayoutFlashKind = 'paid';
     rosterKeepExpanded(id);
     calcAll(); renderAll(); autoSave();
     toastUndo('Added PAY OUT $' + fmt(amount), function(){
-      undoVoidCashOutByKey(id, seq, ts);
+      undoAccountPayoutAt(id, undoKeys);
     });
     setTimeout(function(){
       if (_balPayoutFlashId === id && Date.now() >= _balPayoutFlashUntil - 50) {
@@ -4606,19 +5075,19 @@ function rosterPayHouseOwes(btn, id) {
   });
 }
 
-/** Player-owes COLLECT / PAY IN — apply to priorOwed first (PRIOR_PAYMENT), remainder to markerCredits.
- *  Allowed during pending chip turn-in (rosterTurnInSectionHtml COLLECT path). */
+/** Account OWES → COLLECT: prior, then markers, then negative working (STAFF_COLLECT). */
 function rosterCollectPlayerOwes(btn, id) {
   var p = G.players.find(function(pl){ return pl.id === id; });
   if (!p) { toast('Player not found'); return; }
-  var bal = playerBalance(p);
+  var bal = personAccountBalance(p);
   if (bal >= -SETTLE_EPSILON) { toast('Nothing to collect'); return; }
   var oweAmt = Math.abs(bal);
   var outstandingMarker = playerOutstandingMarker(p);
   var priorOwed = playerPriorOwed(p);
-  var collectableDebt = outstandingMarker + priorOwed;
+  var workNeg = p.staffRole ? Math.max(0, -staffTipBalance(p)) : 0;
+  var collectableDebt = outstandingMarker + priorOwed + workNeg;
   if (collectableDebt <= SETTLE_EPSILON) {
-    toast('No outstanding prior or marker to collect');
+    toast('Nothing collectable on this account');
     return;
   }
   var el = document.getElementById('rx-bal-payout-amount-' + id);
@@ -4641,10 +5110,10 @@ function rosterCollectPlayerOwes(btn, id) {
     receivedByName = recOpt ? recOpt.text : receivedById;
   }
   var name = personDisplayName(p);
+  var shortName = name.split(' · ')[0];
   var afterBal = bal + amount;
-  var cohNote = method === 'CASH' ? ' · cash on hand +$' + fmt(amount) : ' · eCash on hand +$' + fmt(amount);
-  var confirmMsg = 'Tap again: Collect $' + fmt(amount) + ' ' + method + ' from ' + name
-    + ' → ' + name.split(' · ')[0] + ' ' + formatPlayerBalanceAfter(afterBal) + cohNote;
+  var confirmMsg = 'Tap again: COLLECT $' + fmt(amount) + ' ' + method + ' from ' + shortName
+    + ' → ' + shortName + ' ' + formatPersonAccountAfter(afterBal);
   confirmAction(btn, confirmMsg, function(){
     var ts = new Date().toISOString();
     var timeLbl = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -4673,10 +5142,11 @@ function rosterCollectPlayerOwes(btn, id) {
       });
       remaining = Math.round((remaining - priorApply) * 100) / 100;
     }
-    if (remaining > SETTLE_EPSILON) {
+    var markerApply = Math.min(remaining, playerOutstandingMarker(p));
+    if (markerApply > SETTLE_EPSILON) {
       if (!p.markerCredits) p.markerCredits = [];
       p.markerCredits.push({
-        amount: remaining,
+        amount: markerApply,
         source: 'payment',
         method: method,
         timestamp: ts,
@@ -4685,7 +5155,7 @@ function rosterCollectPlayerOwes(btn, id) {
       });
       appendTxn({
         type: 'MARKER_PAYMENT',
-        amount: remaining,
+        amount: markerApply,
         playerId: String(p.id),
         playerName: personDisplayName(p),
         method: method,
@@ -4693,8 +5163,39 @@ function rosterCollectPlayerOwes(btn, id) {
         receivedById: receivedById || undefined,
         receivedByName: receivedByName || undefined
       });
+      remaining = Math.round((remaining - markerApply) * 100) / 100;
     }
-    if (Math.abs(playerBalance(p)) <= SETTLE_EPSILON) {
+    if (remaining > SETTLE_EPSILON) {
+      var workOwes = p.staffRole ? Math.max(0, -staffTipBalance(p)) : 0;
+      var staffApply = Math.min(remaining, workOwes);
+      if (staffApply > SETTLE_EPSILON) {
+        if (!p.staffCollects) p.staffCollects = [];
+        var scSeq = (G._seq || 0) + 1;
+        p.staffCollects.push({
+          amount: staffApply,
+          method: method,
+          timestamp: ts,
+          time: timeLbl,
+          seq: scSeq,
+          receivedById: receivedById || undefined,
+          receivedByName: receivedByName || undefined
+        });
+        appendTxn({
+          type: 'STAFF_COLLECT',
+          amount: staffApply,
+          playerId: String(p.id),
+          playerName: personDisplayName(p),
+          staffId: String(p.id),
+          staffName: p.name,
+          method: method,
+          timestamp: ts,
+          receivedById: receivedById || undefined,
+          receivedByName: receivedByName || undefined
+        });
+        remaining = Math.round((remaining - staffApply) * 100) / 100;
+      }
+    }
+    if (Math.abs(personAccountBalance(p)) <= SETTLE_EPSILON) {
       p.chipTurnIn = 0;
     }
     _balPayoutFlashId = id;
@@ -5190,22 +5691,51 @@ function rosterTurnInSectionHtml(p, markerTotal) {
   + '</div>';
 }
 
+function formatSideBalancePhrase(signed) {
+  var abs = Math.abs(signed);
+  if (abs <= SETTLE_EPSILON) return 'even $0';
+  if (signed < 0) return 'owes $' + fmt(abs);
+  return 'owed $' + fmt(abs);
+}
+
 function rosterPlayerBalanceCardHtml(p) {
-  var bal = playerBalance(p);
-  var word = playerBalanceStateWord(bal);
+  var playBal = playerBalance(p);
+  var workBal = p.staffRole ? staffTipBalance(p) : 0;
+  var bal = personAccountBalance(p);
+  var word = personAccountStateWord(bal);
   var abs = Math.abs(bal);
   var headCls = word === 'OWES' ? 'owes' : (word === 'OWED' ? 'owed' : 'even');
-  var headTxt = word + ' $' + fmt(word === 'EVEN' ? 0 : abs);
-  var terms = playerBalanceReceiptTerms(p);
-  var rows = terms.map(function(t) {
-    return '<div class="pp-receipt-row"><span class="pp-lbl">' + t.label + '</span><span class="pp-val">' + formatReceiptMoney(t.signedAmount) + '</span></div>';
-  }).join('');
+  var shortName = (personDisplayName(p) || 'PLAYER').split(' · ')[0];
+  var headTxt = shortName + ' · ' + word + ' $' + fmt(word === 'EVEN' ? 0 : abs);
+  var showPlaying = isPlayerSeat(p);
+  var showWorking = !!p.staffRole;
+  var playTerms = showPlaying ? playerBalanceReceiptTerms(p) : [];
+  var workTerms = showWorking ? staffTipBalanceReceiptTerms(p) : [];
+  var sectionHtml = '';
+  if (showPlaying) {
+    var playRows = playTerms.map(function(t) {
+      return '<div class="pp-receipt-row"><span class="pp-lbl">' + t.label + '</span><span class="pp-val">' + formatReceiptMoney(t.signedAmount) + '</span></div>';
+    }).join('');
+    sectionHtml += '<div class="pp-receipt-side">'
+      + '<div class="pp-receipt-row" style="font-weight:800"><span class="pp-lbl">Playing</span><span class="pp-val">' + formatSideBalancePhrase(playBal) + '</span></div>'
+      + (playRows || '<div class="pp-receipt-row"><span class="pp-lbl">No playing terms</span><span class="pp-val">$0</span></div>')
+      + '</div>';
+  }
+  if (showWorking) {
+    var workRows = workTerms.map(function(t) {
+      return '<div class="pp-receipt-row"><span class="pp-lbl">' + t.label + '</span><span class="pp-val">' + formatReceiptMoney(t.signedAmount) + '</span></div>';
+    }).join('');
+    sectionHtml += '<div class="pp-receipt-side"' + (showPlaying ? ' style="margin-top:8px"' : '') + '>'
+      + '<div class="pp-receipt-row" style="font-weight:800"><span class="pp-lbl">Working</span><span class="pp-val">' + formatSideBalancePhrase(workBal) + '</span></div>'
+      + (workRows || '<div class="pp-receipt-row"><span class="pp-lbl">No working terms</span><span class="pp-val">$0</span></div>')
+      + '</div>';
+  }
   var totalLbl = word === 'OWES' ? 'Owes' : (word === 'OWED' ? 'Owed' : 'Even');
   var totalColor = word === 'OWES' ? 'var(--red)' : (word === 'OWED' ? 'var(--green)' : 'var(--text-muted)');
   return '<div class="pp-balance-card">'
     + '<div class="pp-balance-head ' + headCls + '">' + headTxt + '</div>'
     + '<div class="pp-receipt">'
-      + (rows || '<div class="pp-receipt-row"><span class="pp-lbl">No balance terms</span><span class="pp-val">$0</span></div>')
+      + (sectionHtml || '<div class="pp-receipt-row"><span class="pp-lbl">No balance terms</span><span class="pp-val">$0</span></div>')
       + '<hr class="pp-receipt-rule">'
       + '<div class="pp-receipt-total"><span>' + totalLbl + '</span><span style="color:' + totalColor + '">$' + fmt(word === 'EVEN' ? 0 : abs) + '</span></div>'
     + '</div>'
@@ -5213,7 +5743,7 @@ function rosterPlayerBalanceCardHtml(p) {
 }
 
 function rosterPlayerNextStepHtml(p) {
-  var bal = playerBalance(p);
+  var bal = personAccountBalance(p);
   var abs = Math.round(Math.abs(bal) * 100) / 100;
   if (bal < -SETTLE_EPSILON) {
     return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">Collect $' + fmt(abs) + '</button>';
@@ -5221,11 +5751,85 @@ function rosterPlayerNextStepHtml(p) {
   if (bal > SETTLE_EPSILON) {
     return '<button type="button" class="pp-next-step pay-out" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">Pay out $' + fmt(abs) + '</button>';
   }
-  var hasTurnIn = playerChipTurnInsTotal(p) > SETTLE_EPSILON || rosterChipTurnInLogged(p);
-  if (!hasTurnIn) {
-    return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'turnin\')">Turn in chips</button>';
+  if (isPlayerSeat(p)) {
+    var hasTurnIn = playerChipTurnInsTotal(p) > SETTLE_EPSILON || rosterChipTurnInLogged(p);
+    if (!hasTurnIn) {
+      return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'turnin\')">Turn in chips</button>';
+    }
   }
   return '';
+}
+
+function rosterStartWorkingHtml(p) {
+  if (p.staffRole) return '';
+  var opts = STAFF_ROLE_KEYS.filter(function(k){ return k !== 'host-player'; }).map(function(k){
+    return '<option value="' + k + '">' + staffRoleLabel(k) + '</option>';
+  }).join('');
+  return '<div class="roster-form-block" id="rx-start-work-' + p.id + '">'
+    + '<div class="roster-form-label">Start working</div>'
+    + '<div class="roster-expand-meta" style="padding:0 0 8px">Pick a staff role — same account, keeps playing</div>'
+    + '<div class="roster-inline-row">'
+      + '<select class="inp" id="rx-start-work-role-' + p.id + '" style="flex:1">' + opts + '</select>'
+      + '<button type="button" class="btn btn-accent btn-xs" onclick="rosterStartWorking(this,' + p.id + ')">Start working</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function rosterAlsoPlayingHtml(p) {
+  if (!p.staffRole) return '';
+  var on = isPlayerSeat(p);
+  return '<div class="roster-form-block" id="rx-also-playing-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
+    + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">'
+      + '<input type="checkbox" id="rx-also-playing-cb-' + p.id + '"' + (on ? ' checked' : '') + ' onchange="rosterToggleAlsoPlaying(' + p.id + ',this.checked)" style="width:18px;height:18px;accent-color:var(--accent)">'
+      + '<span style="font-weight:700">Also playing</span>'
+    + '</label>'
+    + '<div class="roster-expand-meta" style="margin-top:6px">Shows under Players with the same account balance</div>'
+  + '</div>';
+}
+
+function rosterHostCashSectionHtml(p) {
+  if (!isHostCashRole(p)) return '';
+  var dep = hostCashDeposited(p);
+  var wd = hostCashWithdrawn(p);
+  var net = hostCashNet(p);
+  var netPhrase = net < -SETTLE_EPSILON ? ('owes $' + fmt(Math.abs(net)))
+    : (net > SETTLE_EPSILON ? ('owed $' + fmt(net)) : 'even $0');
+  return '<div class="roster-form-block" id="rx-host-cash-' + p.id + '">'
+    + '<div class="roster-form-label">Host cash</div>'
+    + '<div class="roster-expand-summary" style="margin:0 0 10px">Host cash: deposited $' + fmt(dep)
+      + ' · withdrew $' + fmt(wd) + ' · net ' + netPhrase + '</div>'
+    + '<input type="hidden" id="rx-host-cash-kind-' + p.id + '" value="">'
+    + '<div class="roster-pill-row" id="rx-host-cash-kind-pills-' + p.id + '">'
+      + '<button type="button" class="roster-pill" data-kind="DEPOSIT" onclick="rosterSetHostCashKind(' + p.id + ',\'DEPOSIT\')">Deposit</button>'
+      + '<button type="button" class="roster-pill" data-kind="WITHDRAW" onclick="rosterSetHostCashKind(' + p.id + ',\'WITHDRAW\')">Withdraw</button>'
+    + '</div>'
+    + '<input type="hidden" id="rx-host-cash-method-' + p.id + '" value="">'
+    + '<div class="roster-pill-row" id="rx-host-cash-method-pills-' + p.id + '" style="margin-top:8px">'
+      + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetHostCashMethod(' + p.id + ',\'CASH\')">Cash</button>'
+      + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetHostCashMethod(' + p.id + ',\'ECASH\')">eCash</button>'
+    + '</div>'
+    + '<div class="pp-choose-hint" id="rx-host-cash-choose-' + p.id + '">Choose deposit/withdraw and method</div>'
+    + '<div id="rx-host-cash-receiver-row-' + p.id + '" style="display:none;margin-top:8px">'
+      + '<div class="roster-form-label">eCash received by</div>'
+      + '<select class="inp" id="rx-host-cash-receiver-' + p.id + '" style="width:100%">'
+        + '<option value="">— Select receiver —</option>' + getEcashReceiverOptions()
+      + '</select>'
+    + '</div>'
+    + '<div class="roster-inline-row" style="margin-top:8px">'
+      + '<input type="number" class="inp" id="rx-host-cash-amount-' + p.id + '" placeholder="Amount" min="0" step="0.01" inputmode="decimal" style="flex:1">'
+      + '<input type="text" class="inp" id="rx-host-cash-note-' + p.id + '" placeholder="Note (optional)" style="flex:1.2">'
+      + '<button type="button" id="rx-host-cash-btn-' + p.id + '" class="btn btn-accent btn-xs" disabled onclick="rosterAddHostCash(this,' + p.id + ')">Confirm</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function rosterWorkTabBodyHtml(p) {
+  if (!p.staffRole) return '<div class="roster-expand-meta">Not working this game</div>';
+  // Reuse staff expand body pieces via a lightweight compose
+  return rosterAlsoPlayingHtml(p)
+    + rosterHostCashSectionHtml(p)
+    + '<div class="roster-expand-meta" style="margin:8px 0">Tips, tax, expenses, and pay — same tools as Staff roster</div>'
+    + '<div id="rx-work-embed-' + p.id + '">' + rosterStaffWorkToolsHtml(p) + '</div>';
 }
 
 function rosterPlayerExpandedHtml(p) {
@@ -5236,8 +5840,15 @@ function rosterPlayerExpandedHtml(p) {
   var houseOwesPayout = rosterHouseOwesPayoutHtml(p);
   var availBal = Math.max(0, playerBalance(p));
   var showBalancePill = availBal > SETTLE_EPSILON;
-  var tab = _playerProfileTabs[String(p.id)] || 'buyin';
-  if (tab !== 'buyin' && tab !== 'turnin' && tab !== 'settle' && tab !== 'more') tab = 'buyin';
+  var plays = isPlayerSeat(p);
+  var works = !!p.staffRole;
+  var tab = _playerProfileTabs[String(p.id)] || (plays ? 'buyin' : (works ? 'work' : 'settle'));
+  if (tab === 'buyin' && !plays) tab = works ? 'work' : 'settle';
+  if (tab === 'turnin' && !plays) tab = works ? 'work' : 'settle';
+  if (tab === 'work' && !works) tab = plays ? 'buyin' : 'settle';
+  if (tab !== 'buyin' && tab !== 'turnin' && tab !== 'work' && tab !== 'settle' && tab !== 'more') {
+    tab = plays ? 'buyin' : (works ? 'work' : 'settle');
+  }
 
   var buyInForm = '<div class="roster-form-block" id="rx-buyin-block-' + p.id + '" style="border-top:none;margin-top:0;padding-top:0">'
     + '<div class="roster-form-label">Buy-In</div>'
@@ -5303,49 +5914,45 @@ function rosterPlayerExpandedHtml(p) {
   var turnInSection = rosterTurnInSectionHtml(p, markerTotal);
   var balanceCard = rosterPlayerBalanceCardHtml(p);
   var nextStep = rosterPlayerNextStepHtml(p);
+  var workTab = works ? rosterWorkTabBodyHtml(p) : '';
+  var startWork = rosterStartWorkingHtml(p);
 
-  var staffSec = '';
-  if (isHostPlayer(p)) {
-    var tipsEarned = tipsTotal(p);
-    var tipBal = staffTipBalance(p);
-    var staffOpen = !!_playerProfileStaffOpen[String(p.id)];
-    staffSec = '<div class="pp-staff-sec">'
-      + '<button type="button" class="pp-staff-toggle" onclick="rosterToggleStaffSection(' + p.id + ')">'
-        + '<span>Staff</span><span id="rx-staff-chev-' + p.id + '">' + (staffOpen ? '▾' : '▸') + '</span>'
-      + '</button>'
-      + '<div class="pp-staff-body' + (staffOpen ? ' open' : '') + '" id="rx-staff-body-' + p.id + '">'
-        + '<div class="roster-expand-summary" style="margin:10px 0 0;color:' + staffRoleColor('host-player') + '">'
-          + 'Tips earned: <strong>$' + fmt(tipsEarned) + '</strong>'
-          + ' <span style="color:var(--text-muted)">|</span> '
-          + 'Staff balance: <strong>$' + fmt(tipBal) + '</strong>'
-        + '</div>'
-        + '<div class="roster-expand-meta" style="margin-top:8px">Full tip / tax / staff payout tools are on the Staff roster filter</div>'
-      + '</div>'
-    + '</div>';
+  var tabsHtml = '<div class="pp-tabs">';
+  if (plays) {
+    tabsHtml += '<button type="button" class="pp-tab' + (tab === 'buyin' ? ' active' : '') + '" data-tab="buyin" onclick="rosterSetProfileTab(' + p.id + ',\'buyin\')">Buy-in</button>'
+      + '<button type="button" class="pp-tab' + (tab === 'turnin' ? ' active' : '') + '" data-tab="turnin" onclick="rosterSetProfileTab(' + p.id + ',\'turnin\')">Turn-in</button>';
   }
+  if (works) {
+    tabsHtml += '<button type="button" class="pp-tab' + (tab === 'work' ? ' active' : '') + '" data-tab="work" onclick="rosterSetProfileTab(' + p.id + ',\'work\')">Work</button>';
+  }
+  tabsHtml += '<button type="button" class="pp-tab' + (tab === 'settle' ? ' active' : '') + '" data-tab="settle" onclick="rosterSetProfileTab(' + p.id + ',\'settle\')">Settle</button>'
+    + '<button type="button" class="pp-tab' + (tab === 'more' ? ' active' : '') + '" data-tab="more" onclick="rosterSetProfileTab(' + p.id + ',\'more\')">More</button>'
+    + '</div>';
+
+  var panelsHtml = '';
+  if (plays) {
+    panelsHtml += '<div class="pp-tab-panel' + (tab === 'buyin' ? ' active' : '') + '" data-tab="buyin">' + buyInForm + '</div>'
+      + '<div class="pp-tab-panel' + (tab === 'turnin' ? ' active' : '') + '" data-tab="turnin">' + turnInSection + '</div>';
+  }
+  if (works) {
+    panelsHtml += '<div class="pp-tab-panel' + (tab === 'work' ? ' active' : '') + '" data-tab="work">' + workTab + '</div>';
+  }
+  panelsHtml += '<div class="pp-tab-panel' + (tab === 'settle' ? ' active' : '') + '" data-tab="settle">' + houseOwesPayout + '</div>'
+    + '<div class="pp-tab-panel' + (tab === 'more' ? ' active' : '') + '" data-tab="more">' + startWork + creditsForm + priorBalForm + moreExtras + '</div>';
 
   var body = ''
     + '<div id="rx-profile-' + p.id + '">'
     + balanceCard
     + nextStep
-    + '<div class="pp-tabs">'
-      + '<button type="button" class="pp-tab' + (tab === 'buyin' ? ' active' : '') + '" data-tab="buyin" onclick="rosterSetProfileTab(' + p.id + ',\'buyin\')">Buy-in</button>'
-      + '<button type="button" class="pp-tab' + (tab === 'turnin' ? ' active' : '') + '" data-tab="turnin" onclick="rosterSetProfileTab(' + p.id + ',\'turnin\')">Turn-in</button>'
-      + '<button type="button" class="pp-tab' + (tab === 'settle' ? ' active' : '') + '" data-tab="settle" onclick="rosterSetProfileTab(' + p.id + ',\'settle\')">Settle</button>'
-      + '<button type="button" class="pp-tab' + (tab === 'more' ? ' active' : '') + '" data-tab="more" onclick="rosterSetProfileTab(' + p.id + ',\'more\')">More</button>'
-    + '</div>'
-    + '<div class="pp-tab-panel' + (tab === 'buyin' ? ' active' : '') + '" data-tab="buyin">' + buyInForm + '</div>'
-    + '<div class="pp-tab-panel' + (tab === 'turnin' ? ' active' : '') + '" data-tab="turnin">' + turnInSection + '</div>'
-    + '<div class="pp-tab-panel' + (tab === 'settle' ? ' active' : '') + '" data-tab="settle">' + houseOwesPayout + '</div>'
-    + '<div class="pp-tab-panel' + (tab === 'more' ? ' active' : '') + '" data-tab="more">' + creditsForm + priorBalForm + moreExtras + '</div>'
+    + tabsHtml
+    + panelsHtml
     + '<div class="pp-history">'
       + '<div class="roster-form-label" style="margin-bottom:4px">History</div>'
       + lines
     + '</div>'
-    + staffSec
     + '<div class="roster-expand-actions">'
       + '<button class="btn btn-outline btn-xs" onclick="rosterSettleAction(' + p.id + ')">Settle</button>'
-      + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Player</button>'
+      + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove</button>'
     + '</div>'
     + '</div>';
 
@@ -5476,7 +6083,7 @@ function rosterSetHourlyPay(id) {
   toast('Hourly pay set: $' + fmt(staffHourlyPay(p)) + ' ✅');
 }
 
-function rosterStaffExpandedHtml(p) {
+function rosterStaffWorkToolsHtml(p) {
   var roleKey = normalizeStaffRole(p.staffRole);
   var tipRows = buildStaffTipsHistory(p);
   var lines = '';
@@ -5665,10 +6272,6 @@ function rosterStaffExpandedHtml(p) {
     + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
   + '</div>';
 
-  return rosterWrapExpandRow('staff', rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm, dropHistorySection, expensesSection, taxForm, summary, payoutForm, p));
-}
-
-function rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm, dropHistorySection, expensesSection, taxForm, summary, payoutForm, p) {
   return ''
     + rolePaySection
     + '<div class="roster-form-label" style="margin-bottom:4px">Tips History</div>'
@@ -5679,7 +6282,32 @@ function rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm,
     + expensesSection
     + taxForm
     + summary
-    + payoutForm
+    + payoutForm;
+}
+
+function rosterStaffExpandedHtml(p) {
+  var balanceCard = rosterPlayerBalanceCardHtml(p);
+  var alsoPlaying = rosterAlsoPlayingHtml(p);
+  var hostCash = rosterHostCashSectionHtml(p);
+  var tools = rosterStaffWorkToolsHtml(p);
+  var settle = rosterHouseOwesPayoutHtml(p);
+  var body = ''
+    + balanceCard
+    + alsoPlaying
+    + hostCash
+    + tools
+    + '<div class="roster-form-block" style="margin-top:10px">'
+      + '<div class="roster-form-label">Settle account</div>'
+      + settle
+    + '</div>'
+    + '<div class="roster-expand-actions" style="margin-top:10px">'
+      + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Staff</button>'
+    + '</div>';
+  return rosterWrapExpandRow('staff', body);
+}
+
+function rosterComposeStaffExpandBody(rolePaySection, lines, tipsForm, dropForm, dropHistorySection, expensesSection, taxForm, summary, payoutForm, p) {
+  return rosterStaffWorkToolsHtml(p)
     + '<div class="roster-expand-actions" style="margin-top:10px">'
       + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Staff</button>'
     + '</div>';
@@ -5694,7 +6322,8 @@ function rosterStaffExpandedBodyHtml(p) {
 
 function rosterExpandKindFor(p) {
   if (!p) return 'player';
-  if (isHostPlayer(p)) {
+  // Dual seats (plays + staffRole / host-player): filter picks which profile chrome
+  if (isPlayerSeat(p) && isStaffSeat(p)) {
     return (_rosterRoleFilter === 'staff') ? 'staff' : 'player';
   }
   if (p.staffRole) return 'staff';
@@ -5915,10 +6544,57 @@ function undoRosterCollectAt(playerId, ts, quiet) {
       }
     }
   }
+  if (p.staffCollects && p.staffCollects.length) {
+    for (var k = p.staffCollects.length - 1; k >= 0; k--) {
+      var sc = p.staffCollects[k];
+      if (sc && String(sc.timestamp || '') === tsStr) {
+        var scAmt = Number(sc.amount) || 0;
+        p.staffCollects.splice(k, 1);
+        found = true;
+        markTxnVoided(function(t) {
+          return t && String(t.type || '').toUpperCase() === 'STAFF_COLLECT'
+            && String(t.playerId) === String(p.id)
+            && Number(t.amount) === scAmt
+            && String(t.timestamp || '') === tsStr;
+        });
+      }
+    }
+  }
   if (!found) return false;
   rosterKeepExpanded(playerId);
   calcAll(); renderAll(); autoSave();
   if (!quiet) toast('Collect undone');
+  return true;
+}
+
+function undoAccountPayoutAt(playerId, keys) {
+  var p = G.players.find(function(pl){ return pl.id === playerId; });
+  if (!p || !keys || !keys.ts) return false;
+  var tsStr = String(keys.ts);
+  var found = false;
+  if (keys.staffSeq != null && p.staffPayouts) {
+    for (var i = p.staffPayouts.length - 1; i >= 0; i--) {
+      var sp = p.staffPayouts[i];
+      if (sp && (sp.seq === keys.staffSeq || String(sp.timestamp || '') === tsStr)) {
+        var spAmt = Number(sp.amount) || 0;
+        p.staffPayouts.splice(i, 1);
+        found = true;
+        markTxnVoided(function(t) {
+          return t && String(t.type || '').toUpperCase() === 'STAFF_PAYOUT'
+            && String(t.playerId) === String(p.id)
+            && Number(t.amount) === spAmt
+            && String(t.timestamp || '') === tsStr;
+        });
+        break;
+      }
+    }
+  }
+  if (keys.cashSeq != null) {
+    if (undoVoidCashOutByKey(playerId, keys.cashSeq, keys.ts)) found = true;
+  }
+  if (!found) return false;
+  rosterKeepExpanded(playerId);
+  calcAll(); renderAll(); autoSave();
   return true;
 }
 
@@ -6250,13 +6926,14 @@ function rosterPlayerRow(p) {
   var active = p.id === _activePlayerId ? ' active-row' : '';
   var expanded = _expandedRosterId === p.id;
   if (expanded) active += ' roster-expanded';
-  var dual = isHostPlayer(p);
-  var avatarBg = dual ? staffRoleColor('host-player') : 'var(--red)';
+  var dual = isStaffSeat(p) && isPlayerSeat(p);
+  var roleKeyRow = dual ? normalizeStaffRole(p.staffRole) : '';
+  var avatarBg = dual ? staffRoleColor(roleKeyRow || 'host-player') : 'var(--red)';
   var markerWarnIco = markerBlocksPayout(p)
     ? ' <span title="Turn in chips first — marker outstanding" style="color:var(--red);font-weight:800">' + lucideIcon('alert-triangle','action-ico') + '</span>'
     : '';
   var roleSub = dual
-    ? '<div class="roster-role" style="color:' + staffRoleColor('host-player') + '">Host/Player</div>'
+    ? '<div class="roster-role" style="color:' + staffRoleColor(roleKeyRow) + '">' + staffRoleLabel(roleKeyRow) + '</div>'
     : '';
   var linkChip = (!p.personId && !_hostViewMode)
     ? '<button type="button" class="link-person-chip host-hide" onclick="event.stopPropagation();openLinkPersonPicker(' + p.id + ')">Link</button>'
@@ -6273,11 +6950,7 @@ function rosterPlayerRow(p) {
 }
 
 function rosterStaffBalCell(p) {
-  var bal = staffTipBalance(p);
-  if (bal < -SETTLE_EPSILON) {
-    return '<span class="roster-amt neg" title="Net after eCash Received By">Owes house: $' + fmt(Math.abs(bal)) + '</span>';
-  }
-  return rosterBalAmt(bal);
+  return rosterBalAmt(personAccountBalance(p));
 }
 
 function rosterStaffRow(p) {
@@ -6300,13 +6973,9 @@ function rosterStaffRow(p) {
 }
 
 function renderPlayerGrid() {
-  // Host/Player dual role appears in BOTH:
-  //   Players → buy-in / turn-in / cash-out (playerBalance, orange avatar)
-  //   Staff   → tips / tax / expenses / payout (staffTipBalance, orange avatar)
-  var allPlayers = G.players.filter(function(p) {
-    // Pure players (no staffRole) + Host/Player dual
-    return !p.staffRole || isHostPlayer(p);
-  });
+  // One account: person appears under Players if they play, Staff if they have a role.
+  // Same personAccountBalance in both rows.
+  var allPlayers = G.players.filter(isPlayerSeat);
   var allStaff = G.players.filter(isStaffSeat);
   var search = _rosterSearch;
   var showPlayers = _rosterRoleFilter === 'all' || _rosterRoleFilter === 'players';
@@ -6386,8 +7055,8 @@ function renderSettlement() {
         +'</div>';
     }).join('');
   }
-  var owes = G.players.filter(function(p){ return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p)<0; });
-  var owed = G.players.filter(function(p){ return isPlayerSeat(p) && !playerIsStillPlaying(p) && playerBalance(p)>0; });
+  var owes = G.players.filter(function(p){ return personAccountBalance(p) < -SETTLE_EPSILON; });
+  var owed = G.players.filter(function(p){ return personAccountBalance(p) > SETTLE_EPSILON; });
   var soEl = document.getElementById('settle-owes');
   var sdEl = document.getElementById('settle-owed');
   var ecashMapS = calcEcashByReceiver();
@@ -6412,10 +7081,10 @@ function renderSettlement() {
   }
 
   var settleOwesRows = owes.map(function(p){
-    var bal = playerBalance(p);
+    var bal = personAccountBalance(p);
     return settleRowHtml({
       playerId: p.id, name: personDisplayName(p), netBalance: bal, kind: 'BALANCE',
-      rowClass: 'owed-row', tag: 'MARKER', tagColor: 'var(--text-muted)',
+      rowClass: 'owed-row', tag: 'ACCOUNT', tagColor: 'var(--text-muted)',
       amtStyle: 'color:var(--red)'
     });
   }).join('');
@@ -6435,7 +7104,7 @@ function renderSettlement() {
 
   if (sdEl) sdEl.innerHTML = owed.length
     ? owed.map(function(p){
-        var bal = playerBalance(p);
+        var bal = personAccountBalance(p);
         return settleRowHtml({
           playerId: p.id, name: personDisplayName(p), netBalance: bal, kind: 'BALANCE',
           rowClass: 'green-row', tag: '', tagColor: '',
@@ -6598,7 +7267,8 @@ function signedCarryoverOpening(p) {
 /** Auto-pull standing into priorBalances as CARRYOVER (behaves like manual Previous balance). */
 function applyCarryoverPrior(p, standing) {
   standing = Math.round((Number(standing) || 0) * 100) / 100;
-  if (!p || !isPlayerSeat(p)) return false;
+  // Everyone with a personId can carry (players AND staff) — one account
+  if (!p) return false;
   // Subtract this game's already-posted delta so re-link / refresh does not double-count.
   if (p.personId && G.postedDeltas) {
     var alreadyPosted = Number(G.postedDeltas[String(p.personId)]) || 0;
@@ -7366,7 +8036,7 @@ function confirmLinkPerson(personId) {
   if (!p || !row) return;
   p.personId = row.id;
   if (row.tag) p.tag = row.tag;
-  if (isPlayerSeat(p) && applyCarryoverPrior(p, personStandingBalance(row))) {
+  if (applyCarryoverPrior(p, personStandingBalance(row))) {
     toast('Linked · CARRYOVER ' + formatStandingLabel(personStandingBalance(row)));
   } else {
     toast('Linked to ' + bookPersonLabel(row) + ' ✅');
@@ -7427,6 +8097,7 @@ function addPerson() {
     tag: tag || '',
     role: isPlayer ? 'player' : staffRole,
     staffRole: staffRole,
+    plays: !!plays,
     notes: notes || (selectedRow && selectedRow.notes) || '',
     capabilities: {
       canBuyIn:        plays,
@@ -7435,15 +8106,16 @@ function addPerson() {
       canLogDrop:      staffRole === 'dealer',
       canReceiveECash: true
     },
-    buyIns: [], cashOuts: [], chipTurnIns: [], drops: [], tips: [], expenses: [], credits: [], markerCredits: [], priorBalances: [], priorPayments: []
+    buyIns: [], cashOuts: [], chipTurnIns: [], drops: [], tips: [], expenses: [], credits: [], markerCredits: [], priorBalances: [], priorPayments: [],
+    hostCash: [], staffCollects: []
   };
   if (staffRole === 'chef') newP.basePay = 0;
   if (staffRole === 'books') { newP.hourlyRate = 0; newP.hoursWorked = 0; }
   G.players.push(newP);
   ensureGameId();
 
-  // Auto CARRYOVER prior when book standing ≠ 0 (players / host-players only)
-  if (plays && selectedRow) {
+  // Auto CARRYOVER prior when book standing ≠ 0 (everyone — one account)
+  if (selectedRow) {
     var stand0 = personStandingBalance(selectedRow);
     if (applyCarryoverPrior(newP, stand0)) {
       toast('CARRYOVER ' + formatStandingLabel(stand0) + ' pulled in');
@@ -7462,11 +8134,9 @@ function addPerson() {
     if (row && row.id) {
       newP.personId = row.id;
       if (row.tag) newP.tag = row.tag;
-      if (plays) {
-        var stand1 = personStandingBalance(row);
-        if (applyCarryoverPrior(newP, stand1)) {
-          calcAll(); renderAll();
-        }
+      var stand1 = personStandingBalance(row);
+      if (applyCarryoverPrior(newP, stand1)) {
+        calcAll(); renderAll();
       }
       autoSave();
       renderAll();
@@ -8355,9 +9025,9 @@ function newGame(btn) {
 function collectPostBalanceEntries() {
   var entries = [];
   (G.players || []).forEach(function(p){
-    if (!p || !isPlayerSeat(p) || !p.personId) return;
+    if (!p || !p.personId) return;
     var opening = signedCarryoverOpening(p);
-    var closing = Math.round(playerBalance(p) * 100) / 100;
+    var closing = Math.round(personAccountBalance(p) * 100) / 100;
     entries.push({
       personId: String(p.personId),
       opening: opening,
@@ -8521,8 +9191,8 @@ async function retryBalanceSync() {
 
 function unlinkedPlayersWithBalance() {
   return (G.players || []).filter(function(p){
-    return p && isPlayerSeat(p) && !p.personId
-      && Math.abs(playerBalance(p)) > SETTLE_EPSILON;
+    return p && !p.personId
+      && Math.abs(personAccountBalance(p)) > SETTLE_EPSILON;
   });
 }
 
@@ -8547,7 +9217,7 @@ function openUnlinkedBalanceWarn(unlinked, continueFn) {
   }
   var list = document.getElementById('unlinked-balance-list');
   list.innerHTML = unlinked.map(function(p){
-    var bal = playerBalance(p);
+    var bal = personAccountBalance(p);
     var color = bal < 0 ? 'var(--red)' : 'var(--green)';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:8px">'
       + '<div><div style="font-weight:800">' + personDisplayName(p) + '</div>'
@@ -9296,7 +9966,7 @@ function calcEcashByReceiver() {
       if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0, owes: 0 };
       map[t.receivedById].balance += (t.amount || 0);
     }
-    if ((t.type === 'MARKER_PAYMENT' || t.type === 'PRIOR_PAYMENT')
+    if ((t.type === 'MARKER_PAYMENT' || t.type === 'PRIOR_PAYMENT' || t.type === 'HOST_DEPOSIT' || t.type === 'STAFF_COLLECT')
         && String(t.method || '').toUpperCase() === 'ECASH' && t.receivedById) {
       if (!map[t.receivedById]) map[t.receivedById] = { name: t.receivedByName || t.receivedById, balance: 0, owes: 0 };
       map[t.receivedById].balance += (t.amount || 0);
