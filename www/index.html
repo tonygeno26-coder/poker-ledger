@@ -905,8 +905,9 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     padding:16px;position:sticky;top:calc(var(--header-h) + 8px);
   }
   .roster-pane-detail .roster-expand-inner{padding:0}
-  .roster-pane-detail .pp-identity{
-    position:sticky;top:0;z-index:5;
+  /* Sticky identity must be a direct child of the scrolling pane */
+  .roster-pane-detail > .pp-identity{
+    position:sticky;top:0;z-index:6;
     background:var(--surface);
     padding:0 0 12px;margin:0 0 8px;
     border-bottom:1px solid var(--border);
@@ -1139,7 +1140,7 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     <div class="roster-pane-detail" id="roster-pane-detail">
       <div class="roster-detail-empty" id="roster-detail-empty">Select a player or staff member</div>
       <div id="roster-detail-body"></div>
-    </div>
+    </div><!-- sticky .pp-identity injected as direct child of #roster-pane-detail -->
   </div>
 
   <div id="player-detail-view" style="display:none;margin-bottom:20px"></div>
@@ -4596,7 +4597,9 @@ function rosterStaffDropAction(id) {
 }
 
 function rosterStaffPayOutAction(id) {
-  expandRosterTo(id, 'rx-staff-payout-amount-' + id);
+  // One account = one settle — open Settle (no separate staff payout form)
+  expandRosterTo(id, 'rx-bal-payout-amount-' + id);
+  rosterSetProfileTab(id, 'settle');
 }
 
 function rosterBuyInTypeBadge(type) {
@@ -6228,7 +6231,7 @@ function rosterWorkTabBodyHtml(p) {
   // Reuse staff expand body pieces via a lightweight compose
   return rosterAlsoPlayingHtml(p)
     + rosterHostCashSectionHtml(p)
-    + '<div class="roster-expand-meta" style="margin:8px 0">Tips, tax, expenses, and pay — same tools as Staff roster</div>'
+    + '<div class="roster-expand-meta" style="margin:8px 0">Tips, tax, and expenses — payouts are on Settle</div>'
     + '<div id="rx-work-embed-' + p.id + '">' + rosterStaffWorkToolsHtml(p) + '</div>';
 }
 
@@ -6651,29 +6654,12 @@ function rosterStaffWorkToolsHtml(p) {
     + '<div class="roster-expand-summary" style="margin:0;line-height:1.7">' + summaryBits + '</div>'
   + '</div>';
 
-  var payoutPrefill = Math.max(0, unpaid);
-  var owesWarn = unpaid < -SETTLE_EPSILON
-    ? '<div style="margin-bottom:10px;font-size:12px;font-weight:700;color:var(--red)">Owes house $' + fmt(Math.abs(unpaid)) + ' — collect before paying out.</div>'
-    : '';
-  var payoutForm = '<div class="roster-form-block" id="rx-staff-payout-block-' + p.id + '">'
-    + '<div class="roster-form-label">Pay Out Staff</div>'
-    + owesWarn
-    + '<input type="hidden" id="rx-staff-payout-method-' + p.id + '" value="CASH">'
-    + '<div class="roster-pill-row" id="rx-staff-payout-method-pills-' + p.id + '">'
-      + '<button type="button" class="roster-pill roster-pill-gold active" data-method="CASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
-      + '<button type="button" class="roster-pill roster-pill-gold" data-method="ECASH" onclick="rosterSetStaffPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
-    + '</div>'
-    + '<div id="rx-staff-payout-receiver-row-' + p.id + '" style="display:none;margin-bottom:10px">'
-      + '<div class="roster-form-label">Received By</div>'
-      + '<select class="inp" id="rx-staff-payout-receiver-' + p.id + '" style="width:100%">'
-        + getStaffPayoutReceiverOptions(p.id)
-      + '</select>'
-    + '</div>'
-    + '<div class="roster-inline-row" style="margin-bottom:10px">'
-      + '<input type="number" class="inp" id="rx-staff-payout-amount-' + p.id + '" value="' + payoutPrefill + '" min="0" inputmode="decimal" placeholder="Amount" style="flex:1">'
-    + '</div>'
-    + '<button type="button" class="btn btn-xs" style="width:100%;min-height:48px;height:auto;padding:12px 14px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px;white-space:normal;line-height:1.25" onclick="rosterAddStaffPayout(' + p.id + ')">PAY OUT' + (payoutPrefill > 0 ? (' $' + fmt(payoutPrefill)) : '') + ' TO ' + staffFn + '</button>'
-  + '</div>';
+  // One account = one settle: staff PAY OUT / COLLECT live on the Settle tab only.
+  var settleHint = unpaid > SETTLE_EPSILON
+    ? '<div class="roster-expand-meta" style="margin:0;color:var(--green)">Working owed $' + fmt(unpaid) + ' — pay out on Settle</div>'
+    : (unpaid < -SETTLE_EPSILON
+      ? '<div class="roster-expand-meta" style="margin:0;color:var(--red)">Working owes $' + fmt(Math.abs(unpaid)) + ' — collect on Settle</div>'
+      : '<div class="roster-expand-meta" style="margin:0">Working even — settle on Settle if the account total differs</div>');
 
   return ''
     + rolePaySection
@@ -6685,7 +6671,10 @@ function rosterStaffWorkToolsHtml(p) {
     + expensesSection
     + taxForm
     + summary
-    + payoutForm;
+    + '<div class="roster-form-block" id="rx-staff-payout-block-' + p.id + '">'
+      + '<div class="roster-form-label">Pay / Collect</div>'
+      + settleHint
+    + '</div>';
 }
 
 function rosterStaffExpandedHtml(p) {
@@ -6736,19 +6725,33 @@ function rosterExpandKindFor(p) {
   return 'player';
 }
 
+function rosterClearPaneStickyIdentity() {
+  var pane = document.getElementById('roster-pane-detail');
+  if (!pane) return;
+  var kids = pane.children;
+  for (var i = kids.length - 1; i >= 0; i--) {
+    if (kids[i].classList && kids[i].classList.contains('pp-identity')) {
+      pane.removeChild(kids[i]);
+    }
+  }
+}
+
 function rosterRenderDetailPane(expandedPlayer) {
   var page = document.getElementById('page-players');
   var body = document.getElementById('roster-detail-body');
   var empty = document.getElementById('roster-detail-empty');
+  var pane = document.getElementById('roster-pane-detail');
   if (!body) return;
   var two = rosterTwoPaneActive();
   if (page) page.classList.toggle('roster-twopane', two);
   if (!two) {
+    rosterClearPaneStickyIdentity();
     body.innerHTML = '';
     if (empty) empty.style.display = '';
     return;
   }
   if (!expandedPlayer) {
+    rosterClearPaneStickyIdentity();
     body.innerHTML = '';
     if (empty) empty.style.display = '';
     return;
@@ -6758,7 +6761,17 @@ function rosterRenderDetailPane(expandedPlayer) {
   var inner = kind === 'staff'
     ? rosterStaffExpandedBodyHtml(expandedPlayer)
     : rosterPlayerExpandedBodyHtml(expandedPlayer);
-  body.innerHTML = '<div class="roster-expand-inner roster-expand-' + kind + '" onclick="event.stopPropagation()">' + inner + '</div>';
+  // Parse once: hoist .pp-identity to a direct child of the scrolling pane
+  // so position:sticky is not trapped by .roster-expand-inner { overflow-x:hidden }.
+  var tmp = document.createElement('div');
+  tmp.innerHTML = '<div class="roster-expand-inner roster-expand-' + kind + '" onclick="event.stopPropagation()">' + inner + '</div>';
+  var ident = tmp.querySelector('.pp-identity');
+  rosterClearPaneStickyIdentity();
+  if (ident && pane) {
+    if (empty && empty.parentNode === pane) pane.insertBefore(ident, empty);
+    else pane.insertBefore(ident, pane.firstChild);
+  }
+  body.innerHTML = tmp.innerHTML;
 }
 
 /** Find array entry by seq and/or timestamp (UNDO identity — not index). */
