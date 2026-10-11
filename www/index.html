@@ -488,8 +488,12 @@ select.inp{appearance:none;-webkit-appearance:none}
 
 .toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));right:16px;left:16px;margin:0 auto;max-width:360px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;text-align:center}
 .toast.show{opacity:1}
-.confirm-armed{outline:2px solid var(--red)!important;outline-offset:1px;animation:armPulse 0.6s ease-in-out infinite alternate}
-@keyframes armPulse{from{opacity:1}to{opacity:0.65}}
+.confirm-armed{
+  outline:3px solid #fff!important;outline-offset:2px;
+  background:#fff!important;color:#000!important;border-color:#fff!important;
+  font-weight:900!important;animation:armPulse 0.55s ease-in-out infinite alternate;
+}
+@keyframes armPulse{from{opacity:1;filter:none}to{opacity:0.82;filter:brightness(1.05)}}
 
 .badge{display:inline-block;padding:4px 10px;border-radius:99px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px}
 .badge-purple{background:var(--red-dim);color:var(--red)}
@@ -540,7 +544,21 @@ select.inp{appearance:none;-webkit-appearance:none}
 .roster-table tr.roster-row td{border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .roster-table tr.roster-row{cursor:pointer}
 .roster-table tr.roster-row:hover td{background:var(--surface2)}
-.roster-table tr.roster-row.active-row td,.roster-table tr.roster-row.roster-expanded td{background:var(--surface2)}
+.roster-table tr.roster-row.active-row td{background:var(--surface2)}
+/* Selected person — obvious at arm's length (iPad two-pane + phone) */
+.roster-table tr.roster-row.roster-expanded td{
+  background:var(--accent-dim)!important;
+  border-top:3px solid var(--accent)!important;
+  border-bottom:3px solid var(--accent)!important;
+}
+.roster-table tr.roster-row.roster-expanded td:first-child{
+  border-left:6px solid var(--accent)!important;
+  box-shadow:inset 6px 0 0 var(--accent);
+}
+.roster-table tr.roster-row.roster-expanded td:last-child{
+  border-right:3px solid var(--accent)!important;
+}
+.roster-table tr.roster-row.roster-expanded:hover td{background:var(--accent-dim)!important}
 .roster-section td{padding:10px 4px 6px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;background:transparent!important;border:none!important;border-radius:0!important}
 .roster-avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;background:var(--red)}
 .roster-actions{display:flex;gap:6px;flex-wrap:wrap}
@@ -557,7 +575,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 }
 .roster-expand-row.roster-expand-player td{border-left:2px solid var(--red)!important}
 .roster-expand-row.roster-expand-staff td{border-left:2px solid var(--gold)!important}
-.roster-expand-inner{padding:12px 14px 16px 16px}
+.roster-expand-inner{padding:12px 14px 16px 16px;max-width:100%;overflow-x:hidden;box-sizing:border-box}
 .roster-expand-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;font-size:13px;border-bottom:1px solid var(--border)}
 .roster-expand-line:last-child{border-bottom:none}
 .roster-expand-meta{color:var(--text-muted);font-size:11px;font-variant-numeric:tabular-nums;font-family:inherit}
@@ -576,18 +594,46 @@ select.inp{appearance:none;-webkit-appearance:none}
 .roster-pill.roster-pill-gold.active{background:var(--gold);border-color:var(--gold);color:#000}
 .roster-pill.roster-pill-danger.active{background:var(--red);border-color:var(--red);color:#fff}
 /* Player profile redesign */
-.pp-balance-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.pp-identity{
+  display:flex;align-items:center;gap:14px;
+  padding:2px 0 12px;margin:0 0 4px;
+  max-width:100%;min-width:0;
+}
+.pp-identity-avatar{
+  width:56px;height:56px;border-radius:50%;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:800;color:#fff;
+}
+.pp-identity-text{min-width:0;flex:1}
+.pp-identity-name{
+  font-size:28px;font-weight:900;letter-spacing:0.3px;line-height:1.15;
+  word-break:break-word;overflow-wrap:anywhere;
+}
+.pp-identity-role{
+  margin-top:4px;font-size:12px;font-weight:800;letter-spacing:0.7px;
+  text-transform:uppercase;color:var(--text-muted);
+}
+.pp-identity.pp-identity-flash{
+  animation:ppIdentFlash 300ms ease;
+  border-radius:10px;
+}
+@keyframes ppIdentFlash{
+  0%{background:var(--accent);box-shadow:0 0 0 4px var(--accent-dim)}
+  100%{background:transparent;box-shadow:none}
+}
+.pp-balance-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;max-width:100%;overflow:hidden;box-sizing:border-box}
 .pp-balance-head{font-size:28px;font-weight:900;letter-spacing:0.4px;line-height:1.15;margin-bottom:12px}
 .pp-balance-head.owes{color:var(--red)}
 .pp-balance-head.owed{color:var(--green)}
 .pp-balance-head.even{color:var(--text-muted)}
-.pp-receipt{font-size:13px;line-height:1.55}
-.pp-receipt-row{display:flex;justify-content:space-between;gap:12px;padding:2px 0;color:var(--text)}
-.pp-receipt-row .pp-lbl{color:var(--text-muted);font-weight:600}
-.pp-receipt-row .pp-val{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-receipt{font-size:13px;line-height:1.55;max-width:100%;overflow:hidden}
+.pp-receipt-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;color:var(--text);min-width:0}
+.pp-receipt-row .pp-lbl{color:var(--text-muted);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pp-receipt-row .pp-val{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
 .pp-receipt-rule{border:none;border-top:1px solid var(--border);margin:8px 0}
-.pp-receipt-total{display:flex;justify-content:space-between;gap:12px;font-weight:800;font-size:14px}
-.pp-next-step{width:100%;height:48px;margin-bottom:12px;border-radius:12px;border:none;font-size:14px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--accent);color:#fff}
+.pp-receipt-total{display:flex;justify-content:space-between;gap:12px;font-weight:800;font-size:14px;min-width:0}
+.pp-receipt-total span:last-child{flex-shrink:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pp-next-step{width:100%;min-height:48px;height:auto;padding:12px 14px;margin-bottom:12px;border-radius:12px;border:none;font-size:13px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;white-space:normal;background:var(--accent);color:#fff}
 .pp-next-step.pay-out{background:var(--green);color:#fff}
 .pp-tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px;flex-wrap:wrap}
 .pp-tab{flex:1;min-width:64px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:0.3px}
@@ -625,7 +671,7 @@ select.inp{appearance:none;-webkit-appearance:none}
 }
 .roster-turnin-input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 .roster-turnin-input::placeholder{color:var(--text-dim);font-weight:600;font-size:16px}
-.roster-turnin-btn{width:100%;height:52px;justify-content:center;border-radius:12px;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px}
+.roster-turnin-btn{width:100%;min-height:52px;height:auto;padding:12px 14px;justify-content:center;border-radius:12px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;white-space:normal;text-align:center}
 .roster-turnin-calc{margin-top:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-size:13px;line-height:1.7}
 .roster-turnin-calc-row{display:flex;justify-content:space-between;gap:12px}
 .roster-turnin-calc-row .lbl{color:var(--text-muted);text-transform:uppercase;font-size:10px;letter-spacing:0.8px;font-weight:700}
@@ -822,6 +868,12 @@ svg.lucide{display:inline-block;vertical-align:-0.125em;width:1em;height:1em;str
     padding:16px;position:sticky;top:calc(var(--header-h) + 8px);
   }
   .roster-pane-detail .roster-expand-inner{padding:0}
+  .roster-pane-detail .pp-identity{
+    position:sticky;top:0;z-index:5;
+    background:var(--surface);
+    padding:0 0 12px;margin:0 0 8px;
+    border-bottom:1px solid var(--border);
+  }
   .roster-detail-empty{color:var(--text-muted);font-size:14px;text-align:center;padding:48px 16px}
   #page-players.roster-twopane .roster-expand-row{display:none!important}
 }
@@ -3486,21 +3538,39 @@ function toastUndo(msg, undoFn) {
 // First click arms the element (red outline + toast); a second click within
 // the window runs the action. Any other click elsewhere just lets it expire.
 var _armTimers = new WeakMap();
-function confirmAction(el, message, fn) {
+function confirmAction(el, message, fn, meta) {
   if (!el) { fn(); return; }
   if (el.classList.contains('confirm-armed')) {
     clearTimeout(_armTimers.get(el));
     _armTimers.delete(el);
     el.classList.remove('confirm-armed');
+    if (el._confirmOrigHtml != null) {
+      el.innerHTML = el._confirmOrigHtml;
+      el._confirmOrigHtml = null;
+    }
     fn();
     return;
   }
+  el._confirmOrigHtml = el.innerHTML;
   el.classList.add('confirm-armed');
+  var armLabel = 'TAP AGAIN';
+  var armName = meta && meta.name != null ? String(meta.name).trim().toUpperCase() : '';
+  if (armName) {
+    armLabel += ' · ' + armName.split(/\s+/)[0];
+    if (meta.amount != null && meta.amount !== '' && !isNaN(Number(meta.amount))) {
+      armLabel += ' · $' + fmt(Number(meta.amount));
+    }
+  }
+  el.textContent = armLabel;
   toast(message || 'Click again to confirm');
   _armTimers.set(el, setTimeout(function(){
     el.classList.remove('confirm-armed');
+    if (el._confirmOrigHtml != null) {
+      el.innerHTML = el._confirmOrigHtml;
+      el._confirmOrigHtml = null;
+    }
     _armTimers.delete(el);
-  }, 3000));
+  }, 4000));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3933,21 +4003,47 @@ function openStaffFromRoster(id) {
 function toggleRosterExpand(id, evt) {
   if (evt) evt.stopPropagation();
   id = Number(id) || id;
+  var prev = _expandedRosterId;
   if (_expandedRosterId === id) {
     _expandedRosterId = null;
     _rosterFocusField = null;
   } else {
+    if (prev != null && prev !== id) {
+      var oldRoot = document.getElementById('rx-profile-' + prev)
+        || document.getElementById('rx-identity-' + prev);
+      if (oldRoot) {
+        var clearRoot = document.getElementById('rx-profile-' + prev)
+          || (oldRoot.closest ? oldRoot.closest('.roster-expand-inner') : null)
+          || oldRoot.parentElement;
+        rosterClearProfileDrafts(clearRoot);
+      }
+    }
     _expandedRosterId = id;
   }
   renderPlayerGrid();
+  if (_expandedRosterId != null && prev !== _expandedRosterId) {
+    flashIdentityHeader(_expandedRosterId);
+  }
   rosterFocusPending();
 }
 
 function expandRosterTo(id, focusId) {
   id = Number(id) || id;
+  var prev = _expandedRosterId;
+  if (prev != null && prev !== id) {
+    var oldRoot = document.getElementById('rx-profile-' + prev)
+      || document.getElementById('rx-identity-' + prev);
+    if (oldRoot) {
+      var clearRoot = document.getElementById('rx-profile-' + prev)
+        || (oldRoot.closest ? oldRoot.closest('.roster-expand-inner') : null)
+        || oldRoot.parentElement;
+      rosterClearProfileDrafts(clearRoot);
+    }
+  }
   _expandedRosterId = id;
   _rosterFocusField = focusId || null;
   renderPlayerGrid();
+  if (prev !== id) flashIdentityHeader(id);
   rosterFocusPending();
 }
 
@@ -4044,7 +4140,7 @@ function rosterStartWorking(btn, id) {
     rosterKeepExpanded(id);
     calcAll(); renderAll(); autoSave();
     toast('Now working as ' + staffRoleLabel(role) + ' ✅');
-  });
+  }, { name: personFirstName(p) });
 }
 
 function rosterToggleAlsoPlaying(id, on) {
@@ -4164,7 +4260,7 @@ function rosterAddHostCash(btn, id) {
     toastUndo((kind === 'DEPOSIT' ? 'Host deposit' : 'Host withdraw') + ' $' + fmt(amount), function(){
       undoHostCashByKey(id, seq, ts);
     });
-  });
+  }, { name: personFirstName(p), amount: amount });
 }
 
 function undoHostCashByKey(playerId, seq, ts) {
@@ -4776,7 +4872,7 @@ function rosterPayOutAnyway(btn, id) {
     toastUndo('Added PAY OUT $' + fmt(amount), function(){
       undoVoidCashOutByKey(id, seq, ts);
     });
-  });
+  }, { name: personFirstName(p), amount: amount });
 }
 
 function rosterSetProfileTab(id, tab) {
@@ -4840,6 +4936,7 @@ function rosterHouseOwesPayoutHtml(p) {
   var playBal = playerBalance(p);
   var workBal = p.staffRole ? staffTipBalance(p) : 0;
   var bal = personAccountBalance(p);
+  var fn = personFirstName(p);
   var needsTurnIn = isPlayerSeat(p) && playerIsStillPlaying(p) && !rosterChipTurnInLogged(p)
     && Math.abs(workBal) <= SETTLE_EPSILON && Math.abs(playBal) <= SETTLE_EPSILON;
   if (needsTurnIn) {
@@ -4892,7 +4989,7 @@ function rosterHouseOwesPayoutHtml(p) {
       + '<div class="pp-choose-hint" id="rx-bal-payout-choose-' + p.id + '">Choose a method</div>'
       + '<div class="roster-turnin-input-row">'
         + '<input type="number" class="roster-turnin-input" id="rx-bal-payout-amount-' + p.id + '" value="' + netPayout + '" min="0" inputmode="decimal">'
-        + '<button id="rx-bal-payout-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" disabled onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT</button>'
+        + '<button id="rx-bal-payout-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" style="color:var(--green);border-color:var(--green)" disabled onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT $' + fmt(netPayout) + ' TO ' + fn + '</button>'
       + '</div>'
     + '</div>';
   }
@@ -4918,7 +5015,7 @@ function rosterHouseOwesPayoutHtml(p) {
         + '</div>'
         + '<div class="roster-turnin-input-row" style="margin-top:8px">'
           + '<input type="number" class="roster-turnin-input" id="rx-anyway-amount-' + p.id + '" value="" min="0" max="' + payoutCap + '" step="0.01" inputmode="decimal" placeholder="0">'
-          + '<button type="button" id="rx-anyway-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" disabled onclick="rosterPayOutAnyway(this,' + p.id + ')">Pay out anyway</button>'
+          + '<button type="button" id="rx-anyway-btn-' + p.id + '" class="btn btn-outline roster-turnin-btn" disabled onclick="rosterPayOutAnyway(this,' + p.id + ')">Pay out anyway → ' + fn + '</button>'
         + '</div>'
       + '</div>';
     }
@@ -4932,7 +5029,7 @@ function rosterHouseOwesPayoutHtml(p) {
           + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
           + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
         + '</div>'
-        + '<button type="button" id="rx-bal-payin-btn-' + p.id + '" class="btn btn-outline btn-xs" style="color:var(--accent);border-color:var(--accent);flex-shrink:0" disabled onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN</button>'
+        + '<button type="button" id="rx-bal-payin-btn-' + p.id + '" class="btn btn-outline btn-xs" style="color:var(--accent);border-color:var(--accent);flex-shrink:0;white-space:normal;line-height:1.2;height:auto;min-height:44px;padding:8px 10px" disabled onclick="rosterCollectPlayerOwes(this,' + p.id + ')">PAY IN FROM ' + fn + '</button>'
       + '</div>'
       + '<div class="pp-choose-hint" id="rx-bal-payout-choose-' + p.id + '">Choose a method</div>'
       + '<div id="rx-bal-payout-receiver-row-' + p.id + '" style="display:none;margin-top:8px">'
@@ -4955,7 +5052,7 @@ function rosterHouseOwesPayoutHtml(p) {
         + '<button type="button" class="roster-pill" data-method="CASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'CASH\')">Cash</button>'
         + '<button type="button" class="roster-pill" data-method="ECASH" onclick="rosterSetBalPayoutMethod(' + p.id + ',\'ECASH\')">eCash</button>'
       + '</div>'
-      + '<button type="button" id="rx-bal-payout-btn-' + p.id + '" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);flex-shrink:0" disabled onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT</button>'
+      + '<button type="button" id="rx-bal-payout-btn-' + p.id + '" class="btn btn-outline btn-xs" style="color:var(--green);border-color:var(--green);flex-shrink:0;white-space:normal;line-height:1.2;height:auto;min-height:44px;padding:8px 10px" disabled onclick="rosterPayHouseOwes(this,' + p.id + ')">PAY OUT $' + fmt(prefill) + ' TO ' + fn + '</button>'
     + '</div>'
     + '<div class="pp-choose-hint" id="rx-bal-payout-choose-' + p.id + '">Choose a method</div>'
   + '</div>';
@@ -5072,7 +5169,7 @@ function rosterPayHouseOwes(btn, id) {
         renderAll();
       }
     }, 2600);
-  });
+  }, { name: personFirstName(p), amount: amount });
 }
 
 /** Account OWES → COLLECT: prior, then markers, then negative working (STAFF_COLLECT). */
@@ -5214,7 +5311,7 @@ function rosterCollectPlayerOwes(btn, id) {
         renderAll();
       }
     }, 2600);
-  });
+  }, { name: personFirstName(p), amount: amount });
 }
 
 function rosterSetStaffPayoutMethod(id, method) {
@@ -5357,7 +5454,7 @@ function rosterAddBuyIn(btn, id) {
       setTimeout(function(){ openMarkerSignModal(id, buyInIndex); }, 0);
     }
   };
-  if (btn) confirmAction(btn, confirmMsg, runAdd);
+  if (btn) confirmAction(btn, confirmMsg, runAdd, { name: personFirstName(p), amount: amount });
   else runAdd();
 }
 
@@ -5395,7 +5492,7 @@ function rosterLogTurnIn(btn, id) {
       undoVoidTurnInByKey(id, seq, ts);
     });
   };
-  if (btn) confirmAction(btn, confirmMsg, runLog);
+  if (btn) confirmAction(btn, confirmMsg, runLog, { name: personFirstName(p), amount: amount });
   else runLog();
 }
 
@@ -5460,7 +5557,7 @@ function rosterAddCashOut(btn, id) {
       undoVoidCashOutByKey(id, seq, ts);
     });
   };
-  if (btn) confirmAction(btn, confirmMsg, runPay);
+  if (btn) confirmAction(btn, confirmMsg, runPay, { name: personFirstName(p), amount: amount });
   else runPay();
 }
 
@@ -5579,7 +5676,7 @@ function rosterApplyStaffTax(btn, staffId) {
       calcAll(); renderAll(); autoSave();
       toast('Staff tax applied: $' + fmt(preview.taxAmount) + ' to house ✅');
     }
-  });
+  }, { name: personFirstName(p), amount: preview.taxAmount });
 }
 
 function rosterAddStaffPayout(id) {
@@ -5648,9 +5745,9 @@ function rosterTurnInSectionHtml(p, markerTotal) {
       + '<div class="roster-form-label">Add more chips</div>'
       + '<div class="roster-turnin-input-row" style="margin-bottom:10px">'
         + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
-        + '<button type="button" class="btn btn-accent roster-turnin-btn" onclick="rosterLogTurnIn(this,' + p.id + ')">Log Turn-In</button>'
-      + '</div>'
-      + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px;display:none"></div>'
+      + '<button type="button" class="btn btn-accent roster-turnin-btn" onclick="rosterLogTurnIn(this,' + p.id + ')">LOG TURN-IN FOR ' + personFirstName(p) + '</button>'
+    + '</div>'
+    + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc" style="margin-bottom:10px;display:none"></div>'
       + '<div class="roster-expand-meta">Settle collection / payout is on the Settle tab</div>'
     + '</div>';
   }
@@ -5685,7 +5782,7 @@ function rosterTurnInSectionHtml(p, markerTotal) {
     + markerWarn
     + '<div class="roster-turnin-input-row">'
       + '<input type="number" class="roster-turnin-input" id="rx-turnin-amount-' + p.id + '" placeholder="$0" min="0" inputmode="decimal" oninput="rosterUpdateTurnInPreview(' + p.id + ')">'
-      + '<button type="button" class="btn btn-accent roster-turnin-btn" onclick="rosterLogTurnIn(this,' + p.id + ')">Log Turn-In</button>'
+      + '<button type="button" class="btn btn-accent roster-turnin-btn" onclick="rosterLogTurnIn(this,' + p.id + ')">LOG TURN-IN FOR ' + personFirstName(p) + '</button>'
     + '</div>'
     + '<div id="rx-turnin-preview-' + p.id + '" class="roster-turnin-calc">' + calcHtml + '</div>'
   + '</div>';
@@ -5705,8 +5802,7 @@ function rosterPlayerBalanceCardHtml(p) {
   var word = personAccountStateWord(bal);
   var abs = Math.abs(bal);
   var headCls = word === 'OWES' ? 'owes' : (word === 'OWED' ? 'owed' : 'even');
-  var shortName = (personDisplayName(p) || 'PLAYER').split(' · ')[0];
-  var headTxt = shortName + ' · ' + word + ' $' + fmt(word === 'EVEN' ? 0 : abs);
+  var headTxt = word + ' $' + fmt(word === 'EVEN' ? 0 : abs);
   var showPlaying = isPlayerSeat(p);
   var showWorking = !!p.staffRole;
   var playTerms = showPlaying ? playerBalanceReceiptTerms(p) : [];
@@ -5745,16 +5841,17 @@ function rosterPlayerBalanceCardHtml(p) {
 function rosterPlayerNextStepHtml(p) {
   var bal = personAccountBalance(p);
   var abs = Math.round(Math.abs(bal) * 100) / 100;
+  var fn = personFirstName(p);
   if (bal < -SETTLE_EPSILON) {
-    return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">Collect $' + fmt(abs) + '</button>';
+    return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">COLLECT $' + fmt(abs) + ' FROM ' + fn + '</button>';
   }
   if (bal > SETTLE_EPSILON) {
-    return '<button type="button" class="pp-next-step pay-out" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">Pay out $' + fmt(abs) + '</button>';
+    return '<button type="button" class="pp-next-step pay-out" onclick="rosterProfileNextStep(' + p.id + ',\'settle\')">PAY OUT $' + fmt(abs) + ' TO ' + fn + '</button>';
   }
   if (isPlayerSeat(p)) {
     var hasTurnIn = playerChipTurnInsTotal(p) > SETTLE_EPSILON || rosterChipTurnInLogged(p);
     if (!hasTurnIn) {
-      return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'turnin\')">Turn in chips</button>';
+      return '<button type="button" class="pp-next-step" onclick="rosterProfileNextStep(' + p.id + ',\'turnin\')">LOG TURN-IN FOR ' + fn + '</button>';
     }
   }
   return '';
@@ -5770,7 +5867,7 @@ function rosterStartWorkingHtml(p) {
     + '<div class="roster-expand-meta" style="padding:0 0 8px">Pick a staff role — same account, keeps playing</div>'
     + '<div class="roster-inline-row">'
       + '<select class="inp" id="rx-start-work-role-' + p.id + '" style="flex:1">' + opts + '</select>'
-      + '<button type="button" class="btn btn-accent btn-xs" onclick="rosterStartWorking(this,' + p.id + ')">Start working</button>'
+      + '<button type="button" class="btn btn-accent btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterStartWorking(this,' + p.id + ')">START WORKING · ' + personFirstName(p) + '</button>'
     + '</div>'
   + '</div>';
 }
@@ -5818,7 +5915,7 @@ function rosterHostCashSectionHtml(p) {
     + '<div class="roster-inline-row" style="margin-top:8px">'
       + '<input type="number" class="inp" id="rx-host-cash-amount-' + p.id + '" placeholder="Amount" min="0" step="0.01" inputmode="decimal" style="flex:1">'
       + '<input type="text" class="inp" id="rx-host-cash-note-' + p.id + '" placeholder="Note (optional)" style="flex:1.2">'
-      + '<button type="button" id="rx-host-cash-btn-' + p.id + '" class="btn btn-accent btn-xs" disabled onclick="rosterAddHostCash(this,' + p.id + ')">Confirm</button>'
+      + '<button type="button" id="rx-host-cash-btn-' + p.id + '" class="btn btn-accent btn-xs" disabled onclick="rosterAddHostCash(this,' + p.id + ')">CONFIRM FOR ' + personFirstName(p) + '</button>'
     + '</div>'
   + '</div>';
 }
@@ -5842,6 +5939,7 @@ function rosterPlayerExpandedHtml(p) {
   var showBalancePill = availBal > SETTLE_EPSILON;
   var plays = isPlayerSeat(p);
   var works = !!p.staffRole;
+  var fn = personFirstName(p);
   var tab = _playerProfileTabs[String(p.id)] || (plays ? 'buyin' : (works ? 'work' : 'settle'));
   if (tab === 'buyin' && !plays) tab = works ? 'work' : 'settle';
   if (tab === 'turnin' && !plays) tab = works ? 'work' : 'settle';
@@ -5874,7 +5972,7 @@ function rosterPlayerExpandedHtml(p) {
       : '')
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-buyin-amount-' + p.id + '" placeholder="Amount" min="0">'
-      + '<button id="rx-buyin-add-' + p.id + '" class="btn btn-accent btn-xs" disabled onclick="rosterAddBuyIn(this,' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add Buy-In</button>'
+      + '<button id="rx-buyin-add-' + p.id + '" class="btn btn-accent btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" disabled onclick="rosterAddBuyIn(this,' + p.id + ')">ADD BUY-IN FOR ' + fn + '</button>'
     + '</div>'
   + '</div>';
 
@@ -5884,7 +5982,7 @@ function rosterPlayerExpandedHtml(p) {
     + '<div class="roster-inline-row" style="margin-bottom:8px">'
       + '<input type="text" class="inp" id="rx-credit-desc-' + p.id + '" placeholder="Description" style="flex:2">'
       + '<input type="number" class="inp" id="rx-credit-amount-' + p.id + '" placeholder="Amount" min="0" style="flex:1">'
-      + '<button class="btn btn-accent btn-xs" onclick="rosterAddCredit(this,' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add</button>'
+      + '<button class="btn btn-accent btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterAddCredit(this,' + p.id + ')">ADD CREDIT FOR ' + fn + '</button>'
     + '</div>'
   + '</div>';
 
@@ -5899,7 +5997,7 @@ function rosterPlayerExpandedHtml(p) {
     + '<div class="roster-inline-row" style="margin-bottom:8px">'
       + '<input type="number" class="inp" id="rx-prior-amount-' + p.id + '" placeholder="Amount" min="0" step="0.01" inputmode="decimal" style="flex:1">'
       + '<input type="text" class="inp" id="rx-prior-note-' + p.id + '" placeholder="Note (optional)" style="flex:1.4">'
-      + '<button type="button" class="btn btn-accent btn-xs" onclick="rosterAddPriorBalance(this,' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add</button>'
+      + '<button type="button" class="btn btn-accent btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterAddPriorBalance(this,' + p.id + ')">ADD PRIOR FOR ' + fn + '</button>'
     + '</div>'
   + '</div>';
 
@@ -5942,6 +6040,7 @@ function rosterPlayerExpandedHtml(p) {
 
   var body = ''
     + '<div id="rx-profile-' + p.id + '">'
+    + rosterIdentityHeaderHtml(p, 'player')
     + balanceCard
     + nextStep
     + tabsHtml
@@ -6180,16 +6279,17 @@ function rosterStaffWorkToolsHtml(p) {
       + '<input class="inp" id="rx-exp-desc-' + p.id + '" placeholder="Description" style="flex:2;min-width:100px">'
       + '<input type="number" class="inp" id="rx-exp-amount-' + p.id + '" placeholder="Amt" min="0" style="flex:1;min-width:70px">'
       + '<button type="button" class="btn btn-outline btn-xs" onclick="pickExpenseReceipt(\'staff:' + p.id + '\')">' + lucideIcon('camera','action-ico') + ' Receipt</button>'
-      + '<button type="button" class="btn btn-purple btn-xs" onclick="rosterAddStaffExpense(' + p.id + ')">' + lucideIcon('plus','action-ico') + ' Add Expense</button>'
+      + '<button type="button" class="btn btn-purple btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterAddStaffExpense(' + p.id + ')">ADD EXPENSE FOR ' + personFirstName(p) + '</button>'
       + receiptStatus
     + '</div>'
   + '</div>';
 
+  var staffFn = personFirstName(p);
   var tipsForm = '<div class="roster-form-block">'
     + '<div class="roster-form-label">Log Tips</div>'
     + '<div class="roster-inline-row">'
       + '<input type="number" class="inp" id="rx-tips-amount-' + p.id + '" placeholder="Tips amount" min="0">'
-      + '<button class="btn btn-purple btn-xs" onclick="rosterAddTips(' + p.id + ')">Log Tips</button>'
+      + '<button class="btn btn-purple btn-xs" style="white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterAddTips(' + p.id + ')">LOG TIPS FOR ' + staffFn + '</button>'
     + '</div>'
   + '</div>';
 
@@ -6198,7 +6298,7 @@ function rosterStaffWorkToolsHtml(p) {
       + '<div class="roster-form-label">Log Drop</div>'
       + '<div class="roster-inline-row">'
         + '<input type="number" class="inp" id="rx-drop-amount-' + p.id + '" placeholder="Drop amount" min="0">'
-        + '<button class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange)" onclick="rosterAddDrop(' + p.id + ')">Log Drop</button>'
+        + '<button class="btn btn-outline btn-xs" style="color:var(--orange);border-color:var(--orange);white-space:normal;line-height:1.2;height:auto;min-height:44px" onclick="rosterAddDrop(' + p.id + ')">LOG DROP FOR ' + staffFn + '</button>'
       + '</div>'
     + '</div>')
     : '';
@@ -6214,7 +6314,7 @@ function rosterStaffWorkToolsHtml(p) {
       + '<div class="roster-tax-box"><div class="lbl">House Tax</div><div class="val" style="color:var(--red)" id="rx-staff-tax-amount-' + p.id + '">$' + fmt(taxPreview0.taxAmount) + '</div></div>'
       + '<div class="roster-tax-box"><div class="lbl">Staff Net</div><div class="val" style="color:var(--green)" id="rx-staff-tax-net-' + p.id + '">$' + fmt(taxPreview0.netAmount) + '</div></div>'
     + '</div>'
-    + '<button class="btn btn-xs" style="width:100%;margin-top:8px;background:var(--gold);color:#000;font-weight:800" onclick="rosterApplyStaffTax(this,' + p.id + ')">Apply Tax</button>'
+    + '<button class="btn btn-xs" style="width:100%;margin-top:8px;background:var(--gold);color:#000;font-weight:800" onclick="rosterApplyStaffTax(this,' + p.id + ')">APPLY TAX FOR ' + staffFn + '</button>'
     + (playerOutstandingMarker(p) > SETTLE_EPSILON
       ? '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text);cursor:pointer;user-select:none">'
         + '<input type="checkbox" id="rx-tax-to-marker-' + p.id + '" style="width:16px;height:16px;accent-color:var(--orange)">'
@@ -6269,7 +6369,7 @@ function rosterStaffWorkToolsHtml(p) {
     + '<div class="roster-inline-row" style="margin-bottom:10px">'
       + '<input type="number" class="inp" id="rx-staff-payout-amount-' + p.id + '" value="' + payoutPrefill + '" min="0" inputmode="decimal" placeholder="Amount" style="flex:1">'
     + '</div>'
-    + '<button type="button" class="btn btn-xs" style="width:100%;height:48px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px" onclick="rosterAddStaffPayout(' + p.id + ')">Pay Out</button>'
+    + '<button type="button" class="btn btn-xs" style="width:100%;min-height:48px;height:auto;padding:12px 14px;background:var(--gold);color:#000;font-weight:800;border:none;border-radius:12px;white-space:normal;line-height:1.25" onclick="rosterAddStaffPayout(' + p.id + ')">PAY OUT' + (payoutPrefill > 0 ? (' $' + fmt(payoutPrefill)) : '') + ' TO ' + staffFn + '</button>'
   + '</div>';
 
   return ''
@@ -6292,6 +6392,8 @@ function rosterStaffExpandedHtml(p) {
   var tools = rosterStaffWorkToolsHtml(p);
   var settle = rosterHouseOwesPayoutHtml(p);
   var body = ''
+    + '<div id="rx-profile-' + p.id + '">'
+    + rosterIdentityHeaderHtml(p, 'staff')
     + balanceCard
     + alsoPlaying
     + hostCash
@@ -6302,6 +6404,7 @@ function rosterStaffExpandedHtml(p) {
     + '</div>'
     + '<div class="roster-expand-actions" style="margin-top:10px">'
       + '<button class="btn btn-outline btn-xs" style="color:var(--red);border-color:var(--red);margin-left:auto" onclick="removePlayer(this,' + p.id + ')">Remove Staff</button>'
+    + '</div>'
     + '</div>';
   return rosterWrapExpandRow('staff', body);
 }
@@ -6765,7 +6868,7 @@ function rosterAddCredit(btn, id) {
       undoVoidCreditByKey(id, seq, ts);
     });
   };
-  if (btn) confirmAction(btn, confirmMsg, runAdd);
+  if (btn) confirmAction(btn, confirmMsg, runAdd, { name: personFirstName(p), amount: amount });
   else runAdd();
 }
 
@@ -6833,7 +6936,7 @@ function rosterAddPriorBalance(btn, id) {
     toastUndo('Added previous balance $' + fmt(amount), function(){
       undoVoidPriorBalanceByKey(id, seq, ts);
     });
-  });
+  }, { name: personFirstName(p), amount: amount });
 }
 
 function voidRosterPriorBalanceNow(playerId, index, quiet) {
@@ -7208,6 +7311,102 @@ function personDisplayName(p) {
   var tag = String(p.tag || '').trim();
   if (tag) return name + ' · ' + tag.toUpperCase();
   return name;
+}
+
+/** First name token for action buttons / confirm arm labels (before tag). */
+function personFirstName(p) {
+  var raw = String((p && p.name) || '').trim().toUpperCase();
+  if (!raw) {
+    var disp = personDisplayName(p) || '';
+    raw = disp.split(' · ')[0].trim();
+  }
+  var first = raw.split(/\s+/)[0];
+  return first || 'PLAYER';
+}
+
+/** Role line under identity header. */
+function personProfileRoleLabel(p) {
+  if (p && p.staffRole) return staffRoleLabel(p.staffRole);
+  return 'Player';
+}
+
+/** Avatar color matching the roster row for this expand chrome. */
+function rosterAvatarBgFor(p, kind) {
+  kind = kind || rosterExpandKindFor(p);
+  if (kind === 'staff') return staffRoleColor(normalizeStaffRole(p && p.staffRole));
+  if (p && isStaffSeat(p) && isPlayerSeat(p)) {
+    return staffRoleColor(normalizeStaffRole(p.staffRole));
+  }
+  return 'var(--red)';
+}
+
+/** Sticky (iPad) / top-of-expand (phone) identity header. */
+function rosterIdentityHeaderHtml(p, kind) {
+  kind = kind || rosterExpandKindFor(p);
+  var disp = personDisplayName(p) || 'PLAYER';
+  var initial = disp.charAt(0) || '?';
+  var bg = rosterAvatarBgFor(p, kind);
+  var role = personProfileRoleLabel(p);
+  var roleColor = (p && p.staffRole) ? staffRoleColor(normalizeStaffRole(p.staffRole)) : 'var(--text-muted)';
+  return '<div class="pp-identity" id="rx-identity-' + p.id + '">'
+    + '<span class="pp-identity-avatar" style="background:' + bg + '">' + initial + '</span>'
+    + '<div class="pp-identity-text">'
+      + '<div class="pp-identity-name">' + disp + '</div>'
+      + '<div class="pp-identity-role" style="color:' + roleColor + '">' + role + '</div>'
+    + '</div>'
+  + '</div>';
+}
+
+function flashIdentityHeader(id) {
+  setTimeout(function(){
+    var el = document.getElementById('rx-identity-' + id);
+    if (!el) return;
+    el.classList.remove('pp-identity-flash');
+    void el.offsetWidth;
+    el.classList.add('pp-identity-flash');
+    setTimeout(function(){
+      if (el) el.classList.remove('pp-identity-flash');
+    }, 300);
+  }, 0);
+}
+
+/** Disarm confirmAction + ensure no stale typed values when switching people. */
+function rosterClearProfileDrafts(root) {
+  if (!root) return;
+  var inputs = root.querySelectorAll('input[type="number"], input[type="text"], input:not([type])');
+  for (var i = 0; i < inputs.length; i++) {
+    var inp = inputs[i];
+    if (inp.type === 'hidden') continue;
+    if (inp.type === 'checkbox' || inp.type === 'radio' || inp.type === 'range') continue;
+    // Leave settle prefills alone — they are computed for the new person on render.
+    // This helper runs on live DOM before switch; wipe typed drafts.
+    inp.value = '';
+  }
+  var selects = root.querySelectorAll('select');
+  for (var s = 0; s < selects.length; s++) {
+    selects[s].selectedIndex = 0;
+  }
+  var pills = root.querySelectorAll('.roster-pill.active');
+  for (var p = 0; p < pills.length; p++) {
+    pills[p].classList.remove('active');
+  }
+  var hiddens = root.querySelectorAll(
+    'input[id*="-type-"], input[id*="-method-"], input[id*="-kind-"], input[id*="-dir-"]'
+  );
+  for (var h = 0; h < hiddens.length; h++) {
+    if (hiddens[h].type === 'hidden') hiddens[h].value = '';
+  }
+  var armed = root.querySelectorAll('.confirm-armed');
+  for (var a = 0; a < armed.length; a++) {
+    var el = armed[a];
+    clearTimeout(_armTimers.get(el));
+    _armTimers.delete(el);
+    el.classList.remove('confirm-armed');
+    if (el._confirmOrigHtml != null) {
+      el.innerHTML = el._confirmOrigHtml;
+      el._confirmOrigHtml = null;
+    }
+  }
 }
 
 function bookPersonLabel(row) {
